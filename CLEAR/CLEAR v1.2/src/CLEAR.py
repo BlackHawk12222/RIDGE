@@ -1162,7 +1162,7 @@ try:
                 
                 del item_type            
 
-            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_smart_port, auto_do_motors, auto_do_controller, globallogging
+            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_smart_port, auto_do_controller, globallogging
 
             _exec=exec
             lwait=wait
@@ -1192,6 +1192,8 @@ try:
                             if motor.velocity!=0:
                                 self.robot_active=True
                                 break
+                    elif not auto_do_motors:
+                        self.robot_active=True
 
                     start:int=timer()
 
