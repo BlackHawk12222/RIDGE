@@ -156,42 +156,42 @@ try:
                         # Cheaks for the temps,  power, and cheaks for conecttions of motors(s).
                         if self.motor_temp<=50: 
                             if self.current_motor_temp_monitoring>0:
-                                log.add("DM0", "Motor %s Temp %s"%(motor_, self.motor_temp))
+                                log.add("DM0", "Motor %s, Temp %s"%(motor_, self.motor_temp))
                                 self.motor_temp_monitoring[motor_id]=0
                         elif self.motor_temp>70: 
                             if (self.current_motor_temp_monitoring==0 or self.current_motor_temp_monitoring==2):
-                                log.add("EM0", "Motor %s Temp %s"%(motor_, self.motor_temp))
+                                log.add("EM0", "Motor %s, Temp %s"%(motor_, self.motor_temp))
                                 self.motor_temp_monitoring[motor_id]=1  
                         elif self.motor_temp>50: 
                             if self.current_motor_temp_monitoring==0:
-                                log.add("WM0", "Motor %s Temp %s"%(motor_, self.motor_temp))
+                                log.add("WM0", "Motor %s, Temp %s"%(motor_, self.motor_temp))
                                 self.motor_temp_monitoring[motor_id]=2
                         
 
                         if self.current_motor_power<=12: 
                             if self.current_motor_power_monitoring>0:
-                                log.add("DM1", "Motor %s Power %s"%(str(motor_), str(self.current_motor_power)))
+                                log.add("DM1", "Motor %s, Power %s"%(str(motor_), str(self.current_motor_power)))
                                 self.motor_power_monitoring[motor_id]=0
                         elif self.current_motor_power>20: 
                             if (self.current_motor_power_monitoring==0 or self.current_motor_power_monitoring==2):
-                                log.add("EM2", "Motor %s Power %s"%(str(motor_), str(self.current_motor_power)))
+                                log.add("EM2", "Motor %s, Power %s"%(str(motor_), str(self.current_motor_power)))
                                 self.motor_power_monitoring[motor_id]=1
                         elif self.current_motor_power>12: 
                             if self.current_motor_power_monitoring==0:
-                                log.add("WM1", "Motor %s Power %s"%(str(motor_), str(self.current_motor_power)))
+                                log.add("WM1", "Motor %s, Power %s"%(str(motor_), str(self.current_motor_power)))
                                 self.motor_power_monitoring[motor_id]=2
 
                         if self.current_motor_current<=15: 
                             if self.current_motor_current_monitoring>0:
-                                log.add("DM2", "Motor %s Current %1.1f"%(str(motor_), float(self.current_motor_current)/10))
+                                log.add("DM2", "Motor %s, Current %1.1f"%(str(motor_), float(self.current_motor_current)/10))
                                 self.motor_current_monitoring[motor_id]=0
                         elif self.current_motor_current>20: 
                             if (self.current_motor_current_monitoring==0 or self.current_motor_current_monitoring==2):
-                                log.add("EM3", "Motor %s Current %1.1f"%(str(motor_), float(self.current_motor_current)/10))
+                                log.add("EM3", "Motor %s, Current %1.1f"%(str(motor_), float(self.current_motor_current)/10))
                                 self.motor_current_monitoring[motor_id]=1
                         elif self.current_motor_current>15:
                             if self.current_motor_current_monitoring==0:
-                                log.add("WM2", "Motor %s Current %1.1f"%(str(motor_), float(self.current_motor_current)/10))
+                                log.add("WM2", "Motor %s, Current %1.1f"%(str(motor_), float(self.current_motor_current)/10))
                                 self.motor_current_monitoring[motor_id]=2
                 
                 def optical(self, opticalsensor: Optical) -> None:
@@ -226,7 +226,7 @@ try:
 
                         if not (self.optical_color[self.optical_id] >= opticalsensor.hue() - log.tolrance and self.optical_color[self.optical_id] <= opticalsensor.hue() + log.tolrance):
 
-                            log.add("DO0", str(opticalsensor.hue()) + " Sensor " + str(opticalsensor))
+                            log.add("DO0", str(opticalsensor.hue()) + ", Sensor " + str(opticalsensor))
                             self.optical_color[self.optical_id]=opticalsensor.hue()
                             
                     elif not opticalsensor.is_near_object() and self.optical_object[self.optical_id]:
@@ -329,7 +329,7 @@ try:
                             self.distance_object[distance_id]=True
 
                         if not (self.distance_history[distance_id] >= distancesensor.object_distance() - self.distance_tolrance and self.distance_history[distance_id] <= distancesensor.object_distance() + self.distance_tolrance):
-                            log.add("DDS1", str(distancesensor.object_distance()) + " Sensor " + str(distancesensor))
+                            log.add("DDS1", str(distancesensor.object_distance()) + ", Sensor " + str(distancesensor))
                             self.distance_history[distance_id]=distancesensor.object_distance()
                     elif not distancesensor.is_object_detected() and self.distance_object[distance_id]:
                         log.add("DDS4", distancesensor)
@@ -358,12 +358,12 @@ try:
                     
                     if not (self.rotation_angle_history[rotaion_id] >= rotationsensor.angle() - log.tolrance and self.rotation_angle_history[rotaion_id] <= rotationsensor.angle() + log.tolrance):
 
-                        log.add("DR1", str(rotationsensor.angle()) + " Sensor " + str(rotationsensor))
+                        log.add("DR1", str(rotationsensor.angle()) + ", Sensor " + str(rotationsensor))
                         self.rotation_angle_history[rotaion_id]= rotationsensor.angle()
                     
                     if not (self.rotation_position_history[rotaion_id] >= rotationsensor.position() - log.tolrance and self.rotation_position_history[rotaion_id] <= rotationsensor.position() + log.tolrance):
 
-                        log.add("DR2", str(rotationsensor.position()) + " Sensor " + str(rotationsensor))
+                        log.add("DR2", str(rotationsensor.position()) + ", Sensor " + str(rotationsensor))
                         self.rotation_position_history[rotaion_id]= rotationsensor.position()
                 
             
@@ -602,31 +602,31 @@ try:
                 self.c_axis4 = controller.axis4.position()
 
                 if self.c_axis1 != 0 and not (self.axis[controllerid][0] >= self.c_axis1 - log.tolrance and self.axis[controllerid][0] <= self.c_axis1 + log.tolrance):
-                    log.add("DC1", "%s_Axis1 %d"%(self.ctrl_name, self.c_axis1))
+                    log.add("DC1", "%s, Axis1, %d"%(self.ctrl_name, self.c_axis1))
                     self.axis[controllerid][0] = self.c_axis1
                 elif self.c_axis1 == 0 and self.axis[controllerid][0] != 0:
-                    log.add("DC1", "%s_Axis1 %d"%(self.ctrl_name, 0))
+                    log.add("DC1", "%s, Axis1, %d"%(self.ctrl_name, 0))
                     self.axis[controllerid][0] = 0
 
                 if self.c_axis2 != 0 and not (self.axis[controllerid][1] >= self.c_axis2 - log.tolrance and self.axis[controllerid][1] <= self.c_axis2 + log.tolrance):
-                    log.add("DC1", "%s_Axis2 %d"%(self.ctrl_name, self.c_axis2))
+                    log.add("DC1", "%s, Axis2, %d"%(self.ctrl_name, self.c_axis2))
                     self.axis[controllerid][1] = self.c_axis2
                 elif self.c_axis2 == 0 and self.axis[controllerid][1] != 0:
-                    log.add("DC1", "%s_Axis2 %d"%(self.ctrl_name, 0))
+                    log.add("DC1", "%s, Axis2, %d"%(self.ctrl_name, 0))
                     self.axis[controllerid][1] = 0
 
                 if self.c_axis3 != 0 and not (self.axis[controllerid][2] >= self.c_axis3 - log.tolrance and self.axis[controllerid][2] <= self.c_axis3 + log.tolrance):
-                    log.add("DC1", "%s_Axis3 %d"%(self.ctrl_name, self.c_axis3))
+                    log.add("DC1", "%s, Axis3, %d"%(self.ctrl_name, self.c_axis3))
                     self.axis[controllerid][2] = self.c_axis3
                 elif self.c_axis3 == 0 and self.axis[controllerid][2] != 0:
-                    log.add("DC1", "%s_Axis3 %d"%(self.ctrl_name, 0))
+                    log.add("DC1", "%s, Axis3, %d"%(self.ctrl_name, 0))
                     self.axis[controllerid][2] = 0
 
                 if self.c_axis4 != 0 and not (self.axis[controllerid][3] >= self.c_axis4 - log.tolrance and self.axis[controllerid][3] <= self.c_axis4 + log.tolrance):
-                    log.add("DC1", "%s_Axis4 %d"%(self.ctrl_name, self.c_axis4))
+                    log.add("DC1", "%s, Axis4, %d"%(self.ctrl_name, self.c_axis4))
                     self.axis[controllerid][3] = self.c_axis4
                 elif self.c_axis4 == 0 and self.axis[controllerid][3] != 0:
-                    log.add("DC1", "%s_Axis4 %d"%(self.ctrl_name, 0))
+                    log.add("DC1", "%s, Axis4, %d"%(self.ctrl_name, 0))
                     self.axis[controllerid][3] = 0
 
                 # Button logging for controller.
@@ -651,11 +651,11 @@ try:
                 for i in range(12):
                     if self.button_objs[i].pressing():
                         if self.button_values[controllerid][i]:
-                            log.add("DC0", "%s_Button %s Pressed"%(self.ctrl_name, self.button_names[i]))
+                            log.add("DC0", "%s, %s, Pressed"%(self.ctrl_name, self.button_names[i]))
                             self.button_values[controllerid][i] = False
                     else:
                         if not self.button_values[controllerid][i]:
-                            log.add("DC0", "%s_Button %s Released"%(self.ctrl_name, self.button_names[i]))
+                            log.add("DC0", "%s, %s, Released"%(self.ctrl_name, self.button_names[i]))
                             self.button_values[controllerid][i] = True
 
             def variable(self, name: str, value: Any) -> None:
@@ -679,12 +679,14 @@ try:
                         self.variables[self.valueid]=0
                 
                 if value != self.variables[self.valueid]:
-                    log.add("DV0", "%s Value %s"%(name, value))
+                    log.add("DV0", "%s, Val %s"%(name, value))
                     self.variables[self.valueid] = value
     class Log:
         """Main object for the CLEAR import. \n To start logging use the "logstart()" function in this object to do the main logging if you need help with its inputs use help() over the "logstart()" function."""
                     
         def __init__(self):
+            if not brain.sdcard.exists("loghistory.txt"):
+                brain.sdcard.savefile("loghistory.txt")
             self.capture=Capture()
             self.archive=Archive()
             self._index:int=0
@@ -707,77 +709,76 @@ try:
             # Predefined Log Codes dictionary
             self.codes:dict={
             """Main dictionary for CLEAR"""
-                    "EB0": ":Batt ERR: Very Low Volt. Volt: ",
-                    "EB1": ":Batt ERR: Very Low Batt. Capacity: ",
-                    "EB2": ":Batt ERR: Very High Curr. Curr: ",
-                    "EB3": ":Batt ERR: Very High Watt. Watt: ",
-                    "EB4": ":Batt ERR: Very High Temp. Temp: ",
-                    "WB0": ":Batt WARN: Low Volt. Volt: ",
-                    "WB1": ":Batt WARN: Low Batt. Capacity: ",
-                    "WB2": ":Batt WARN: High Curr. Curr: ",
-                    "WB3": ":Batt WARN: High Watt. Watt: ",
-                    "WB4": ":Batt WARN: High Temp. Temp: ",
-                    "DB0": ":Batt DATA: Volt Normal. Volt: ",
-                    "DB1": ":Batt DATA: Curr Normal. Curr: ",
-                    "DB2": ":Batt DATA: Watt Normal. Watt: ",
-                    "DB3": ":Batt DATA: Capacity Changed. Capacity: ",
-                    "DB4": ":Batt DATA: Temp. Temp: ",
-                    "DA0": ":Aton DATA: Recording Started.: ",
-                    "DA1": ":Aton DATA: Recording Stopped.: ",
-                    "DA2": ":Aton DATA: Recording Saved.: ",
-                    "DA3": ":Aton DATA: Recording Loaded.: ",
-                    "DS0": ":System DATA: Init setup complete.: ",
-                    "DS1": ":System DATA: Archive Log complete. Time: ",
-                    "DS2": ":System DATA: Index Log History complete. Time: ",
-                    "DS3": ":System DATA: Archive Recording complete. Time: ",
-                    "DS5": ":System DATA: Recalled Recording complete. Recording: ",
-                    "EM0": ":Motor ERR: Very Hot. Temp: ",
-                    "EM1": ":Motor ERR: Disconnected. Name: ",
-                    "EM2": ":Motor ERR: Very High Power. Power: ",
-                    "EM3": ":Motor ERR: Very High Current. Current: ",
-                    "WM0": ":Motor WARN: Hot. Temp: ",
-                    "WM1": ":Motor WARN: High Power. Power: ",
-                    "WM2": ":Motor WARN: High Current. Current: ",
-                    "DM0": ":Motor DATA: Temp Normal. Temp: ",
-                    "DM1": ":Motor DATA: Power Normal. Power: ",
-                    "DM2": ":Motor DATA: Current Back To Normal. Current: ",
-                    "DV0": ":Variable DATA: Changed. Name: ",
-                    "DC0": ":Controller DATA: Button Changed. Button: ",
-                    "DC1": ":Controller DATA: Axis Changed. Axis: ",
-                    "DPW0": ":Pwm DATA: Value Changed. Value: ",
-                    "DP0": ":Pot DATA: Value Changed. Value: ",
-                    "DLS1": ":Limit DATA: Released.: ",
-                    "DLS0": ":Limit DATA: Pressed.: ",
-                    "DO3": ":Optical DATA: Installed: ",
-                    "EO0": ":Optical ERROR: Disconnected: ",
-                    "DO1": ":Optical DATA: Detected Object.: ",
-                    "DO0": ":Optical DATA: Color Changed. Color: ",
-                    "DO2": ":Optical DATA: Lost Object.: ",
-                    "DI7": ":Inertial DATA: Installed: ",
-                    "DI2": ":Inertial DATA: Calibrating.: ",
-                    "DI3": ":Inertial DATA: Calibration Complete.: ",
-                    "DI0": ":Inertial DATA: Rotation Changed. Rotation: ",
-                    "DI9": ":Inertial DATA: Roll Changed. Roll: ",
-                    "DI8": ":Inertial DATA: Pitch Changed. Pitch: ",
-                    "DI1": ":Inertial DATA: Heading Changed. Heading: ",
-                    "DI4": ":Inertial DATA: X Axis Changed. Accel: ",
-                    "DI5": ":Inertial DATA: Y Axis Changed. Accel: ",
-                    "DI6": ":Inertial DATA: Z Axis Changed. Accel: ",
-                    "EI0": ":Inertial ERROR: Disconnected.: ",
-                    "DDS3": ":Distance DATA: Installed.: ",
-                    "EDS0": ":Distance ERROR: Disconnected.: ",
-                    "DDS0": ":Distance DATA: Detected Object.: ",
-                    "DDS1": ":Distance DATA: Distance Changed. Distance: ",
-                    "DDS4": ":Distance DATA: Lost Object.: ",
-                    "DR0": ":Rotation DATA: Installed.: ",
-                    "ER0": ":Rotation ERROR: Disconnected.: ",
-                    "DR1": ":Rotation DATA: Angle Changed. Angle: ",
-                    "DR2": ":Rotation DATA: Position Changed. Position: ",
-                    "DDI0": ":Digital DATA: High.: ",
-                    "DDI1": ":Digital DATA: Low.: ",
-                    "DAI0": ":Analog DATA: Changed. Value: ",
-                    "DBS0": ":Bumper DATA: Pressed.: ",
-                    "DBS1": ":Bumper DATA: Released.: ",
+                    "EB0": "<Batt ERR: Very Low Volt>",
+                    "EB1": "<Batt ERR: Very Low Batt>",
+                    "EB2": "<Batt ERR: Very High Curr>",
+                    "EB3": "<Batt ERR: Very High Watt>",
+                    "EB4": "<Batt ERR: Very High Temp>",
+                    "WB0": "<Batt WARN: Low Volt>",
+                    "WB1": "<Batt WARN: Low Batt>",
+                    "WB2": "<Batt WARN: High Curr>",
+                    "WB3": "<Batt WARN: High Watt>",
+                    "WB4": "<Batt WARN: High Temp>",
+                    "DB0": "<Batt DATA: Volt Normal>",
+                    "DB1": "<Batt DATA: Curr Normal>",
+                    "DB2": "<Batt DATA: Watt Normal>",
+                    "DB3": "<Batt DATA: Capacity Changed>",
+                    "DB4": "<Batt DATA: Temp Normal>",
+                    "DA1": "<Aton DATA: Recording Stopped>",
+                    "DA2": "<Aton DATA: Recording Saved>",
+                    "DA3": "<Aton DATA: Recording Loaded>",
+                    "DS0": "<System DATA: Init setup Done>",
+                    "DS1": "<System DATA: Archived Log>",
+                    "DS2": "<System DATA: Index Log History Done>",
+                    "DS3": "<System DATA: Archived Recording>",
+                    "DS5": "<System DATA: Recalled Recording>",
+                    "EM0": "<Motor ERR: Very Hot>",
+                    "EM1": "<Motor ERR: Disconnected>",
+                    "EM2": "<Motor ERR: Very High Power>",
+                    "EM3": "<Motor ERR: Very High Current>",
+                    "WM0": "<Motor WARN: Hot>",
+                    "WM1": "<Motor WARN: High Power>",
+                    "WM2": "<Motor WARN: High Current>",
+                    "DM0": "<Motor DATA: Temp Normal>",
+                    "DM1": "<Motor DATA: Power Normal>",
+                    "DM2": "<Motor DATA: Current Back To Normal>",
+                    "DV0": "<Variable DATA: Changed>",
+                    "DC0": "<Cont DATA: Button Changed>",
+                    "DC1": "<Cont DATA: Axis Changed>",
+                    "DPW0": "<Pwm DATA: Value Changed>",
+                    "DP0": "<Pot DATA: Value Changed>",
+                    "DLS1": "<Limit DATA: Released>",
+                    "DLS0": "<Limit DATA: Pressed>",
+                    "DO3": "<Optical DATA: Installed>",
+                    "EO0": "<Optical ERROR: Disconnected>",
+                    "DO1": "<Optical DATA: Detected Object>",
+                    "DO0": "<Optical DATA: Color Changed. Color:",
+                    "DO2": "<Optical DATA: Lost Object>",
+                    "DI7": "<Inertial DATA: Installed>",
+                    "DI2": "<Inertial DATA: Calibrating>",
+                    "DI3": "<Inertial DATA: Calibration Complete>",
+                    "DI0": "<Inertial DATA: Rotation Changed>",
+                    "DI9": "<Inertial DATA: Roll Changed>",
+                    "DI8": "<Inertial DATA: Pitch Changed>",
+                    "DI1": "<Inertial DATA: Heading Changed>",
+                    "DI4": "<Inertial DATA: X Axis Changed>",
+                    "DI5": "<Inertial DATA: Y Axis Changed>",
+                    "DI6": "<Inertial DATA: Z Axis Changed>",
+                    "EI0": "<Inertial ERROR: Disconnected>",
+                    "DDS3": "<Distance DATA: Installed>",
+                    "EDS0": "<Distance ERROR: Disconnected>",
+                    "DDS0": "<Distance DATA: Detected Object>",
+                    "DDS1": "<Distance DATA: Distance Changed>",
+                    "DDS4": "<Distance DATA: Lost Object>",
+                    "DR0": "<Rotation DATA: Installed>",
+                    "ER0": "<Rotation ERROR: Disconnected>",
+                    "DR1": "<Rotation DATA: Angle Changed>",
+                    "DR2": "<Rotation DATA: Position Changed>",
+                    "DDI0": "<Digital DATA: High>",
+                    "DDI1": "<Digital DATA: Low>",
+                    "DAI0": "<Analog DATA: Changed Value>",
+                    "DBS0": "<Bumper DATA: Pressed>",
+                    "DBS1": "<Bumper DATA: Released>",
                     }
             
             # Setting up Log Files if they dont exist and setting index.
@@ -793,9 +794,6 @@ try:
                             break
 
                         log_number+=chunk.count(b'\n')
-
-                if not brain.sdcard.exists("loghistory.txt"):
-                    brain.sdcard.savefile("loghistory.txt")
 
                 self._index= log_number - 1
 
@@ -843,7 +841,7 @@ try:
             """
 
             if not self.adding:
-                self._cache.extend(b", %d [%d] %s %s \n" % (self._index, log_time.time(), self.codes.get(add_code), add_details))
+                self._cache.extend(b"%d [%d], %s, %s\n" % (self._index, log_time.time(), self.codes.get(add_code), add_details))
                 return 
             else:
                 if self._cache:
@@ -857,7 +855,7 @@ try:
                     self._cache=bytearray()
                     return
                 
-            self.entry=b", %d [%d] %s %s \n" %(self._index, log_time.time(), self.codes.get(add_code), add_details)
+            self.entry=b"%d [%d ms], %s, %s\n" %(self._index, log_time.time(), self.codes.get(add_code), add_details)
             self._bufferSize=len(self.entry)
 
             pack_into("=%ds"%(self._bufferSize), self.buffer, self._buffer_offset, self.entry)
@@ -1176,31 +1174,42 @@ try:
                             break
                         
                         loglist=chunk_buffer.decode(log.format).split("\n")
+                        incomplete=bytearray()
                         for i in range(len(loglist)):
-                            logline=loglist[i].split(':')
+                            logline= loglist[i].split(",")
 
                             if archivelist_offset > 20000:
                                 brain.sdcard.appendfile("loghistory.txt", archivelist[0:archivelist_offset])
                                 archivelist_offset=0
                             
-                            if len(logline)>=4:
-                                loglines= ":%s: %s: "%(logline[1], logline[2].strip())
-                                entry=b"%s %s %s \n"%(logline[0], reversecodes.get(loglines, loglines), logline[3])
+                            if len(logline)>=3:
+                                logstring=logline[1].strip()
+                                numbers=logline[0].split(" ")
+                                hexindex="{:#x}".format(int(numbers[0]))
+                                hextime="{:#x}".format(int(numbers[1].replace("[", "")))
+                                entry=b"%s %s %s%s\n"%(hexindex, hextime, reversecodes.get(logstring, logstring), str(logline[2:len(logline)-1]).replace("'", "").replace("[", "").replace("]", ""))
                                 bufferSize=len(entry)
                                 pack_into("=%ds"%(bufferSize), archivelist, archivelist_offset, entry)
                                 archivelist_offset+=bufferSize
                             else:
-                                entry=loglist[i]
-                                bufferSize=len(entry)
-                                pack_into("=%ds"%(bufferSize), archivelist, archivelist_offset, entry)
-                                archivelist_offset+=bufferSize
+                                incomplete.extend(loglist[i].encode(log.format))
+                                if incomplete.decode(log.format).count('>') != 0:
+                                    logline=incomplete.decode(log.format).split(",")
+                                    if len(logline)>=3:
+                                        logstring=logline[1].strip()
+                                        numbers=logline[0].split(" ")
+                                        hexindex="{:#x}".format(int(numbers[0]))
+                                        hextime="{:#x}".format(int(numbers[1].replace(" ms]", "").replace("[]", "")))
+                                        entry=b"%s %s %s%s\n"%(hexindex, hextime, reversecodes.get(logstring, logstring), str(logline[2:len(logline)-1]).replace("'", "").replace("[", "").replace("]", ""))
+                                        bufferSize=len(entry)
+                                        pack_into("=%ds"%(bufferSize), archivelist, archivelist_offset, entry)
+                                        archivelist_offset+=bufferSize
+                                        incomplete=bytearray()
                                 
                             del logline
                         brain.sdcard.appendfile("loghistory.txt", archivelist[0:archivelist_offset])
                         archivelist_offset=0
                         print("done loop")
-                
-                brain.sdcard.appendfile("loghistory.txt", archivelist)
                 log.clear()
                 log.adding=True
 
