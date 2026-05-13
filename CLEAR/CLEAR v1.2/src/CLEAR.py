@@ -699,7 +699,6 @@ try:
             self._bufferSize=0
             self._buffer_offset=0
             self._last_write=0
-            self.speed=0
             self.Motors: list[Motor]=[]
             self.robot_active=False
 
@@ -786,31 +785,19 @@ try:
             if not brain.sdcard.exists("Log.csv"):
                 brain.sdcard.savefile("Log.csv", bytearray("log Start: \n", self.format))
             else:
-                if brain.sdcard.filesize("Log.csv") < 300000:
-                    log_lines=[]
-                    log_lines=brain.sdcard.loadfile("Log.csv").decode(self.format).split("\n")
-                    log_number=len(log_lines)
-                    del log_lines
-                else:
-                    print("Log.csv cannot be decoded.")
-                    with open("Log.csv", 'rb') as log_file:
-                        chunk_size=10240
-                        while True:
-                            chunk=log_file.read(chunk_size)
-                            if not chunk:
-                                break
+                with open("Log.csv", 'rb') as log_file:
+                    chunk_size=10240
+                    while True:
+                        chunk=log_file.read(chunk_size)
+                        if not chunk:
+                            break
 
-                            log_number+=chunk.count(b'\n')
-
-                    print("Log done")
+                        log_number+=chunk.count(b'\n')
 
                 if not brain.sdcard.exists("loghistory.txt"):
                     brain.sdcard.savefile("loghistory.txt")
 
                 self._index= log_number - 1
-
-                # Clears lists to free memory.
-                del log_number
 
         def append_log(self) -> None:
             """
@@ -1184,12 +1171,18 @@ try:
                     
                     while True:
                         chunk=file.readinto(chunk_buffer)
+
                         if not chunk:
                             break
                         
                         loglist=chunk_buffer.decode(log.format).split("\n")
                         for i in range(len(loglist)):
                             logline=loglist[i].split(':')
+
+                            if archivelist_offset > 20000:
+                                brain.sdcard.appendfile("loghistory.txt", archivelist[0:archivelist_offset])
+                                archivelist_offset=0
+                            
                             if len(logline)>=4:
                                 loglines= ":%s: %s: "%(logline[1], logline[2].strip())
                                 entry=b"%s %s %s \n"%(logline[0], reversecodes.get(loglines, loglines), logline[3])
@@ -1197,7 +1190,11 @@ try:
                                 pack_into("=%ds"%(bufferSize), archivelist, archivelist_offset, entry)
                                 archivelist_offset+=bufferSize
                             else:
-                                print(logline)
+                                entry=loglist[i]
+                                bufferSize=len(entry)
+                                pack_into("=%ds"%(bufferSize), archivelist, archivelist_offset, entry)
+                                archivelist_offset+=bufferSize
+                                
                             del logline
                         brain.sdcard.appendfile("loghistory.txt", archivelist[0:archivelist_offset])
                         archivelist_offset=0
