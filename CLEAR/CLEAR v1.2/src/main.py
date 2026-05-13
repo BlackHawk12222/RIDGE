@@ -96,6 +96,8 @@ if brain.sdcard.is_inserted() and brain.sdcard.exists("CLEAR.py"):
             CLEAR.recording.stop()
             controller_1.rumble("--")
             print("Recording Stopped")
+            CLEAR.encode.encode()
+            print("Encoding Complete")
     controller_1.buttonA.pressed(toggle_recording)
 
 # Event setup

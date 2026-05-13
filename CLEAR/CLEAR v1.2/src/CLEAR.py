@@ -209,16 +209,10 @@ try:
                         self.optical_color[self.optical_id]=0
                     
                     if opticalsensor.installed() and not self.optical_connected[self.optical_id]:
-
-                        if "DO3" not in log.codes:
-                            log.add_codes("DO3", ":Optical DATA: Optical Installed: ")
                         
                         log.add("DO3", str(opticalsensor))
                         self.optical_connected[self.optical_id]=True
                     elif not opticalsensor.installed() and self.optical_connected[self.optical_id]:
-
-                        if "EO0" not in log.codes:
-                            log.add_codes("EO0", ":Optical ERROR: Optical Disconnected: ")
 
                         log.add("EO0", str(opticalsensor))
                         self.optical_connected[self.optical_id]=False
@@ -227,24 +221,15 @@ try:
 
                         if not self.optical_object[self.optical_id]:
 
-                            if "DO1" not in log.codes:
-                                log.add_codes("DO1", ":Optical DATA: Optical Detected Object.: ")
-
                             log.add("DO1", str(opticalsensor))
                             self.optical_object[self.optical_id]=True
 
                         if not (self.optical_color[self.optical_id] >= opticalsensor.hue() - log.tolrance and self.optical_color[self.optical_id] <= opticalsensor.hue() + log.tolrance):
 
-                            if "DO0" not in log.codes:
-                                log.add_codes("DO0", ":Optical DATA: Color Changed. Color: ")
-
                             log.add("DO0", str(opticalsensor.hue()) + " Sensor " + str(opticalsensor))
                             self.optical_color[self.optical_id]=opticalsensor.hue()
                             
                     elif not opticalsensor.is_near_object() and self.optical_object[self.optical_id]:
-
-                        if "DO2" not in log.codes:
-                            log.add_codes("DO2", ":Optical DATA: Optical Lost Object.: ")
 
                         log.add("DO2", str(opticalsensor))
                         self.optical_object[self.optical_id]=False
@@ -265,87 +250,55 @@ try:
 
 
                         if not self.inertial_connected:
-                            if "DI7" not in log.codes:
-                                log.add_codes("DI7", ":Inertial DATA: Inertial Installed: ")
 
                             log.add("DI7", "")
                             self.inertial_connected=True
 
                         if inertialsensor.is_calibrating() and not self.inertial_calibrating:
 
-                            if "DI2" not in log.codes:
-                                log.add_codes("DI2", ":Inertial DATA: Calibrating.: ")
-
                             log.add("DI2", "")
                             self.inertial_calibrating=True
                         elif not inertialsensor.is_calibrating() and self.inertial_calibrating:
-
-                            if "DI3" not in log.codes:
-                                log.add_codes("DI3", ":Inertial DATA: Calibration Complete.: ")
 
                             log.add("DI3", "")
                             self.inertial_calibrating=False
 
                         if not (self.inertial_rotation_history >= self.rotation_values - self.inertial_gyro_tolerance and self.inertial_rotation_history <= self.rotation_values + self.inertial_gyro_tolerance):
 
-                            if "DI0" not in log.codes:
-                                log.add_codes("DI0", ":Inertial DATA: Rotation Changed. Rotation: ")
-
                             log.add("DI0", int(self.rotation_values))
                             self.inertial_rotation_history= self.rotation_values
 
                         if not (self.inertial_roll_history >= self.roll - self.inertial_gyro_tolerance and self.inertial_roll_history <= self.roll + self.inertial_gyro_tolerance):
-
-                            if "DI9" not in log.codes:
-                                log.add_codes("DI9", ":Inertial DATA: Roll Changed. Roll: ")
 
                             log.add("DI9", int(self.roll))
                             self.inertial_roll_history= self.roll
 
                         if not (self.inertial_pitch_history >= self.pitch - self.inertial_gyro_tolerance and self.inertial_pitch_history <= self.pitch + self.inertial_gyro_tolerance):
 
-                            if "DI8" not in log.codes:
-                                log.add_codes("DI8", ":Inertial DATA: Pitch Changed. Pitch: ")
-
                             log.add("DI8", int(self.pitch))
                             self.inertial_pitch_history= self.pitch
                         
                         if not (self.inertial_heading_history >= self.heading - self.inertial_gyro_tolerance and self.inertial_heading_history <= self.heading + self.inertial_gyro_tolerance):
-
-                            if "DI1" not in log.codes:
-                                log.add_codes("DI1", ":Inertial DATA: Heading Changed. Heading: ")
 
                             log.add("DI1", int(self.heading))
                             self.inertial_heading_history= self.heading
                         
                         if not (self.inertial_x_axis_history >= self.acceleration_x - self.inertial_axis_tolerance and self.inertial_x_axis_history <= self.acceleration_x + self.inertial_axis_tolerance):
 
-                            if "DI4" not in log.codes:
-                                log.add_codes("DI4", ":Inertial DATA: X Axis Changed. Acceleration: ")
-
                             log.add("DI4", round(self.acceleration_x, 2))
                             self.inertial_x_axis_history= self.acceleration_x
                         
                         if not (self.inertial_y_axis_history >= self.acceleration_y - self.inertial_axis_tolerance and self.inertial_y_axis_history <= self.acceleration_y + self.inertial_axis_tolerance):
 
-                            if "DI5" not in log.codes:
-                                log.add_codes("DI5", ":Inertial DATA: Y Axis Changed. Acceleration: ")
-
                             log.add("DI5", round(self.acceleration_y, 2))
                             self.inertial_y_axis_history= self.acceleration_y
 
                         if not (self.inertial_z_axis_history >= self.acceleration_z - self.inertial_axis_tolerance and self.inertial_z_axis_history <= self.acceleration_z + self.inertial_axis_tolerance):
-
-                            if "DI6" not in log.codes:
-                                log.add_codes("DI6", ":Inertial DATA: Z Axis Changed. Acceleration: ")
                                 
                             log.add("DI6", round(self.acceleration_z, 2))
                             self.inertial_z_axis_history= self.acceleration_z
                             
                     elif self.inertial_connected:
-
-                        if "EI0" not in log.codes:
-                            log.add_codes("EI0", ":Inertial ERROR: Inertial Disconnected.: ")
 
                         log.add("EI0", "")
                         self.inertial_connected=False
@@ -363,32 +316,22 @@ try:
                         self.distance_history[distance_id]=0
 
                     if distancesensor.installed() and not self.distance_connection[distance_id]:
-                        if "DDS3" not in log.codes:
-                            log.add_codes("DDS3", ":Distance DATA: Distance Installed.: ")
                         log.add("DDS3", str(distancesensor))
                         self.distance_connection[distance_id]=True
                     elif not distancesensor.installed() and self.distance_connection[distance_id]:
-                        if "EDS0" not in log.codes:
-                            log.add_codes("EDS0", ":Distance ERROR: Distance Disconnected.: ")
                         log.add("EDS0", str(distancesensor))
                         self.distance_connection[distance_id]=False
 
                     if distancesensor.is_object_detected():
                         if not self.distance_object[distance_id]:
-                            if "DDS0" not in log.codes:
-                                log.add_codes("DDS0", ":Distance DATA: Distance Detected Object.: ")
 
                             log.add("DDS0", distancesensor)
                             self.distance_object[distance_id]=True
 
                         if not (self.distance_history[distance_id] >= distancesensor.object_distance() - self.distance_tolrance and self.distance_history[distance_id] <= distancesensor.object_distance() + self.distance_tolrance):
-                            if "DDS1" not in log.codes:
-                                log.add_codes("DDS1", ":Distance DATA: Distance Changed. Distance: ")
                             log.add("DDS1", str(distancesensor.object_distance()) + " Sensor " + str(distancesensor))
                             self.distance_history[distance_id]=distancesensor.object_distance()
                     elif not distancesensor.is_object_detected() and self.distance_object[distance_id]:
-                        if "DDS4" not in log.codes:
-                            log.add_codes("DDS4", ":Distance DATA: Distance Lost Object.: ")
                         log.add("DDS4", distancesensor)
                         self.distance_object[distance_id]=False
 
@@ -406,31 +349,19 @@ try:
                     
                     if rotationsensor.installed() and self.rotation_connection[rotaion_id]==False:
 
-                        if "DR0" not in log.codes:
-                            log.add_codes("DR0", ":Rotation DATA: Rotation Installed.: ")
-
                         log.add("DR0", str(rotationsensor))
                         self.rotation_connection[rotaion_id]=True
                     elif not rotationsensor.installed() and self.rotation_connection[rotaion_id]==True:
-
-                        if "ER0" not in log.codes:
-                            log.add_codes("ER0", ":Rotation ERROR: Rotation Disconnected.: ")
 
                         log.add("ER0", str(rotationsensor))
                         self.rotation_connection[rotaion_id]=False
                     
                     if not (self.rotation_angle_history[rotaion_id] >= rotationsensor.angle() - log.tolrance and self.rotation_angle_history[rotaion_id] <= rotationsensor.angle() + log.tolrance):
 
-                        if "DR1" not in log.codes:
-                            log.add_codes("DR1", ":Rotation DATA: Angle Changed. Angle: ")
-
                         log.add("DR1", str(rotationsensor.angle()) + " Sensor " + str(rotationsensor))
                         self.rotation_angle_history[rotaion_id]= rotationsensor.angle()
                     
                     if not (self.rotation_position_history[rotaion_id] >= rotationsensor.position() - log.tolrance and self.rotation_position_history[rotaion_id] <= rotationsensor.position() + log.tolrance):
-
-                        if "DR2" not in log.codes:
-                            log.add_codes("DR2", ":Rotation DATA: Position Changed. Position: ")
 
                         log.add("DR2", str(rotationsensor.position()) + " Sensor " + str(rotationsensor))
                         self.rotation_position_history[rotaion_id]= rotationsensor.position()
@@ -450,13 +381,9 @@ try:
                         self.digital_value[input_id]=0
 
                     if input.value()==1 and self.digital_value[input_id]==0:
-                        if "DDI0" not in log.codes:
-                            log.add_codes("DDI0", ":Digital DATA: Value High.: ")
                         log.add("DDI0", "")
                         self.digital_value[input_id]=1
                     elif input.value()==0 and self.digital_value[input_id]==1:
-                        if "DDI1" not in log.codes:
-                            log.add_codes("DDI1", ":Digital DATA: Value Low.: ")
                         log.add("DDI1", "")
                         self.digital_value[input_id]=0
 
@@ -469,8 +396,6 @@ try:
                         self.analog_value[input_id]=0
 
                     if not (self.analog_value[input_id] >= input.value() - log.tolrance and self.analog_value[input_id] <= input.value() + log.tolrance):
-                        if "DAI0" not in log.codes:
-                            log.add_codes("DAI0", ":Analog DATA: Value Changed. Value: ")
                         log.add("DAI0", input.value())
                         self.analog_value[input_id]=input.value()
                 
@@ -483,13 +408,9 @@ try:
                         self.digital_value[bumper_id]=0
 
                     if bumpersensor.value()==1 and self.digital_value[bumper_id]==0:
-                        if "DBS0" not in log.codes:
-                            log.add_codes("DBS0", ":Bumper DATA: Pressed.: ")
                         log.add("DBS0", "")
                         self.digital_value[bumper_id]=1
                     elif bumpersensor.value()==0 and self.digital_value[bumper_id]==1:
-                        if "DBS1" not in log.codes:
-                            log.add_codes("DBS1", ":Bumper DATA: Released.: ")
                         log.add("DBS1", "")
                         self.digital_value[bumper_id]=0
 
@@ -502,13 +423,9 @@ try:
                         self.digital_value[limit_id]=0
 
                     if limitsensor.value()==1 and self.digital_value[limit_id]==0:
-                        if "DLS0" not in log.codes:
-                            log.add_codes("DLS0", ":Limit DATA: Pressed.: ")
                         log.add("DLS0", "")
                         self.digital_value[limit_id]=1
                     elif limitsensor.value()==0 and self.digital_value[limit_id]==1:
-                        if "DLS1" not in log.codes:
-                            log.add_codes("DLS1", ":Limit DATA: Released.: ")
                         log.add("DLS1", "")
                         self.digital_value[limit_id]=0
 
@@ -521,8 +438,6 @@ try:
                         self.analog_value[sensor_id]=0
 
                     if not (self.analog_value[sensor_id] >= sensor.angle() - log.tolrance and self.analog_value[sensor_id] <= sensor.angle() + log.tolrance):
-                        if "DP0" not in log.codes:
-                            log.add_codes("DP0", ":Potentiometer DATA: Value Changed. Value: ")
                         log.add("DP0", sensor.angle())
                         self.analog_value[sensor_id]=sensor.angle()
 
@@ -541,8 +456,6 @@ try:
                         self.analog_value[input_id]=0
 
                     if not (self.analog_value[input_id] >= input.value() - log.tolrance and self.analog_value[input_id] <= input.value() + log.tolrance):
-                        if "DPW0" not in log.codes:
-                            log.add_codes("DPW0", ":Pwm DATA: Value Changed. Value: ")
                         log.add("DPW0", input.value())
                         self.analog_value[input_id]=input.value()    
 
@@ -564,10 +477,8 @@ try:
                 self.current:int=0
                 self.capacity:int=0
                 self.watts:int=0
-                self.axis1=0
-                self.axis2=0
-                self.axis3=0
-                self.axis4=0
+                self.axis={}
+
                 self.button_a=True
                 self.button_b=True
                 self.button_x=True
@@ -586,20 +497,7 @@ try:
                     "UP", "DOWN", "LEFT", "RIGHT",
                     "L1", "L2", "R1", "R2",
                 ]
-                self.button_values = [
-                    self.button_a,
-                    self.button_b,
-                    self.button_x,
-                    self.button_y,
-                    self.button_up,
-                    self.button_down,
-                    self.button_left,
-                    self.button_right,
-                    self.button_L1,
-                    self.button_L2,
-                    self.button_R1,
-                    self.button_R2,
-                ]
+                self.button_values = {}
 
             def battery(self) -> None:
                 """
@@ -689,6 +587,26 @@ try:
                 Args:
                 controller= Controller()
                 """
+                controllerid=str(controller)
+
+                if controllerid not in self.button_values:
+                    self.button_values[controllerid]=[
+                    self.button_a,
+                    self.button_b,
+                    self.button_x,
+                    self.button_y,
+                    self.button_up,
+                    self.button_down,
+                    self.button_left,
+                    self.button_right,
+                    self.button_L1,
+                    self.button_L2,
+                    self.button_R1,
+                    self.button_R2,
+                ]
+                
+                if controllerid not in self.axis:
+                    self.axis[controllerid]=[0, 0, 0, 0]
 
                 self.ctrl_name = str(controller)
                 self.c_axis1 = controller.axis1.position()
@@ -696,33 +614,33 @@ try:
                 self.c_axis3 = controller.axis3.position()
                 self.c_axis4 = controller.axis4.position()
 
-                if self.c_axis1 != 0 and not (self.axis1 >= self.c_axis1 - log.tolrance and self.axis1 <= self.c_axis1 + log.tolrance):
-                    log.add("DC1", "%s_Axis1 %d Moved"%(self.ctrl_name, self.c_axis1))
-                    self.axis1 = self.c_axis1
-                elif self.c_axis1 == 0 and self.axis1 != 0:
-                    log.add("DC1", "%s_Axis1 %d Moved"%(self.ctrl_name, 0))
-                    self.axis1 = 0
+                if self.c_axis1 != 0 and not (self.axis[controllerid][0] >= self.c_axis1 - log.tolrance and self.axis[controllerid][0] <= self.c_axis1 + log.tolrance):
+                    log.add("DC1", "%s_Axis1 %d"%(self.ctrl_name, self.c_axis1))
+                    self.axis[controllerid][0] = self.c_axis1
+                elif self.c_axis1 == 0 and self.axis[controllerid][0] != 0:
+                    log.add("DC1", "%s_Axis1 %d"%(self.ctrl_name, 0))
+                    self.axis[controllerid][0] = 0
 
-                if self.c_axis2 != 0 and not (self.axis2 >= self.c_axis2 - log.tolrance and self.axis2 <= self.c_axis2 + log.tolrance):
-                    log.add("DC1", "%s_Axis2 %d Moved"%(self.ctrl_name, self.c_axis2))
-                    self.axis2 = self.c_axis2
-                elif self.c_axis2 == 0 and self.axis2 != 0:
-                    log.add("DC1", "%s_Axis2 %d Moved"%(self.ctrl_name, 0))
-                    self.axis2 = 0
+                if self.c_axis2 != 0 and not (self.axis[controllerid][1] >= self.c_axis2 - log.tolrance and self.axis[controllerid][1] <= self.c_axis2 + log.tolrance):
+                    log.add("DC1", "%s_Axis2 %d"%(self.ctrl_name, self.c_axis2))
+                    self.axis[controllerid][1] = self.c_axis2
+                elif self.c_axis2 == 0 and self.axis[controllerid][1] != 0:
+                    log.add("DC1", "%s_Axis2 %d"%(self.ctrl_name, 0))
+                    self.axis[controllerid][1] = 0
 
-                if self.c_axis3 != 0 and not (self.axis3 >= self.c_axis3 - log.tolrance and self.axis3 <= self.c_axis3 + log.tolrance):
-                    log.add("DC1", "%s_Axis3 %d Moved"%(self.ctrl_name, self.c_axis3))
-                    self.axis3 = self.c_axis3
-                elif self.c_axis3 == 0 and self.axis3 != 0:
-                    log.add("DC1", "%s_Axis3 %d Moved"%(self.ctrl_name, 0))
-                    self.axis3 = 0
+                if self.c_axis3 != 0 and not (self.axis[controllerid][2] >= self.c_axis3 - log.tolrance and self.axis[controllerid][2] <= self.c_axis3 + log.tolrance):
+                    log.add("DC1", "%s_Axis3 %d"%(self.ctrl_name, self.c_axis3))
+                    self.axis[controllerid][2] = self.c_axis3
+                elif self.c_axis3 == 0 and self.axis[controllerid][2] != 0:
+                    log.add("DC1", "%s_Axis3 %d"%(self.ctrl_name, 0))
+                    self.axis[controllerid][2] = 0
 
-                if self.c_axis4 != 0 and not (self.axis4 >= self.c_axis4 - log.tolrance and self.axis4 <= self.c_axis4 + log.tolrance):
-                    log.add("DC1", "%s_Axis4 %d Moved"%(self.ctrl_name, self.c_axis4))
-                    self.axis4 = self.c_axis4
-                elif self.c_axis4 == 0 and self.axis4 != 0:
-                    log.add("DC1", "%s_Axis4 %d Moved"%(self.ctrl_name, 0))
-                    self.axis4 = 0
+                if self.c_axis4 != 0 and not (self.axis[controllerid][3] >= self.c_axis4 - log.tolrance and self.axis[controllerid][3] <= self.c_axis4 + log.tolrance):
+                    log.add("DC1", "%s_Axis4 %d"%(self.ctrl_name, self.c_axis4))
+                    self.axis[controllerid][3] = self.c_axis4
+                elif self.c_axis4 == 0 and self.axis[controllerid][3] != 0:
+                    log.add("DC1", "%s_Axis4 %d"%(self.ctrl_name, 0))
+                    self.axis[controllerid][3] = 0
 
                 # Button logging for controller.
 
@@ -745,13 +663,13 @@ try:
 
                 for i in range(12):
                     if self.button_objs[i].pressing():
-                        if self.button_values[i]:
+                        if self.button_values[controllerid][i]:
                             log.add("DC0", "%s_Button %s Pressed"%(self.ctrl_name, self.button_names[i]))
-                            self.button_values[i] = False
+                            self.button_values[controllerid][i] = False
                     else:
-                        if not self.button_values[i]:
+                        if not self.button_values[controllerid][i]:
                             log.add("DC0", "%s_Button %s Released"%(self.ctrl_name, self.button_names[i]))
-                            self.button_values[i] = True
+                            self.button_values[controllerid][i] = True
 
                 (
                     self.button_a,
@@ -766,7 +684,7 @@ try:
                     self.button_L2,
                     self.button_R1,
                     self.button_R2,
-                ) = self.button_values
+                ) = self.button_values[controllerid]
 
             def variable(self, name: str, value: Any) -> None:
                 """
@@ -789,7 +707,7 @@ try:
                         self.variables[self.valueid]=0
                 
                 if value != self.variables[self.valueid]:
-                    log.add("DV0", "Variable %s Value %s"%(name, value))
+                    log.add("DV0", "%s Value %s"%(name, value))
                     self.variables[self.valueid] = value
     class Log:
         """Main object for the CLEAR import. \n To start logging use the "logstart()" function in this object to do the main logging if you need help with its inputs use help() over the "logstart()" function."""
@@ -855,6 +773,40 @@ try:
                     "DV0": ":Variable DATA: Changed. Name: ",
                     "DC0": ":Controller DATA: Button Changed. Button: ",
                     "DC1": ":Controller DATA: Axis Changed. Axis: ",
+                    "DPW0": ":Pwm DATA: Value Changed. Value: ",
+                    "DP0": ":Pot DATA: Value Changed. Value: ",
+                    "DLS1": ":Limit DATA: Released.: ",
+                    "DLS0": ":Limit DATA: Pressed.: ",
+                    "DO3": ":Optical DATA: Installed: ",
+                    "EO0": ":Optical ERROR: Disconnected: ",
+                    "DO1": ":Optical DATA: Detected Object.: ",
+                    "DO0": ":Optical DATA: Color Changed. Color: ",
+                    "DO2": ":Optical DATA: Lost Object.: ",
+                    "DI7": ":Inertial DATA: Installed: ",
+                    "DI2": ":Inertial DATA: Calibrating.: ",
+                    "DI3": ":Inertial DATA: Calibration Complete.: ",
+                    "DI0": ":Inertial DATA: Rotation Changed. Rotation: ",
+                    "DI9": ":Inertial DATA: Roll Changed. Roll: ",
+                    "DI8": ":Inertial DATA: Pitch Changed. Pitch: ",
+                    "DI1": ":Inertial DATA: Heading Changed. Heading: ",
+                    "DI4": ":Inertial DATA: X Axis Changed. Accel: ",
+                    "DI5": ":Inertial DATA: Y Axis Changed. Accel: ",
+                    "DI6": ":Inertial DATA: Z Axis Changed. Accel: ",
+                    "EI0": ":Inertial ERROR: Disconnected.: ",
+                    "DDS3": ":Distance DATA: Installed.: ",
+                    "EDS0": ":Distance ERROR: Disconnected.: ",
+                    "DDS0": ":Distance DATA: Detected Object.: ",
+                    "DDS1": ":Distance DATA: Distance Changed. Distance: ",
+                    "DDS4": ":Distance DATA: Lost Object.: ",
+                    "DR0": ":Rotation DATA: Installed.: ",
+                    "ER0": ":Rotation ERROR: Disconnected.: ",
+                    "DR1": ":Rotation DATA: Angle Changed. Angle: ",
+                    "DR2": ":Rotation DATA: Position Changed. Position: ",
+                    "DDI0": ":Digital DATA: High.: ",
+                    "DDI1": ":Digital DATA: Low.: ",
+                    "DAI0": ":Analog DATA: Changed. Value: ",
+                    "DBS0": ":Bumper DATA: Pressed.: ",
+                    "DBS1": ":Bumper DATA: Released.: ",
                     }
             
             # Setting up Log Files if they dont exist and setting index.
@@ -1179,7 +1131,7 @@ try:
                 for _ in range(20):
                     if not self.robot_active:
                         for motor in self.Motors:
-                            if motor.velocity!=0:
+                            if motor.velocity(PERCENT)!=0:
                                 self.robot_active=True
                                 break
                     elif not auto_do_motors:
@@ -1227,7 +1179,13 @@ try:
             pass
 
         def encode(self):
-            pass
+            prelist=[]
+            file=brain.sdcard.loadfile("RecordingData.csv").decode(log.format).split("\n")
+            for line in file:
+                if line:
+                    prelist.append(line.split(','))
+            print(prelist)
+
     
     class Archive:
             """
@@ -1245,77 +1203,7 @@ try:
                 speed=log_time.time()
                 log.adding=False
 
-                log.add_codes("DPW0", ":Pwm DATA: Value Changed. Value: ")
-                log.add_codes("DP0", ":Potentiometer DATA: Value Changed. Value: ")
-                log.add_codes("DLS1", ":Limit DATA: Released.: ")
-                log.add_codes("DLS0", ":Limit DATA: Pressed.: ")
-                log.add_codes("DO3", ":Optical DATA: Optical Installed: ")
-                log.add_codes("EO0", ":Optical ERROR: Optical Disconnected: ")
-                log.add_codes("DO1", ":Optical DATA: Optical Detected Object.: ")
-                log.add_codes("DO0", ":Optical DATA: Color Changed. Color: ")
-                log.add_codes("DO2", ":Optical DATA: Optical Lost Object.: ")
-                log.add_codes("DI7", ":Inertial DATA: Inertial Installed: ")
-                log.add_codes("DI2", ":Inertial DATA: Calibrating.: ")
-                log.add_codes("DI3", ":Inertial DATA: Calibration Complete.: ")
-                log.add_codes("DI0", ":Inertial DATA: Rotation Changed. Rotation: ")
-                log.add_codes("DI9", ":Inertial DATA: Roll Changed. Roll: ")
-                log.add_codes("DI8", ":Inertial DATA: Pitch Changed. Pitch: ")
-                log.add_codes("DI1", ":Inertial DATA: Heading Changed. Heading: ")
-                log.add_codes("DI4", ":Inertial DATA: X Axis Changed. Acceleration: ")
-                log.add_codes("DI5", ":Inertial DATA: Y Axis Changed. Acceleration: ")
-                log.add_codes("DI6", ":Inertial DATA: Z Axis Changed. Acceleration: ")
-                log.add_codes("EI0", ":Inertial ERROR: Inertial Disconnected.: ")
-                log.add_codes("DDS3", ":Distance DATA: Distance Installed.: ")
-                log.add_codes("EDS0", ":Distance ERROR: Distance Disconnected.: ")
-                log.add_codes("DDS0", ":Distance DATA: Distance Detected Object.: ")
-                log.add_codes("DDS1", ":Distance DATA: Distance Changed. Distance: ")
-                log.add_codes("DDS4", ":Distance DATA: Distance Lost Object.: ")
-                log.add_codes("DR0", ":Rotation DATA: Rotation Installed.: ")
-                log.add_codes("ER0", ":Rotation ERROR: Rotation Disconnected.: ")
-                log.add_codes("DR1", ":Rotation DATA: Angle Changed. Angle: ")
-                log.add_codes("DR2", ":Rotation DATA: Position Changed. Position: ")
-                log.add_codes("DDI0", ":Digital DATA: Value High.: ")
-                log.add_codes("DDI1", ":Digital DATA: Value Low.: ")
-                log.add_codes("DAI0", ":Analog DATA: Value Changed. Value: ")
-                log.add_codes("DBS0", ":Bumper DATA: Pressed.: ")
-                log.add_codes("DBS1", ":Bumper DATA: Released.: ")
-
                 reversecodes={value: key for key, value in log.codes.items()}
-
-                log.remove_codes("DPW0")
-                log.remove_codes("DP0")
-                log.remove_codes("DLS1")
-                log.remove_codes("DLS0")
-                log.remove_codes("DO3")
-                log.remove_codes("EO0")
-                log.remove_codes("DO1")
-                log.remove_codes("DO0")
-                log.remove_codes("DO2")
-                log.remove_codes("DI7")
-                log.remove_codes("DI2")
-                log.remove_codes("DI3")
-                log.remove_codes("DI0")
-                log.remove_codes("DI9")
-                log.remove_codes("DI8")
-                log.remove_codes("DI1")
-                log.remove_codes("DI4")
-                log.remove_codes("DI5")
-                log.remove_codes("DI6")
-                log.remove_codes("EI0")
-                log.remove_codes("DDS3")
-                log.remove_codes("EDS0")
-                log.remove_codes("DDS0")
-                log.remove_codes("DDS1")
-                log.remove_codes("DDS4")
-                log.remove_codes("DR0")
-                log.remove_codes("ER0")
-                log.remove_codes("DR1")
-                log.remove_codes("DR2")
-                log.remove_codes("DDI0")
-                log.remove_codes("DDI1")
-                log.remove_codes("DAI0")
-                log.remove_codes("DBS0")
-                log.remove_codes("DBS1")
                 
                 with open("Log.csv", "rb") as file:
                     chunk_buffer=bytearray(20480)
@@ -1476,9 +1364,11 @@ try:
                 
                 if not self.record:
                     break
-
+                
+                self.axis1=controller.axis1.position()
                 self.axis2=controller.axis2.position()
                 self.axis3=controller.axis3.position()
+                self.axis4=controller.axis4.position()
                 self.time_stamp=log_time.time()
                 self.buttonspressed=bytearray()
 
@@ -1518,7 +1408,7 @@ try:
                 if controller.buttonL2.pressing():
                     self.buttonspressed.extend(b"L2: ")
 
-                brain.sdcard.appendfile("RecordingData.csv", bytearray(b"%d A2, %d A3, %d T, %s BP, %d RP, %d LP \n"%(self.axis2 , self.axis3, self.time_stamp , self.buttonspressed.decode("utf-8"), Right.position(DEGREES), Left.position(DEGREES))))
+                brain.sdcard.appendfile("RecordingData.csv", bytearray(b"%d A1, %d A2, %d A3, %d A4, %d T, %s BP, %d RP, %d LP \n"%(self.axis1, self.axis2 , self.axis3, self.axis4, self.time_stamp , self.buttonspressed.decode("utf-8"), Right.position(DEGREES), Left.position(DEGREES))))
 
                 wait(20, MSEC)
     class Settings:
