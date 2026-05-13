@@ -590,20 +590,7 @@ try:
                 controllerid=str(controller)
 
                 if controllerid not in self.button_values:
-                    self.button_values[controllerid]=[
-                    self.button_a,
-                    self.button_b,
-                    self.button_x,
-                    self.button_y,
-                    self.button_up,
-                    self.button_down,
-                    self.button_left,
-                    self.button_right,
-                    self.button_L1,
-                    self.button_L2,
-                    self.button_R1,
-                    self.button_R2,
-                ]
+                    self.button_values[controllerid]=[True,True,True,True,True,True,True,True,True,True,True,True]
                 
                 if controllerid not in self.axis:
                     self.axis[controllerid]=[0, 0, 0, 0]
@@ -670,21 +657,6 @@ try:
                         if not self.button_values[controllerid][i]:
                             log.add("DC0", "%s_Button %s Released"%(self.ctrl_name, self.button_names[i]))
                             self.button_values[controllerid][i] = True
-
-                (
-                    self.button_a,
-                    self.button_b,
-                    self.button_x,
-                    self.button_y,
-                    self.button_up,
-                    self.button_down,
-                    self.button_left,
-                    self.button_right,
-                    self.button_L1,
-                    self.button_L2,
-                    self.button_R1,
-                    self.button_R2,
-                ) = self.button_values[controllerid]
 
             def variable(self, name: str, value: Any) -> None:
                 """
