@@ -1136,12 +1136,22 @@ try:
             pass
 
         def encode(self):
-            prelist=[]
+            prelist:List[List[str]]=[]
             file=brain.sdcard.loadfile("RecordingData.csv").decode(log.format).split("\n")
             for line in file:
                 if line:
                     prelist.append(line.split(','))
-            print(prelist)
+            
+            for i in range(len(prelist)):
+                axis1=int(prelist[i][0].replace("A1", ""))
+                axis2=int(prelist[i][1].replace("A2", ""))
+                axis3=int(prelist[i][2].replace("A3", ""))
+                axis4=int(prelist[i][3].replace("A4", ""))
+                timestamp=int(prelist[i][4].replace("T", ""))
+                rightposition=int(prelist[i][6].replace("RP", ""))
+                leftpostion=int(prelist[i][7].replace("LP", ""))
+                pressedbuttons: List[str] = prelist[i][5].replace("BP", "").split(":")
+                print(axis1, axis2, axis3, axis4, timestamp, pressedbuttons, rightposition, leftpostion)
 
     
     class Archive:
@@ -1277,29 +1287,16 @@ try:
                 None
                 """
 
-                filename=("logrecalled.txt")
+                filename=("logrecalled.csv")
                 print("recalling...")
-                try:
-                    file=brain.sdcard.loadfile("loghistory.txt").decode(log.format)
-                    brain.sdcard.savefile(filename)
-                    filelist=file.split(',')
-                    for i in range(len(filelist)):
-                        prelist=filelist[i].split(' ')
-                        print(prelist)
-                        if len(prelist) >= 5:
-                            detailslist=[item + " " for item in prelist[5 : len(prelist)-1]]
-                            details="".join(detailslist)
-                            brain.sdcard.appendfile(filename, bytearray(", %s %s %s %s \n"%(prelist[1], prelist[2], log.codes.get(prelist[4]), details), log.format))
-                    print("Recall done.")
-                except MemoryError: # Same thing as the last three exceptions.
-                    with open("loghistory.txt", 'r') as file:
-                        for line in file:
-                            prelist=line.split(' ')
-                            if len(prelist) >= 5:
-                                detailslist=[item + " " for item in prelist[5 : len(prelist)-1]]
-                            details="".join(detailslist)
-                            brain.sdcard.appendfile(filename, bytearray(", %s %s %s %s \n"%(prelist[1], prelist[2], log.codes.get(prelist[4]), details), log.format))
-                    print("Recall done.")
+                with open("loghistory.txt", 'r') as file:
+                    for line in file:
+                        prelist=line.split(' ')
+                        if len(prelist) >= 4:
+                            detailslist=[item + " " for item in prelist[3 : len(prelist)-1]]
+                        details="".join(detailslist)
+                        brain.sdcard.appendfile(filename, bytearray("%d [%s ms], %s, %s\n"%(int(prelist[0], 16),int(prelist[1], 16) , log.codes.get(prelist[2], prelist[2]), details), log.format))
+                print("Recall done.")
             
             def recall_recording(self, name: str) -> None:
                 """
