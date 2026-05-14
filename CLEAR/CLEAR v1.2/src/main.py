@@ -79,6 +79,8 @@ def rightmove(rightspeed):
     Right1.spin(FORWARD, rightspeed, VOLT)
     Right2.spin(FORWARD, rightspeed, VOLT)
 
+compsd=Competition(none, none)
+
 # Recording Functions
 if brain.sdcard.is_inserted() and brain.sdcard.exists("CLEAR.py"):
     import CLEAR

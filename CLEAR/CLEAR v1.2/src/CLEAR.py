@@ -40,50 +40,34 @@ try:
                 def memoryuse(self) -> None:
                     self.currentMemory=mem_alloc()/1000  # type: ignore
                     if not (self.memory >= self.currentMemory - self.memory_tolrance and self.memory <= self.currentMemory + self.memory_tolrance):
-                        if "DSM0" not in log.codes:
-                            log.add_codes("DSM0", ":Memory DATA: Memory Useage Changed. Memory Used: ")
                         log.add("DSM0", str(self.currentMemory) + " KB")
                         self.memory=self.currentMemory
                 
                 def modules(self) -> None:
                     if self.modulelist != sys.modules:
-                        if "DSP0" not in log.codes:
-                            log.add_codes("DSP0", ":System DATA: New module(s) added. Module(s): ")
                         filtered_list = [item for item in sys.modules if item not in self.modulelist]
                         log.add("DSP0", filtered_list)
                         self.modulelist= sys.modules.copy()
-                
+
                 def control(self, comp: Competition):
                     if comp.is_autonomous() and not self.aton:
-                        if "DSC0" not in log.codes:
-                            log.add_codes("DSC0", ":Competition DATA: Atonomous Started:")
                         log.add("DSC0", "")
                         self.aton=True
                         self.driver=False
                     elif comp.is_driver_control() and not self.driver:
-                        if "DSC1" not in log.codes:
-                            log.add_codes("DSC1", ":Competition DATA: Driver Control Started:")
                         log.add("DSC1", "")
                         self.driver=True
                         self.aton=False
                     elif comp.is_competition_switch() and not self.comp_switch:
-                        if "DSC2" not in log.codes:
-                            log.add_codes("DSC2", ":Competition DATA: Competition Connected:")
                         log.add("DSC2", "")
                         self.comp_switch=True
                     elif not comp.is_field_control() and self.field:
-                        if "DSC5" not in log.codes:
-                            log.add_codes("DSC5", ":Competition DATA: Competition Disconnected:")
                         log.add("DSC5", "")
                         self.field=False
                     elif comp.is_field_control() and not self.field:
-                        if "DSC3" not in log.codes:
-                            log.add_codes("DSC3", ":Competition DATA: Field Connected:")
                         log.add("DSC3", "")
                         self.field=True
                     elif not comp.is_field_control() and self.field:
-                        if "DSC4" not in log.codes:
-                            log.add_codes("DSC4", ":Competition DATA: Field Disconnected:")
                         log.add("DSC4", "")
                         self.field=False
 
@@ -478,19 +462,6 @@ try:
                 self.capacity:int=0
                 self.watts:int=0
                 self.axis={}
-
-                self.button_a=True
-                self.button_b=True
-                self.button_x=True
-                self.button_y=True
-                self.button_up=True
-                self.button_down=True
-                self.button_left=True
-                self.button_right=True
-                self.button_L1=True
-                self.button_L2=True
-                self.button_R1=True
-                self.button_R2=True
                 self.button_objs=[]
                 self.button_names = [
                     "A", "B", "X", "Y",
@@ -591,6 +562,7 @@ try:
 
                 if controllerid not in self.button_values:
                     self.button_values[controllerid]=[True,True,True,True,True,True,True,True,True,True,True,True]
+
                 
                 if controllerid not in self.axis:
                     self.axis[controllerid]=[0, 0, 0, 0]
@@ -779,6 +751,14 @@ try:
                     "DAI0": "<Analog DATA: Changed Value>",
                     "DBS0": "<Bumper DATA: Pressed>",
                     "DBS1": "<Bumper DATA: Released>",
+                    "DSM0": "<Mem DATA: Memory Useage Changed> ",
+                    "DSP0": "<Sys DATA: New module(s) added>",
+                    "DSC0": "<Comp DATA: Aton Started>",
+                    "DSC1": "<Comp DATA: Driver Started>",
+                    "DSC2": "<Comp DATA: Connected>",
+                    "DSC3": "<Comp DATA: Field Connected>",
+                    "DSC4": "<Comp DATA: Field Disconnected>",
+                    "DSC5": "<Comp DATA: Disconnected>"
                     }
             
             # Setting up Log Files if they dont exist and setting index.
@@ -1056,7 +1036,7 @@ try:
                     log.add_logstart("log.capture.threewire.potentiometer(%s)"%(item.replace("'", "")))
                 elif item_type == "<class 'triport_analog'>" and auto_do_three_wire:
                     log.add_logstart("log.capture.threewire.analog(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'competition'>" and auto_do_control:
+                elif item_type == "<class 'comp'>" and auto_do_control:
                     log.add_logstart("log.capture.system.control(%s)"%(item.replace("'", "")))
                 
                 del item_type            
