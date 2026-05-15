@@ -287,8 +287,6 @@ try:
                         log.add("EI0", "")
                         self.inertial_connected=False
 
-                    
-
                 def distance(self, distancesensor: Distance) -> None:
                     distance_id=id(distancesensor)
 
@@ -350,7 +348,6 @@ try:
                         log.add("DR2", str(rotationsensor.position()) + ", Sensor " + str(rotationsensor))
                         self.rotation_position_history[rotaion_id]= rotationsensor.position()
                 
-            
             class Threewire:
                 def __init__(self):
                     self.digital_value={}
@@ -653,6 +650,7 @@ try:
                 if value != self.variables[self.valueid]:
                     log.add("DV0", "%s, Val %s"%(name, value))
                     self.variables[self.valueid] = value
+
     class Log:
         """Main object for the CLEAR import. \n To start logging use the "logstart()" function in this object to do the main logging if you need help with its inputs use help() over the "logstart()" function."""
                     
@@ -915,7 +913,7 @@ try:
             funtion= Funtion for object Log
             """
 
-            brain.sdcard.appendfile("Logstart.txt" , bytearray(funtion + ", ", self.format))     
+            brain.sdcard.appendfile("Logstart.txt" , bytearray(funtion + ", ", self.format))
             
         def auto_start(self):
             """
@@ -1005,7 +1003,7 @@ try:
             else:
                 auto_do_controller:bool=False
 
-            controllers=[]
+            controllers: List[Controller]=[]
             globallogging= dir()
 
             for item in globallogging:
@@ -1041,7 +1039,7 @@ try:
                 
                 del item_type            
 
-            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_smart_port, auto_do_controller, globallogging
+            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port, globallogging
 
             _exec=exec
             lwait=wait
@@ -1067,11 +1065,10 @@ try:
             while True:
                 for _ in range(20):
                     if not self.robot_active:
-                        for motor in self.Motors:
-                            if motor.velocity(PERCENT)!=0:
-                                self.robot_active=True
-                                break
-                    elif not auto_do_motors:
+                        if controllers[0].axis2.position() !=0 or controllers[0].axis3.position() !=0:
+                            self.robot_active=True
+                            break
+                    if not auto_do_controller:
                         self.robot_active=True
 
                     start:int=timer()
