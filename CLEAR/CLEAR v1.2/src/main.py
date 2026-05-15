@@ -83,6 +83,9 @@ comp=Competition(none, none)
 
 # Recording Functions
 if brain.sdcard.is_inserted() and brain.sdcard.exists("CLEAR.py"):
+
+    rightmotorlist=[Right1, Right2]
+    leftmotorlist=[left1, left2]
     import CLEAR
 
     Thread(CLEAR.log.auto_start)
@@ -95,11 +98,9 @@ if brain.sdcard.is_inserted() and brain.sdcard.exists("CLEAR.py"):
             print("Recording Started")
         else:
             recording_state = 0
-            CLEAR.recording.stop()
+            CLEAR.recording.stop("TestRecording", rightmotorlist, leftmotorlist)
             controller_1.rumble("--")
             print("Recording Stopped")
-            CLEAR.encode.encode()
-            print("Encoding Complete")
     controller_1.buttonA.pressed(toggle_recording)
 
 # Event setup

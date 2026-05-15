@@ -1110,14 +1110,40 @@ try:
 
     class Encode:
         def __init__(self):
+            self.axis2History=0
+            self.axis3History=0
+            self.degreesoffsetright=0
+            self.degreesoffsetleft=0
+            self.codeobjectoffset=0
+
+        def rightmoveCLEAR(self, Motors: List[Motor], Velocity: int):
+            for motor in Motors:
+                motor.set_velocity(Velocity, PERCENT)
+            
+        def leftmoveCLEAR(self, Motors: List[Motor], Velocity: int):
+            for motor in Motors:
+                motor.set_velocity(Velocity, PERCENT)
+        
+        def rightDegreesCLEAR(self, Motors: List[Motor], degrees):
+            for motor in Motors:
+                motor.spin_for(FORWARD, degrees, DEGREES)
+
+        def leftDegreesCELAR(self, Motors: List[Motor], degrees):
+            for motor in Motors:
+                motor.spin_for(FORWARD, degrees, DEGREES)
+
+        def run(self):
             pass
 
-        def encode(self):
+        def encode(self, Name: str, RightMotors: List[Motor], LeftMotors: List[Motor], dotank=True):
+
             prelist:List[List[str]]=[]
             file=brain.sdcard.loadfile("RecordingData.csv").decode(log.format).split("\n")
             for line in file:
                 if line:
                     prelist.append(line.split(','))
+
+            codeobject=bytearray(50000)
             
             for i in range(len(prelist)):
                 axis1=int(prelist[i][0].replace("A1", ""))
@@ -1126,10 +1152,48 @@ try:
                 axis4=int(prelist[i][3].replace("A4", ""))
                 timestamp=int(prelist[i][4].replace("T", ""))
                 rightposition=int(prelist[i][6].replace("RP", ""))
-                leftpostion=int(prelist[i][7].replace("LP", ""))
+                leftposition=int(prelist[i][7].replace("LP", ""))
                 pressedbuttons: List[str] = prelist[i][5].replace("BP", "").split(":")
-                print(axis1, axis2, axis3, axis4, timestamp, pressedbuttons, rightposition, leftpostion)
+                print(axis1, axis2, axis3, axis4, timestamp, pressedbuttons, rightposition, leftposition)
 
+                if dotank:
+                    codestring=b", CLEAR.encode.rightmoveCLEAR(%s, %s), CLEAR.encode.leftmoveCLEAR(%s, %s)"%(RightMotors, axis2, LeftMotors, axis3)
+                else:
+                    pass
+
+                if axis2 > 0:
+                    axis2sign=True
+                else:
+                    axis2sign=False
+                
+                if axis3 > 0:
+                    axis3sign=True
+                else:
+                    axis3sign=False
+
+                codestringdegreeright=b""
+                codestringdegreeleft=b""
+                
+                if axis2sign != self.axis2History:
+                    self.axis2History=axis2sign
+                    degrees=rightposition-self.degreesoffsetright
+                    codestringdegreeright=b", rightDegreesCLEAR(%s, %s)"%(RightMotors, degrees)
+                    self.degreesoffsetright=rightposition
+
+                if axis3sign != self.axis3History:
+                    self.axis3History=axis3sign
+                    degrees=leftposition-self.degreesoffsetleft
+                    codestringdegreeleft=b", leftDegreesCLEAR(%s, %s)"%(LeftMotors, degrees)
+                    self.degreesoffsetright=rightposition
+                
+                fullstring="%s%s%s"%(codestring, codestringdegreeright, codestringdegreeleft)
+                
+                stringsize=len(fullstring)
+                pack_into("=%ds"%(stringsize), codeobject, self.codeobjectoffset, fullstring)
+
+                self.codeobjectoffset+=stringsize 
+
+            brain.sdcard.savefile(Name, codeobject[0:self.codeobjectoffset])     
     
     class Archive:
             """
@@ -1307,9 +1371,9 @@ try:
             self.record=True
             self._record_loop(controller, Right, Left)
 
-        def stop(self):
+        def stop(self, Name, Right, Left):
             self.record=False
-            encode.encode()
+            encode.encode(Name, Right, Left)
 
         def _record_loop(self, controller: Controller, Right: Motor, Left: Motor):
             while True:
