@@ -1049,7 +1049,7 @@ try:
                 elif item_type == "<class 'comp'>" and auto_do_control:
                     log.add_logstart("log.capture.system.control(%s)"%(item.replace("'", "")))
 
-            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port, globallogging
+            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port, globallogging, __main__
 
             for item in globals():
                 if item not in dict_variables:

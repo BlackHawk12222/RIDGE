@@ -81,6 +81,10 @@ def rightmove(rightspeed):
 
 comp=Competition(none, none)
 
+def state_test():
+    global pushing
+    pushing=True
+
 # Recording Functions
 if brain.sdcard.is_inserted() and brain.sdcard.exists("CLEAR.py"):
 
@@ -105,3 +109,4 @@ if brain.sdcard.is_inserted() and brain.sdcard.exists("CLEAR.py"):
 # Event setup
 controller_1.axis2.changed(rightside)
 controller_1.axis3.changed(leftside)
+controller_1.buttonL1.pressed(state_test)
