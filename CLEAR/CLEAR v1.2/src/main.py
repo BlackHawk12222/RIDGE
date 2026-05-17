@@ -84,6 +84,7 @@ comp=Competition(none, none)
 def state_test():
     global pushing
     pushing=True
+    print("Pushing: ", pushing)
 
 # Recording Functions
 if brain.sdcard.is_inserted() and brain.sdcard.exists("CLEAR.py"):
