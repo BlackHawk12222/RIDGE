@@ -1005,13 +1005,14 @@ try:
                 auto_do_controller:bool=False
 
             controllers: List[Controller]=[]
-            dict_variables: dict[str, Any]={}
             import __main__
+            dict_variables=dict(vars(__main__))
             globallogging=dir(__main__)
-            for object in globallogging:
-                value=getattr(__main__, object)
-                print(object, value)
-                dict_variables[object]=value
+
+            # for object in globallogging:
+            #     value=getattr(__main__, object)
+            #     print(object, value)
+            #     dict_variables[object]=value
 
             #print(globallogging)
             print(dict_variables)
@@ -1103,6 +1104,7 @@ try:
             while True:
                 for _ in range(20):
                     start:int=timer()
+
                     if not self.robot_active:
                         if not auto_do_controller:
                             self.robot_active=True
@@ -1112,12 +1114,6 @@ try:
                                 self.robot_active=True
                         else:
                             self.robot_active=True
-
-                    import __main__
-                    for object in globallogging:
-                        value=getattr(__main__, object)
-                        dict_variables[object]=value
-                    del __main__
 
                     if controllers:
                         for controller in controllers:
