@@ -913,7 +913,7 @@ try:
             funtion= Funtion for object Log
             """
 
-            brain.sdcard.appendfile("Logstart.txt" , bytearray(funtion + ", ", self.format))
+            brain.sdcard.appendfile("Logstart.txt" , bytearray(funtion + "\n", self.format))
             
         def auto_start(self):
             """
@@ -1004,18 +1004,30 @@ try:
                 auto_do_controller:bool=False
 
             controllers: List[Controller]=[]
-            globallogging= dir()
+            dict_variables: dict[str, Any]={}
+            import __main__
+            globallogging=dir(__main__)
+            for object in globallogging:
+                value=getattr(__main__, object)
+                dict_variables[object]=value
+
+            #print(globallogging)
+            #print(dict_variables)
 
             for item in globallogging:
+                
+                try:
+                    item_type=str(type(eval(item, dict_variables, dict_variables)))
+                except NameError:
+                    continue
 
-                item_type=str(type(eval(item)))
 
                 if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>") and auto_do_variables:
                     log.add_logstart("log.capture.variable('%s', %s)"%(item, item.replace("'", "")))
                 elif item_type == "<class 'motor'>" and auto_do_motors:
-                    self.Motors+=[eval(item)]
+                    self.Motors+=[eval(item, dict_variables, dict_variables)]
                 elif item_type == "<class 'controller'>" and auto_do_controller:
-                    controllers+=[eval(item)]
+                    controllers+=[eval(item, dict_variables, dict_variables)]
                 elif item_type == "<class 'inertial'>" and auto_do_smart_port:
                     log.add_logstart("log.capture.smartport.inertial(%s)"%(item.replace("'", "")))
                 elif item_type == "<class 'optical'>" and auto_do_smart_port:
@@ -1036,10 +1048,13 @@ try:
                     log.add_logstart("log.capture.threewire.analog(%s)"%(item.replace("'", "")))
                 elif item_type == "<class 'comp'>" and auto_do_control:
                     log.add_logstart("log.capture.system.control(%s)"%(item.replace("'", "")))
-                
-                del item_type            
 
             del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port, globallogging
+
+            for item in globals():
+                if item not in dict_variables:
+                    value=globals()[item]
+                    dict_variables[item]=value
 
             _exec=exec
             lwait=wait
@@ -1055,7 +1070,7 @@ try:
             # Loads extra funtions from file.
             try:
                 addedfuntion=brain.sdcard.loadfile("Logstart.txt").decode(self.format)
-                added_bytes=compile(addedfuntion, '<string>' ,'exec', 0,  True, 2)
+                added_bytes=compile(addedfuntion, '<string>' ,'exec', 0,  False, 2)
             except AttributeError:
                 addedfuntion=""
                 added_bytes=compile("", '<string>' ,'exec', 0,  True, 2)
@@ -1065,11 +1080,14 @@ try:
             while True:
                 for _ in range(20):
                     if not self.robot_active:
-                        if controllers[0].axis2.position() !=0 or controllers[0].axis3.position() !=0:
+                        if not auto_do_controller:
                             self.robot_active=True
-                            break
-                    if not auto_do_controller:
-                        self.robot_active=True
+                        
+                        if len(controllers)>0:
+                            if  (controllers[0].axis2.position() !=0 or controllers[0].axis3.position() !=0):
+                                self.robot_active=True
+                        else:
+                            self.robot_active=True
 
                     start:int=timer()
 
@@ -1080,7 +1098,7 @@ try:
                     log_check()
 
                     if addedfuntion:
-                        _exec(added_bytes)
+                        _exec(added_bytes, dict_variables, dict_variables)
                     
                     if self.Motors:
                         motorcapture()
@@ -1483,6 +1501,7 @@ try:
     log=Log()
     encode=Encode()
     recording=Recording()
+    clear=Thread(log.auto_start())
 
 except Exception as e:
     import uio
