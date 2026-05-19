@@ -638,7 +638,6 @@ try:
                 """
 
                 self.valueid=str(name)
-                print(self.variables)
 
                 # Adds id if not in set.
                 if self.valueid not in self.variables:
@@ -1005,80 +1004,49 @@ try:
                 auto_do_controller:bool=False
 
             controllers: List[Controller]=[]
-            import __main__
-            dict_variables=dict(vars(__main__))
-            globallogging=dir(__main__)
 
-            # for object in globallogging:
-            #     value=getattr(__main__, object)
-            #     print(object, value)
-            #     dict_variables[object]=value
+            globallogging=dir()
 
             #print(globallogging)
-            print(dict_variables)
-            exclude_dict=dict_variables.copy()
 
             for item in globallogging:
                 
                 try:
-                    item_type=str(type(eval(item, dict_variables, dict_variables)))
+                    item_type=str(type(eval(item)))
                 except NameError:
                     continue
 
                 if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>") and auto_do_variables:
                     log.add_logstart("log.capture.variable('%s', %s)"%(item, item.replace("'", "")))
-                    exclude_dict.pop(item)
                 elif item_type == "<class 'motor'>" and auto_do_motors:
-                    self.Motors+=[eval(item, dict_variables, dict_variables)]
-                    exclude_dict.pop(item)
+                    self.Motors+=[eval(item)]
                 elif item_type == "<class 'controller'>" and auto_do_controller:
-                    controllers+=[eval(item, dict_variables, dict_variables)]
-                    exclude_dict.pop(item)
+                    controllers+=[eval(item)]
                 elif item_type == "<class 'inertial'>" and auto_do_smart_port:
                     log.add_logstart("log.capture.smartport.inertial(%s)"%(item.replace("'", "")))
-                    exclude_dict.pop(item)
                 elif item_type == "<class 'optical'>" and auto_do_smart_port:
                     log.add_logstart("log.capture.smartport.optical(%s)"%(item.replace("'", "")))
-                    exclude_dict.pop(item)
                 elif item_type == "<class 'rotation'>" and auto_do_smart_port:
                     log.add_logstart("log.capture.smartport.rotation(%s)"%(item.replace("'", "")))
-                    exclude_dict.pop(item)
                 elif item_type == "<class 'distance'>" and auto_do_smart_port:
                     log.add_logstart("log.capture.smartport.distance(%s)"%(item.replace("'", "")))
-                    exclude_dict.pop(item)
                 elif item_type == "<class 'triport_bumper'>" and auto_do_three_wire:
                     log.add_logstart("log.capture.threewire.bumper(%s)"%(item.replace("'", "")))
-                    exclude_dict.pop(item)
                 elif item_type == "<class 'triport_limit'>" and auto_do_three_wire:
                     log.add_logstart("log.capture.threewire.limit(%s)"%(item.replace("'", "")))
-                    exclude_dict.pop(item)
                 elif item_type == "<class 'triport_digitalin'>" and auto_do_three_wire:
                     log.add_logstart("log.capture.threewire.digitalinput(%s)"%(item.replace("'", "")))
-                    exclude_dict.pop(item)
                 elif item_type == "<class 'triport_potv2'>" and auto_do_three_wire:
                     log.add_logstart("log.capture.threewire.potentiometer(%s)"%(item.replace("'", "")))
-                    exclude_dict.pop(item)
                 elif item_type == "<class 'triport_analog'>" and auto_do_three_wire:
                     log.add_logstart("log.capture.threewire.analog(%s)"%(item.replace("'", "")))
-                    exclude_dict.pop(item)
                 elif item_type == "<class 'comp'>" and auto_do_control:
                     log.add_logstart("log.capture.system.control(%s)"%(item.replace("'", "")))
-                    exclude_dict.pop(item)
 
-            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port, __main__
-
-            for item in exclude_dict:
-                dict_variables.pop(item)
-            
-            print(dict_variables)
+            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port
 
             print("Logstart: ")
             print(brain.sdcard.loadfile("Logstart.txt").decode(self.format))
-
-            for item in globals():
-                if item not in dict_variables:
-                    value=globals()[item]
-                    dict_variables[item]=value
 
             _exec=exec
             lwait=wait
@@ -1095,9 +1063,13 @@ try:
             try:
                 addedfuntion=brain.sdcard.loadfile("Logstart.txt").decode(self.format)
                 added_bytes=compile(addedfuntion, '<string>' ,'exec', 0,  False, 2)
+                added_bytes_used=True
             except AttributeError:
                 addedfuntion=""
                 added_bytes=compile("", '<string>' ,'exec', 0,  True, 2)
+                added_bytes_used=False
+            
+            del addedfuntion
             
             gc_collect()
 
@@ -1121,8 +1093,8 @@ try:
                             
                     log_check()
 
-                    if addedfuntion:
-                        _exec(added_bytes, dict_variables, dict_variables)
+                    if added_bytes_used:
+                        _exec(added_bytes)
                     
                     if self.Motors:
                         motorcapture()
@@ -1525,7 +1497,6 @@ try:
     log=Log()
     encode=Encode()
     recording=Recording()
-    clear=Thread(log.auto_start())
 
 except Exception as e:
     import uio

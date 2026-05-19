@@ -92,6 +92,7 @@ if brain.sdcard.is_inserted() and brain.sdcard.exists("CLEAR.py"):
     rightmotorlist=[Right1, Right2]
     leftmotorlist=[left1, left2]
     import CLEAR
+    Thread(CLEAR.log.auto_start())
     
     def toggle_recording():
         global recording_state
