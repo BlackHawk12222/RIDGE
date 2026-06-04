@@ -1156,8 +1156,8 @@ try:
             for motor in Motors:
                 motor.spin_for(FORWARD, degrees, DEGREES)
 
-        def run(self):
-            pass
+        def run(self, Name: str):
+            exec(brain.sdcard.loadfile(Name + ".txt").decode(log.format))
 
         def encode(self, Name: str, RightMotors: List[Motor], LeftMotors: List[Motor], dotank=True):
 
@@ -1181,7 +1181,7 @@ try:
                 print(axis1, axis2, axis3, axis4, timestamp, pressedbuttons, rightposition, leftposition)
 
                 if dotank:
-                    codestring=b", CLEAR.encode.rightmoveCLEAR(%s, %s), CLEAR.encode.leftmoveCLEAR(%s, %s)"%(RightMotors, axis2, LeftMotors, axis3)
+                    codestring=b", encode.rightmoveCLEAR(%s, %s), encode.leftmoveCLEAR(%s, %s)"%(RightMotors, axis2, LeftMotors, axis3)
                 else:
                     pass
 
@@ -1210,14 +1210,14 @@ try:
                     codestringdegreeleft=b", leftDegreesCLEAR(%s, %s)"%(LeftMotors, degrees)
                     self.degreesoffsetright=rightposition
                 
-                fullstring="%s%s%s"%(codestring, codestringdegreeright, codestringdegreeleft)
+                fullstring="%s%s%s"%(codestring.decode(log.format), codestringdegreeright.decode(log.format), codestringdegreeleft.decode(log.format))
                 
                 stringsize=len(fullstring)
                 pack_into("=%ds"%(stringsize), codeobject, self.codeobjectoffset, fullstring)
 
                 self.codeobjectoffset+=stringsize 
 
-            brain.sdcard.savefile(Name, codeobject[0:self.codeobjectoffset])     
+            brain.sdcard.savefile(Name + ".txt", codeobject[0:self.codeobjectoffset])     
     
     class Archive:
             """

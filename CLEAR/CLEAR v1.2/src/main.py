@@ -9,11 +9,12 @@ def none():
 
 # Robot configuration code
 controller_1 = Controller(PRIMARY)
-Right1 = Motor(Ports.PORT11, GearSetting.RATIO_6_1, False)
-Right2 = Motor(Ports.PORT13, GearSetting.RATIO_6_1, False)
-left1 = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)
-left2 = Motor(Ports.PORT19, GearSetting.RATIO_6_1, True)
-rotation= Rotation(Ports.PORT9)
+Right1 = Motor(Ports.PORT18, GearSetting.RATIO_6_1, True)
+Right2 = Motor(Ports.PORT19, GearSetting.RATIO_6_1, False)
+Right3 = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)
+left1 = Motor(Ports.PORT11, GearSetting.RATIO_6_1, False)
+left2 = Motor(Ports.PORT12, GearSetting.RATIO_6_1, True)
+left3 = Motor(Ports.PORT13, GearSetting.RATIO_6_1, False)
 
 # wait for rotation sensor to fully initialize
 wait(30, MSEC)
@@ -75,7 +76,10 @@ def rightmove(rightspeed):
     Right1.spin(FORWARD, rightspeed, VOLT)
     Right2.spin(FORWARD, rightspeed, VOLT)
 
-comp=Competition(none, none)
+def aton():
+    CLEAR.encode.run("TestRecording")
+
+comp=Competition(none, aton)
 
 def state_test():
     global pushing
@@ -84,10 +88,10 @@ def state_test():
 
 if brain.sdcard.is_inserted() and brain.sdcard.exists("CLEAR.py"):
 
-    rightmotorlist=[Right1, Right2]
-    leftmotorlist=[left1, left2]
+    rightmotorlist=[Right1, Right2, Right3]
+    leftmotorlist=[left1, left2, left3]
     import CLEAR
-    Thread(CLEAR.log.auto_start())
+    Thread(CLEAR.log.auto_start)
     
     def toggle_recording():
         global recording_state
