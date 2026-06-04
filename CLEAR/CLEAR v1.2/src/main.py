@@ -18,10 +18,6 @@ rotation= Rotation(Ports.PORT9)
 # wait for rotation sensor to fully initialize
 wait(30, MSEC)
 
-def play_vexcode_sound(sound_name):
-    print("VEXPlaySound:" + sound_name)
-    wait(5, MSEC)
-
 # add a small delay to make sure we don't print in the middle of the REPL header
 wait(200, MSEC)
 # clear the console to make sure we don't have the REPL in the console
@@ -86,7 +82,6 @@ def state_test():
     pushing=True
     print("Pushing: ", pushing)
 
-# Recording Functions
 if brain.sdcard.is_inserted() and brain.sdcard.exists("CLEAR.py"):
 
     rightmotorlist=[Right1, Right2]

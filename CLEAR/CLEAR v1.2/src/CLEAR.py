@@ -14,6 +14,7 @@ try:
     from vex import *
     from gc import collect, mem_alloc# type: ignore 
     from ustruct import pack_into
+    import uarray
     
     brain=Brain()
     log_time= Timer() # Main timer used.
@@ -449,14 +450,16 @@ try:
                 self.valueid=0
                 
                 # Variables used to not have spam in log.  
-                self.battery_voltage_monitoring=0
-                self.battery_capacity_monitoring=0
-                self.battery_current_monitoring=0
-                self.battery_watt_monitoring=0
-                self.battery_temp_monitoring=0
-                self.voltage:int=0
-                self.current:int=0
-                self.capacity:int=0
+                # self.battery_voltage_monitoring=0
+                # self.battery_capacity_monitoring=0
+                # self.battery_current_monitoring=0
+                # self.battery_watt_monitoring=0
+                # self.battery_temp_monitoring=0
+                self.battery_values=uarray.array('H', [0, 0, 0, 0, 0])
+                self.battery_monitoring=uarray.array('H', [0, 0, 0, 0, 0])
+                # self.voltage:int=0
+                # self.current:int=0
+                # self.capacity:int=0
                 self.watts:int=0
                 self.axis={}
                 self.button_objs=[]
@@ -474,78 +477,85 @@ try:
                 Args:
                 None
                 """
+                
 
-                self.voltage:int=int(brain.battery.voltage(VoltageUnits.VOLT))
-                self.current:int=brain.battery.current(CurrentUnits.AMP)
-                self.capacity:int=brain.battery.capacity()
-                self.watts:int=int(brain.battery.current(CurrentUnits.AMP)) * int(brain.battery.voltage(VoltageUnits.VOLT))
-                self.temps:int=int(brain.battery.temperature(PERCENT))
+                self.battery_values[0]=int(brain.battery.voltage(VoltageUnits.VOLT))
+                self.battery_values[1]=int(brain.battery.current(CurrentUnits.AMP) * 10)
+                self.battery_values[2]=brain.battery.capacity()
+                self.battery_values[3]=int(brain.battery.current(CurrentUnits.AMP) * int(brain.battery.voltage(VoltageUnits.VOLT)) / 10)
+                self.battery_values[4]=int(brain.battery.temperature(PERCENT))
+
+                # self.voltage:int=int(brain.battery.voltage(VoltageUnits.VOLT))
+                # self.current:int=brain.battery.current(CurrentUnits.AMP)
+                # self.capacity:int=brain.battery.capacity()
+                # self.watts:int=int(brain.battery.current(CurrentUnits.AMP)) * int(brain.battery.voltage(VoltageUnits.VOLT))
+                # self.temps:int=int(brain.battery.temperature(PERCENT))
 
                 # Battery monitoring for voltage, capacity, and current.
-                if self.voltage>=12:
-                    if self.battery_voltage_monitoring==1 or self.battery_voltage_monitoring==2:
-                        log.add("DB0", "%s"%(self.voltage))
-                        self.battery_voltage_monitoring=0
-                elif self.voltage<12:
-                    if self.battery_voltage_monitoring==0 or self.battery_voltage_monitoring==1:
-                        log.add("WB0", "%s"%(self.voltage))
-                        self.battery_voltage_monitoring=2
-                elif self.voltage<11:
-                    if self.battery_voltage_monitoring==0 or self.battery_voltage_monitoring==2:
-                        log.add("EB0", "%s"%(self.voltage))
-                        self.battery_voltage_monitoring=1
+                if self.battery_values[0]>=12:
+                    if self.battery_monitoring[0]==1 or self.battery_monitoring[0]==2:
+                        log.add("DB0", "%s"%(self.battery_values[0]))
+                        self.battery_monitoring[0]=0
+                elif self.battery_values[0]<12:
+                    if self.battery_monitoring[0]==0 or self.battery_monitoring[0]==1:
+                        log.add("WB0", "%s"%(self.battery_values[0]))
+                        self.battery_monitoring[0]=2
+                elif self.battery_values[0]<11:
+                    if self.battery_monitoring[0]==0 or self.battery_monitoring[0]==2:
+                        log.add("EB0", "%s"%(self.battery_values[0]))
+                        self.battery_monitoring[0]=1
 
-                if self.capacity>=50:
-                    if self.battery_capacity_monitoring!=self.capacity:
-                        log.add("DB3", "%s"%(self.capacity))
-                        self.battery_capacity_monitoring=self.capacity
-                elif self.capacity<50:
-                    if self.battery_capacity_monitoring!=self.capacity:
-                        log.add("WB1", "%s"%(self.capacity))
-                        self.battery_capacity_monitoring=self.capacity
-                elif self.capacity<25:
-                    if self.battery_capacity_monitoring!=self.capacity:
-                        log.add("EB1", "%s"%(self.capacity))
-                        self.battery_capacity_monitoring=self.capacity
-                
-                if self.current<=10:
-                    if self.battery_current_monitoring==1 or self.battery_current_monitoring==2:
-                        log.add("DB1", "%s"%(self.current))
-                        self.battery_current_monitoring=0
-                elif self.current>10:
-                    if self.battery_current_monitoring==0 or self.battery_current_monitoring==1:
-                        log.add("WB2", "%s"%(self.current))
-                        self.battery_current_monitoring=2
-                elif self.current>15:
-                    if self.battery_current_monitoring==0 or self.battery_current_monitoring==2:
-                        log.add("EB2", "%s"%(self.current))
-                        self.battery_current_monitoring=1
-                
-                if self.watts<=150:
-                    if self.battery_watt_monitoring==1 or self.battery_watt_monitoring==2:
-                        log.add("DB2", "%s"%(self.watts))
-                        self.battery_watt_monitoring=0
-                elif self.watts>150:
-                    if self.battery_watt_monitoring==0 or self.battery_watt_monitoring==1:
-                        log.add("WB3", "%s"%(self.watts))
-                        self.battery_watt_monitoring=2
-                elif self.watts>200:
-                    if self.battery_watt_monitoring==0 or self.battery_watt_monitoring==3:
-                        log.add("EB3", "%s"%(self.watts))
-                        self.battery_watt_monitoring=1  
+                if self.battery_values[2]>=50:
+                    if self.battery_monitoring[2]!=self.battery_values[2]:
+                        log.add("DB3", "%s"%(self.battery_values[2]))
+                        self.battery_monitoring[2]=self.battery_values[2]
+                elif self.battery_values[2]<50:
+                    if self.battery_monitoring[2]!=self.battery_values[2]:
+                        log.add("WB1", "%s"%(self.battery_values[2]))
+                        self.battery_monitoring[2]=self.battery_values[2]
+                elif self.battery_values[2]<25:
+                    if self.battery_monitoring[2]!=self.battery_values[2]:
+                        log.add("EB1", "%s"%(self.battery_values[2]))
+                        self.battery_monitoring[2]=self.battery_values[2]
 
-                if self.temps<=30:
-                    if self.battery_temp_monitoring==1 or self.battery_temp_monitoring==2:
-                        log.add("DB4", "%s"%(self.temps))
-                        self.battery_temp_monitoring=0
-                elif self.temps>30:
-                    if self.battery_temp_monitoring==0 or self.battery_temp_monitoring==1:
-                        log.add("WB4", "%s"%(self.temps))
-                        self.battery_temp_monitoring=2
-                elif self.temps>50:
-                    if self.battery_watt_monitoring==0 or self.battery_temp_monitoring==3:
-                        log.add("EB4", "%s"%(self.temps))
-                        self.battery_temp_monitoring=1  
+                if self.battery_values[1]<=10:
+                    if self.battery_monitoring[1]==1 or self.battery_monitoring[1]==2:
+                        log.add("DB1", "%s"%(self.battery_values[1]))
+                        self.battery_monitoring[1]=0
+                elif self.battery_values[1]>10:
+                    if self.battery_monitoring[1]==0 or self.battery_monitoring[1]==1:
+                        log.add("WB2", "%s"%(self.battery_values[1]))
+                        self.battery_monitoring[1]=2
+                elif self.battery_values[1]>15:
+                    if self.battery_monitoring[1]==0 or self.battery_monitoring[1]==2:
+                        log.add("EB2", "%s"%(self.battery_values[1]))
+                        self.battery_monitoring[1]=1
+                
+                if self.battery_values[3]<=150:
+                    if self.battery_monitoring[3]==1 or self.battery_monitoring[3]==2:
+                        log.add("DB2", "%s"%(self.battery_values[3]))
+                        self.battery_monitoring[3]=0
+                elif self.battery_values[3]>150:
+                    if self.battery_monitoring[3]==0 or self.battery_monitoring[3]==1:
+                        log.add("WB3", "%s"%(self.battery_values[3]))
+                        self.battery_monitoring[3]=2
+                elif self.battery_values[3]>200:
+                    if self.battery_monitoring[3]==0 or self.battery_monitoring[3]==3:
+                        log.add("EB3", "%s"%(self.battery_values[3]))
+                        self.battery_monitoring[3]=1
+
+                if self.battery_values[4]<=30:
+                    if self.battery_monitoring[4]==1 or self.battery_monitoring[4]==2:
+                        log.add("DB4", "%s"%(self.battery_values[4]))
+                        self.battery_monitoring[4]=0
+                elif self.battery_values[4]>30:
+                    if self.battery_monitoring[4]==0 or self.battery_monitoring[4]==1:
+                        log.add("WB4", "%s"%(self.battery_values[4]))
+                        self.battery_monitoring[4]=2
+                elif self.battery_values[4]>50:
+                    if self.battery_monitoring[4]==0 or self.battery_monitoring[4]==3:
+                        log.add("EB4", "%s"%(self.battery_values[4]))
+                        self.battery_monitoring[4]=1  
 
             def controller(self, controller: Controller) -> None:
                 """
@@ -1086,12 +1096,12 @@ try:
                                 self.robot_active=True
                         else:
                             self.robot_active=True
+                    else:
+                        log_check()
 
                     if controllers:
                         for controller in controllers:
                             controllercapture(controller)
-                            
-                    log_check()
 
                     if added_bytes_used:
                         _exec(added_bytes)
@@ -1108,7 +1118,7 @@ try:
                     if log_battery:
                         capture_battery()
                     
-                    #print(timer()-start)
+                    print(timer()-start)
 
                     lwait(wait_time_logging - (timer() - start))
 
@@ -1250,9 +1260,13 @@ try:
                             if len(logline)>=3:
                                 logstring=logline[1].strip()
                                 numbers=logline[0].split(" ")
-                                hexindex="{:#x}".format(int(numbers[0]))
-                                hextime="{:#x}".format(int(numbers[1].replace("[", "")))
-                                entry=b"%s %s %s%s\n"%(hexindex, hextime, reversecodes.get(logstring, logstring), str(logline[2:len(logline)-1]).replace("'", "").replace("[", "").replace("]", ""))
+                                try:
+                                    hexindex="{:#x}".format(int(numbers[0]))
+                                    hextime="{:#x}".format(int(numbers[1].replace("[", "")))
+                                except ValueError:
+                                    incomplete.extend(loglist[i].encode(log.format))
+                                    continue
+                                entry=b"%s %s %s%s\n"%(hexindex, hextime, reversecodes.get(logstring, logstring), str(logline[2:len(logline)]).replace("'", "").replace("[", "").replace("]", ""))
                                 bufferSize=len(entry)
                                 pack_into("=%ds"%(bufferSize), archivelist, archivelist_offset, entry)
                                 archivelist_offset+=bufferSize
@@ -1263,8 +1277,12 @@ try:
                                     if len(logline)>=3:
                                         logstring=logline[1].strip()
                                         numbers=logline[0].split(" ")
-                                        hexindex="{:#x}".format(int(numbers[0]))
-                                        hextime="{:#x}".format(int(numbers[1].replace(" ms]", "").replace("[]", "")))
+                                        try:
+                                            hexindex="{:#x}".format(int(numbers[0]))
+                                            hextime="{:#x}".format(int(numbers[1].replace(" ms]", "").replace("[]", "")))
+                                        except ValueError:
+                                            incomplete.extend(loglist[i].encode(log.format))
+                                            continue
                                         entry=b"%s %s %s%s\n"%(hexindex, hextime, reversecodes.get(logstring, logstring), str(logline[2:len(logline)-1]).replace("'", "").replace("[", "").replace("]", ""))
                                         bufferSize=len(entry)
                                         pack_into("=%ds"%(bufferSize), archivelist, archivelist_offset, entry)
