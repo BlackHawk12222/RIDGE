@@ -1,5 +1,6 @@
 #region VEXcode Generated Robot Configuration
 from vex import *
+import RE
 
 # Brain should be defined by default
 brain=Brain()
@@ -77,7 +78,7 @@ def rightmove(rightspeed):
     Right2.spin(FORWARD, rightspeed, VOLT)
 
 def aton():
-    CLEAR.encode.run("TestRecording")
+    RE.encode.run("TestRecording")
 
 comp=Competition(none, aton)
 
@@ -86,23 +87,23 @@ def state_test():
     pushing=True
     print("Pushing: ", pushing)
 
-if brain.sdcard.is_inserted() and brain.sdcard.exists("CLEAR.py"):
+if brain.sdcard.is_inserted() and brain.sdcard.exists("CLA.py"):
 
-    rightmotorlist=[Right1, Right2, Right3]
-    leftmotorlist=[left1, left2, left3]
-    import CLEAR
-    Thread(CLEAR.log.auto_start)
+    rightmotorlist=["Right1", "Right2", "Right3"]
+    leftmotorlist=["left1", "left2", "left3"]
+    import CLA
+    CLA.log.start()
     
     def toggle_recording():
         global recording_state
         if recording_state == 0:
             recording_state = 1
-            Thread(lambda: CLEAR.recording.start(controller_1, Right1, left1))
+            Thread(lambda: RE.recording.start(controller_1, Right1, left1))
             controller_1.rumble("-")
             print("Recording Started")
         else:
             recording_state = 0
-            CLEAR.recording.stop("TestRecording", rightmotorlist, leftmotorlist)
+            RE.recording.stop("TestRecording", rightmotorlist, leftmotorlist)
             controller_1.rumble("--")
             print("Recording Stopped")
     controller_1.buttonA.pressed(toggle_recording)

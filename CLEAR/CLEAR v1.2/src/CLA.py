@@ -7,6 +7,7 @@
     # 	Description:  Capture, Logging, Encoding, Archiving, Recording.            #
     #                                                                              #
     # ---------------------------------------------------------------------------- #
+
 _errorcreated=False
 import sys
 
@@ -14,7 +15,7 @@ try:
     from vex import *
     from gc import collect, mem_alloc# type: ignore 
     from ustruct import pack_into
-    import uarray
+    import uarray, OD
     
     brain=Brain()
     log_time= Timer() # Main timer used.
@@ -1124,100 +1125,17 @@ try:
 
                 if gc_use:
                     gc_collect()
+        
+        def start(self) -> Thread:
+            cla=Thread(self.auto_start)
+            return cla
 
         def __enter__(self) -> Thread:
             self.Thread=Thread(log.auto_start)
             return self.Thread
 
         def __exit__(self) -> None:
-            self.Thread.stop()
-
-    class Encode:
-        def __init__(self):
-            self.axis2History=0
-            self.axis3History=0
-            self.degreesoffsetright=0
-            self.degreesoffsetleft=0
-            self.codeobjectoffset=0
-
-        def rightmoveCLEAR(self, Motors: List[Motor], Velocity: int):
-            for motor in Motors:
-                motor.set_velocity(Velocity, PERCENT)
-            
-        def leftmoveCLEAR(self, Motors: List[Motor], Velocity: int):
-            for motor in Motors:
-                motor.set_velocity(Velocity, PERCENT)
-        
-        def rightDegreesCLEAR(self, Motors: List[Motor], degrees):
-            for motor in Motors:
-                motor.spin_for(FORWARD, degrees, DEGREES)
-
-        def leftDegreesCELAR(self, Motors: List[Motor], degrees):
-            for motor in Motors:
-                motor.spin_for(FORWARD, degrees, DEGREES)
-
-        def run(self, Name: str):
-            exec(brain.sdcard.loadfile(Name + ".txt").decode(log.format))
-
-        def encode(self, Name: str, RightMotors: List[Motor], LeftMotors: List[Motor], dotank=True):
-
-            prelist:List[List[str]]=[]
-            file=brain.sdcard.loadfile("RecordingData.csv").decode(log.format).split("\n")
-            for line in file:
-                if line:
-                    prelist.append(line.split(','))
-
-            codeobject=bytearray(50000)
-            
-            for i in range(len(prelist)):
-                axis1=int(prelist[i][0].replace("A1", ""))
-                axis2=int(prelist[i][1].replace("A2", ""))
-                axis3=int(prelist[i][2].replace("A3", ""))
-                axis4=int(prelist[i][3].replace("A4", ""))
-                timestamp=int(prelist[i][4].replace("T", ""))
-                rightposition=int(prelist[i][6].replace("RP", ""))
-                leftposition=int(prelist[i][7].replace("LP", ""))
-                pressedbuttons: List[str] = prelist[i][5].replace("BP", "").split(":")
-                print(axis1, axis2, axis3, axis4, timestamp, pressedbuttons, rightposition, leftposition)
-
-                if dotank:
-                    codestring=b", encode.rightmoveCLEAR(%s, %s), encode.leftmoveCLEAR(%s, %s)"%(RightMotors, axis2, LeftMotors, axis3)
-                else:
-                    pass
-
-                if axis2 > 0:
-                    axis2sign=True
-                else:
-                    axis2sign=False
-                
-                if axis3 > 0:
-                    axis3sign=True
-                else:
-                    axis3sign=False
-
-                codestringdegreeright=b""
-                codestringdegreeleft=b""
-                
-                if axis2sign != self.axis2History:
-                    self.axis2History=axis2sign
-                    degrees=rightposition-self.degreesoffsetright
-                    codestringdegreeright=b", rightDegreesCLEAR(%s, %s)"%(RightMotors, degrees)
-                    self.degreesoffsetright=rightposition
-
-                if axis3sign != self.axis3History:
-                    self.axis3History=axis3sign
-                    degrees=leftposition-self.degreesoffsetleft
-                    codestringdegreeleft=b", leftDegreesCLEAR(%s, %s)"%(LeftMotors, degrees)
-                    self.degreesoffsetright=rightposition
-                
-                fullstring="%s%s%s"%(codestring.decode(log.format), codestringdegreeright.decode(log.format), codestringdegreeleft.decode(log.format))
-                
-                stringsize=len(fullstring)
-                pack_into("=%ds"%(stringsize), codeobject, self.codeobjectoffset, fullstring)
-
-                self.codeobjectoffset+=stringsize 
-
-            brain.sdcard.savefile(Name + ".txt", codeobject[0:self.codeobjectoffset])     
+            self.Thread.stop()     
     
     class Archive:
             """
@@ -1390,75 +1308,7 @@ try:
                     elif "Pressed" in item or "Released" in item:
                         brain.sdcard.appendfile(filename, bytearray("[',', '0', %s ':Controller', 'DATA:', 'Button', 'Changed.', 'Button:', '', %s %s %s ''] \n"%(prelist[0], prelist[1], prelist[2], prelist[3]), log.format))
                 log.add("DS5", name)
-    class Recording:
-        """
-        Main class for recording.
-        """
 
-        def __init__(self):
-            self.record=False
-
-        def start(self, controller:Controller, Right: Motor, Left: Motor):
-            brain.sdcard.savefile("RecordingData.csv")
-            self.record=True
-            self._record_loop(controller, Right, Left)
-
-        def stop(self, Name, Right, Left):
-            self.record=False
-            encode.encode(Name, Right, Left)
-
-        def _record_loop(self, controller: Controller, Right: Motor, Left: Motor):
-            while True:
-                
-                if not self.record:
-                    break
-                
-                self.axis1=controller.axis1.position()
-                self.axis2=controller.axis2.position()
-                self.axis3=controller.axis3.position()
-                self.axis4=controller.axis4.position()
-                self.time_stamp=log_time.time()
-                self.buttonspressed=bytearray()
-
-                if controller.buttonA.pressing():
-                    self.buttonspressed.extend(b"A: ")
-
-                if controller.buttonB.pressing():
-                    self.buttonspressed.extend(b"B: ")
-
-                if controller.buttonX.pressing():
-                    self.buttonspressed.extend(b"X: ")
-
-                if controller.buttonY.pressing():
-                    self.buttonspressed.extend(b"Y: ")
-
-                if controller.buttonUp.pressing():
-                    self.buttonspressed.extend(b"Up: ")
-
-                if controller.buttonDown.pressing():
-                    self.buttonspressed.extend(b"Down: ")
-
-                if controller.buttonLeft.pressing():
-                    self.buttonspressed.extend(b"Left: ")
-
-                if controller.buttonRight.pressing():
-                    self.buttonspressed.extend(b"Right: ")
-
-                if controller.buttonR1.pressing():
-                    self.buttonspressed.extend(b"R1: ")
-
-                if controller.buttonR2.pressing():
-                    self.buttonspressed.extend(b"R2: ")
-
-                if controller.buttonL1.pressing():
-                    self.buttonspressed.extend(b"L1: ")
-
-                if controller.buttonL2.pressing():
-                    self.buttonspressed.extend(b"L2: ")
-
-                brain.sdcard.appendfile("RecordingData.csv", bytearray(b"%d A1, %d A2, %d A3, %d A4, %d T, %s BP, %d RP, %d LP \n"%(self.axis1, self.axis2 , self.axis3, self.axis4, self.time_stamp , self.buttonspressed.decode("utf-8"), Right.position(DEGREES), Left.position(DEGREES))))
-
-                wait(20, MSEC)
     class Settings:
         """Used to congigure the log in a more permenet way using the Sd card"""
 
@@ -1513,8 +1363,6 @@ try:
     
     settings=Settings()
     log=Log()
-    encode=Encode()
-    recording=Recording()
 
 except Exception as e:
     import uio
@@ -1523,6 +1371,6 @@ except Exception as e:
     exeption_string=uio.StringIO(500)
     sys.print_exception(e, exeption_string)  # type: ignore
     print(exeption_string.getvalue())
-    brain.sdcard.appendfile("Error.txt", bytearray(b":System ERROR: Runtime Error.: \n %s "%(exeption_string.getvalue()))) 
+    brain.sdcard.appendfile("Error.txt", bytearray(b"<System ERROR> Python Runtime Error. \n %s "%(exeption_string.getvalue()))) 
     
     del exeption_string, uio
