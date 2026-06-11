@@ -19,6 +19,7 @@ class odometry:
         self.RobotWidthMM: float = 0.0
         self.WheelDiameterMM: float = 0.0
         self.DistanceGlobalM: float = 0.0
+        self.Timer=Timer()
     
     @staticmethod
     def _Run() -> None:
@@ -43,6 +44,7 @@ class odometry:
         HeadingM: float=0.0
 
         while True:
+            StartTime=OD.Timer.time()
             OD.XSpeedLocalI+=(OD.Inertial.acceleration(AxisType.XAXIS) * 9.81) * 0.01
             OD.YSpeedLocalI+=(OD.Inertial.acceleration(AxisType.YAXIS) * 9.81) * 0.01
             OD.XDistanceI=OD.XSpeedLocalI*0.01
@@ -66,7 +68,7 @@ class odometry:
             LeftDegreesOld=OD.leftEncodedMotor.position()
             RightDegreesOld=OD.rightEncodedMotor.position()
 
-            wait(10, MSEC)
+            wait(10 - (OD.Timer.time()-StartTime), MSEC)
 
     def StartOD(self, LeftEncodedMotor: Motor, RightEncodedMotor: Motor, RobotWidthMM: float, WheelDiameterMM: float,) -> Thread:
         self.leftEncodedMotor = LeftEncodedMotor
