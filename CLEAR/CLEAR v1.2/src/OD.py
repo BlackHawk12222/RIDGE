@@ -1,16 +1,24 @@
 from vex import *
+import math
 
 class odometry:
     def __init__(self):
-        self.XOdomSensor: Rotation
-        self.YOdomSensor: Rotation
-        self.XPosition: float = 0
-        self.YPosition: float = 0
-        self.Heading: float = 0
+        self.leftEncodedMotor: Motor
+        self.rightEncodedMotor: Motor
+        self.XPosition: float = 0.0
+        self.YPosition: float = 0.0
+        self.HeadingI: float = 0.0
         self.Inertial: Inertial
         self.InertialSensorUse=False
-        self.XSpeed: float = 0
-        self.YSpeed: float = 0
+        self.XSpeedLocalI: float = 0.0
+        self.YSpeedLocalI: float = 0.0
+        self.LDistanceM: float = 0.0
+        self.RDistanceM: float = 0.0
+        self.XDistanceI: float = 0.0
+        self.YDistanceI: float = 0.0
+        self.RobotWidthMM: float = 0.0
+        self.WheelDiameterMM: float = 0.0
+        self.DistanceGlobalM: float = 0.0
     
     @staticmethod
     def _Run() -> None:
@@ -21,23 +29,50 @@ class odometry:
             except NameError:
                 continue
             if item_type == "<class 'inertial'>":
-                OD.InertialSensorUse=True
-                OD.Inertial = eval(item)
-                break
+                if item != "Inertial":
+                    OD.InertialSensorUse=True
+                    OD.Inertial = eval(item)
+                    break
         
-        OD.XSpeed=(OD.Inertial.acceleration(AxisType.XAXIS) * 9.81) * 0.01
-        OD.YSpeed=(OD.Inertial.acceleration(AxisType.YAXIS) * 9.81) * 0.01
+        OD.XSpeedLocalI=(OD.Inertial.acceleration(AxisType.XAXIS) * 9.81) * 0.01
+        OD.YSpeedLocalI=(OD.Inertial.acceleration(AxisType.YAXIS) * 9.81) * 0.01
+        OD.HeadingI=OD.Inertial.heading()
+
+        LeftDegreesOld=OD.leftEncodedMotor.position()
+        RightDegreesOld=OD.rightEncodedMotor.position()
+        HeadingM: float=0.0
 
         while True:
-            OD.XSpeed+=(OD.Inertial.acceleration(AxisType.XAXIS) * 9.81) * 0.01
-            OD.YSpeed+=(OD.Inertial.acceleration(AxisType.YAXIS) * 9.81) * 0.01
-            OD.Heading=OD.Inertial.heading()
-            
+            OD.XSpeedLocalI+=(OD.Inertial.acceleration(AxisType.XAXIS) * 9.81) * 0.01
+            OD.YSpeedLocalI+=(OD.Inertial.acceleration(AxisType.YAXIS) * 9.81) * 0.01
+            OD.XDistanceI=OD.XSpeedLocalI*0.01
+            OD.YDistanceI=OD.YSpeedLocalI*0.01
+
+            XDistanceGlobalI: float=(OD.XDistanceI*math.cos(OD.HeadingI)) - (OD.YDistanceI*math.sin(OD.HeadingI))
+            YDistanceGlobalI: float=(OD.XDistanceI*math.cos(OD.HeadingI)) + (OD.YDistanceI*math.sin(OD.HeadingI))
+
+            OD.LDistanceM=((OD.leftEncodedMotor.position()-LeftDegreesOld) / 360) * (OD.WheelDiameterMM*math.pi)
+            OD.RDistanceM=((OD.rightEncodedMotor.position()-RightDegreesOld) / 360) * (OD.WheelDiameterMM*math.pi)
+            OD.HeadingI=OD.Inertial.heading()
+            HeadingM=(OD.LDistanceM-OD.RDistanceM)/(OD.RobotWidthMM / OD.WheelDiameterMM)
+
+            OD.DistanceGlobalM=(OD.LDistanceM+OD.RDistanceM)/2
+            XDistanceGlobalM: float=OD.DistanceGlobalM*math.cos(OD.HeadingI)
+            YDistanceGlobalM: float=OD.DistanceGlobalM*math.sin(OD.HeadingI)
+
+            OD.XPosition+=XDistanceGlobalI + XDistanceGlobalM/2
+            OD.YPosition+=YDistanceGlobalI + YDistanceGlobalM/2
+
+            LeftDegreesOld=OD.leftEncodedMotor.position()
+            RightDegreesOld=OD.rightEncodedMotor.position()
+
             wait(10, MSEC)
 
-    def StartOD(self, XOdomSensor: Rotation, YOdomSensor: Rotation) -> Thread:
-        self.XOdomSensor = XOdomSensor
-        self.YOdomSensor = YOdomSensor
+    def StartOD(self, LeftEncodedMotor: Motor, RightEncodedMotor: Motor, RobotWidthMM: float, WheelDiameterMM: float,) -> Thread:
+        self.leftEncodedMotor = LeftEncodedMotor
+        self.rightEncodedMotor = RightEncodedMotor
+        self.RobotWidthMM = RobotWidthMM
+        self.WheelDiameterMM = WheelDiameterMM
         self.ODT=Thread(OD._Run)
 
         return self.ODT
