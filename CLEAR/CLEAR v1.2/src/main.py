@@ -16,6 +16,9 @@ Right3 = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)
 left1 = Motor(Ports.PORT11, GearSetting.RATIO_6_1, False)
 left2 = Motor(Ports.PORT12, GearSetting.RATIO_6_1, True)
 left3 = Motor(Ports.PORT13, GearSetting.RATIO_6_1, False)
+inertial = Inertial(Ports.PORT3)
+Xodom = Rotation(Ports.PORT1)
+Yodom = Rotation(Ports.PORT2)
 
 # wait for rotation sensor to fully initialize
 wait(30, MSEC)
@@ -48,6 +51,7 @@ Right1.set_stopping(HOLD)
 Right2.set_stopping(HOLD)
 left1.set_stopping(HOLD)
 left2.set_stopping(HOLD)
+inertial.calibrate()
 
 # Driver Control Functions
 
@@ -107,6 +111,17 @@ if brain.sdcard.is_inserted() and brain.sdcard.exists("CLA.py"):
             controller_1.rumble("--")
             print("Recording Stopped")
     controller_1.buttonA.pressed(toggle_recording)
+    
+    import OD
+    ODMainLoop=OD.OD.StartOD(inertial, left1, Right1, 1, 69.85, Xodom, Yodom, 76.2, 81, 1)
+
+    def print_location_loop():
+        while True:
+            print("X: ", OD.OD.XPosition, " Y: ", OD.OD.YPosition, " Heading: ", OD.OD.HeadingI)
+            print("X LocalI: ", OD.OD.XDistanceI, " Y LocalI: ", OD.OD.YDistanceI)
+            wait(100, MSEC)
+            
+    ODLoop=Thread(print_location_loop)
 
 # Event setup
 controller_1.axis2.changed(rightside)

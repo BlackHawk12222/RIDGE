@@ -20,20 +20,15 @@ class odometry:
         self.WheelDiameterMM: float = 0.0
         self.DistanceGlobalM: float = 0.0
         self.Timer=Timer()
+        self.ODT: Thread
+        self.Xodom: Rotation
+        self.Yodom: Rotation
+        self.OdomWheelDiameterMM: float = 0.0
+        self.XOdomOffset: float = 0.0
+        self.YOdomOffset: float = 0.0
     
     @staticmethod
     def _Run() -> None:
-        GlobalScope = dir()
-        for item in GlobalScope:      
-            try:
-                item_type=str(type(eval(item)))
-            except NameError:
-                continue
-            if item_type == "<class 'inertial'>":
-                if item != "Inertial":
-                    OD.InertialSensorUse=True
-                    OD.Inertial = eval(item)
-                    break
         
         OD.XSpeedLocalI=(OD.Inertial.acceleration(AxisType.XAXIS) * 9.81) * 0.01
         OD.YSpeedLocalI=(OD.Inertial.acceleration(AxisType.YAXIS) * 9.81) * 0.01
@@ -45,6 +40,7 @@ class odometry:
 
         while True:
             StartTime=OD.Timer.time()
+
             OD.XSpeedLocalI+=(OD.Inertial.acceleration(AxisType.XAXIS) * 9.81) * 0.01
             OD.YSpeedLocalI+=(OD.Inertial.acceleration(AxisType.YAXIS) * 9.81) * 0.01
             OD.XDistanceI=OD.XSpeedLocalI*0.01
@@ -59,22 +55,36 @@ class odometry:
             HeadingM=(OD.LDistanceM-OD.RDistanceM)/(OD.RobotWidthMM / OD.WheelDiameterMM)
 
             OD.DistanceGlobalM=(OD.LDistanceM+OD.RDistanceM)/2
-            XDistanceGlobalM: float=OD.DistanceGlobalM*math.cos(OD.HeadingI)
-            YDistanceGlobalM: float=OD.DistanceGlobalM*math.sin(OD.HeadingI)
+            XDistanceGlobalM: float=OD.DistanceGlobalM*math.cos(HeadingM)
+            YDistanceGlobalM: float=OD.DistanceGlobalM*math.sin(HeadingM)
 
-            OD.XPosition+=XDistanceGlobalI + XDistanceGlobalM/2
-            OD.YPosition+=YDistanceGlobalI + YDistanceGlobalM/2
+            XodomOffset=OD.Inertial.heading() * OD.XOdomOffset/OD.OdomWheelDiameterMM
+            XDistanceO: float=(OD.Xodom.angle()-XodomOffset) / 360 * (OD.OdomWheelDiameterMM*math.pi)
+            YDistanceO: float=OD.Yodom.angle() / 360 * (OD.OdomWheelDiameterMM*math.pi)
+
+            XDistanceGlobalO: float=XDistanceO*math.cos(OD.HeadingI) - YDistanceO*math.sin(OD.HeadingI)
+            YDistanceGlobalO: float=XDistanceO*math.cos(OD.HeadingI) + YDistanceO*math.sin(OD.HeadingI)
+
+            OD.XPosition+=XDistanceGlobalI + XDistanceGlobalM + XDistanceGlobalO/3
+            OD.YPosition+=YDistanceGlobalI + YDistanceGlobalM + YDistanceGlobalO/3
+
 
             LeftDegreesOld=OD.leftEncodedMotor.position()
             RightDegreesOld=OD.rightEncodedMotor.position()
 
             wait(10 - (OD.Timer.time()-StartTime), MSEC)
 
-    def StartOD(self, LeftEncodedMotor: Motor, RightEncodedMotor: Motor, RobotWidthMM: float, WheelDiameterMM: float,) -> Thread:
+    def StartOD(self, Inertial: Inertial, LeftEncodedMotor: Motor, RightEncodedMotor: Motor, RobotWidthMM: float, WheelDiameterMM: float, Xodom: Rotation, Yodom: Rotation, OdomWheelDiameterMM: float, XOdomOffset: float, YodomOffset: float) -> Thread:
+        self.Inertial = Inertial
         self.leftEncodedMotor = LeftEncodedMotor
         self.rightEncodedMotor = RightEncodedMotor
         self.RobotWidthMM = RobotWidthMM
         self.WheelDiameterMM = WheelDiameterMM
+        self.Xodom = Xodom
+        self.Yodom = Yodom
+        self.OdomWheelDiameterMM = OdomWheelDiameterMM
+        self.XOdomOffset = XOdomOffset
+        self.YOdomOffset = YodomOffset
         self.ODT=Thread(OD._Run)
 
         return self.ODT
