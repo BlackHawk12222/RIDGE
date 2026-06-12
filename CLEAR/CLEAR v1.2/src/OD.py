@@ -26,12 +26,13 @@ class odometry:
         self.OdomWheelDiameterMM: float = 0.0
         self.XOdomOffset: float = 0.0
         self.YOdomOffset: float = 0.0
+        self.Weight: float = 0.98
     
     @staticmethod
     def _Run() -> None:
         
-        OD.XSpeedLocalI=(OD.Inertial.acceleration(AxisType.XAXIS) * 9.81) * 0.01
-        OD.YSpeedLocalI=(OD.Inertial.acceleration(AxisType.YAXIS) * 9.81) * 0.01
+        OD.XSpeedLocalI=(round(OD.Inertial.acceleration(AxisType.XAXIS), 3)*(0.01**2))
+        OD.YSpeedLocalI=(round(OD.Inertial.acceleration(AxisType.YAXIS), 3)*(0.01**2))
         OD.HeadingI=OD.Inertial.heading()
 
         LeftDegreesOld=OD.leftEncodedMotor.position()
@@ -41,36 +42,57 @@ class odometry:
         while True:
             StartTime=OD.Timer.time()
 
-            OD.XSpeedLocalI+=(OD.Inertial.acceleration(AxisType.XAXIS) * 9.81) * 0.01
-            OD.YSpeedLocalI+=(OD.Inertial.acceleration(AxisType.YAXIS) * 9.81) * 0.01
+            # Heading calculations.
+            OD.HeadingI=OD.Weight*OD.Inertial.heading() + (1-OD.Weight)*HeadingM
+
+            # Inertial calulations.
+            OD.XSpeedLocalI+=(round(OD.Inertial.acceleration(AxisType.XAXIS), 3)*(0.01**2))
+            OD.YSpeedLocalI+=(round(OD.Inertial.acceleration(AxisType.YAXIS), 3)*(0.01**2))
             OD.XDistanceI=OD.XSpeedLocalI*0.01
             OD.YDistanceI=OD.YSpeedLocalI*0.01
 
             XDistanceGlobalI: float=(OD.XDistanceI*math.cos(OD.HeadingI)) - (OD.YDistanceI*math.sin(OD.HeadingI))
             YDistanceGlobalI: float=(OD.XDistanceI*math.cos(OD.HeadingI)) + (OD.YDistanceI*math.sin(OD.HeadingI))
 
+            # Motor calulations.
             OD.LDistanceM=((OD.leftEncodedMotor.position()-LeftDegreesOld) / 360) * (OD.WheelDiameterMM*math.pi)
             OD.RDistanceM=((OD.rightEncodedMotor.position()-RightDegreesOld) / 360) * (OD.WheelDiameterMM*math.pi)
             OD.HeadingI=OD.Inertial.heading()
             HeadingM=(OD.LDistanceM-OD.RDistanceM)/(OD.RobotWidthMM / OD.WheelDiameterMM)
 
             OD.DistanceGlobalM=(OD.LDistanceM+OD.RDistanceM)/2
-            XDistanceGlobalM: float=OD.DistanceGlobalM*math.cos(HeadingM)
-            YDistanceGlobalM: float=OD.DistanceGlobalM*math.sin(HeadingM)
+            XDistanceGlobalM: float=OD.DistanceGlobalM*math.cos(OD.HeadingI)
+            YDistanceGlobalM: float=OD.DistanceGlobalM*math.sin(OD.HeadingI)
 
+            # Slip ratio calculations for comp. filter weight.
+            try:
+                SlipRatio=OD.Yodom.velocity()/(OD.leftEncodedMotor.velocity()+OD.rightEncodedMotor.velocity()/2)
+            except ZeroDivisionError:
+                SlipRatio=1
+
+            Mtrust=min(max(SlipRatio-0.5, 0.0), 1.0)
+
+            # Odometer calculations.
             XodomOffset=OD.Inertial.heading() * OD.XOdomOffset/OD.OdomWheelDiameterMM
-            XDistanceO: float=(OD.Xodom.angle()-XodomOffset) / 360 * (OD.OdomWheelDiameterMM*math.pi)
-            YDistanceO: float=OD.Yodom.angle() / 360 * (OD.OdomWheelDiameterMM*math.pi)
+            XDistanceO: float=(OD.Xodom.position()-XodomOffset) / 360 * (OD.OdomWheelDiameterMM*math.pi)
+            YDistanceO: float=OD.Yodom.position() / 360 * (OD.OdomWheelDiameterMM*math.pi)
 
             XDistanceGlobalO: float=XDistanceO*math.cos(OD.HeadingI) - YDistanceO*math.sin(OD.HeadingI)
             YDistanceGlobalO: float=XDistanceO*math.cos(OD.HeadingI) + YDistanceO*math.sin(OD.HeadingI)
 
-            OD.XPosition+=XDistanceGlobalI + XDistanceGlobalM + XDistanceGlobalO/3
-            OD.YPosition+=YDistanceGlobalI + YDistanceGlobalM + YDistanceGlobalO/3
+            # Final filtered distance calculations using powered motors and dead wheel odometry.
+            XDistanceGlobalF: float=Mtrust*XDistanceGlobalM + (1-Mtrust)*XDistanceGlobalO
+            YDistanceGlobalF: float=Mtrust*YDistanceGlobalM + (1-Mtrust)*YDistanceGlobalO
 
+            OD.XPosition+=OD.Weight*XDistanceGlobalF + (1-OD.Weight)*XDistanceGlobalI
+            OD.YPosition+=OD.Weight*YDistanceGlobalF + (1-OD.Weight)*YDistanceGlobalI
 
+            # Update the old positions for the next iteration.
             LeftDegreesOld=OD.leftEncodedMotor.position()
             RightDegreesOld=OD.rightEncodedMotor.position()
+
+            OD.Xodom.set_position(0)
+            OD.Yodom.set_position(0)
 
             wait(10 - (OD.Timer.time()-StartTime), MSEC)
 

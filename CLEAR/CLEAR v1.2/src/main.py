@@ -118,7 +118,6 @@ if brain.sdcard.is_inserted() and brain.sdcard.exists("CLA.py"):
     def print_location_loop():
         while True:
             print("X: ", OD.OD.XPosition, " Y: ", OD.OD.YPosition, " Heading: ", OD.OD.HeadingI)
-            print("X LocalI: ", OD.OD.XDistanceI, " Y LocalI: ", OD.OD.YDistanceI)
             wait(100, MSEC)
             
     ODLoop=Thread(print_location_loop)
