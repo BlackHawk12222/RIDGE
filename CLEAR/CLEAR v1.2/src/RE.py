@@ -1,6 +1,7 @@
 from vex import *
 
 from ustruct import pack_into
+import OD as od
 
 brain = Brain()
 timer=Timer()
@@ -105,6 +106,13 @@ class Recording:
         brain.sdcard.savefile("RecordingData.csv")
         self.record=True
         self._record_loop(controller, Right, Left)
+    
+    def odom_start(self, controller:Controller, Right: Motor, Left: Motor, inertial: Inertial, RobotWidthMM: float, WheelDiameterMM: float, Xodom: Rotation, Yodom: Rotation, OdomWheelDiameterMM: float, XOdomOffset: float, YOdomOffset: float):
+        
+        brain.sdcard.savefile("RecordingDataOdom.csv")
+        self.record=True
+        od.OD.StartOD(inertial, Right, Left, RobotWidthMM, WheelDiameterMM, 1, Xodom, Yodom, OdomWheelDiameterMM, XOdomOffset, YOdomOffset)
+        self._odom_record_loop(controller, Right, Left)
 
     def stop(self, NameOfFile: str, RightMotorsName: List[str], LeftMotorsName: List[str]):
         self.record=False
@@ -159,7 +167,60 @@ class Recording:
             if controller.buttonL2.pressing():
                 self.buttonspressed.extend(b"L2: ")
 
-            brain.sdcard.appendfile("RecordingData.csv", bytearray(b"%d A1, %d A2, %d A3, %d A4, %d T, %s BP, %d RP, %d LP \n"%(self.axis1, self.axis2 , self.axis3, self.axis4, self.time_stamp , self.buttonspressed.decode("utf-8"), Right.position(DEGREES), Left.position(DEGREES))))
+            brain.sdcard.appendfile("RecordingDataOdom.csv", bytearray(b"%d A1, %d A2, %d A3, %d A4, %d T, %s BP, %d RP, %d LP, %3.3f XP, %3.3f YP \n"%(self.axis1, self.axis2 , self.axis3, self.axis4, self.time_stamp , self.buttonspressed.decode("utf-8"), Right.position(DEGREES), Left.position(DEGREES), od.OD.Xodom, od.OD.Yodom)))
+
+            wait(20, MSEC)
+    
+    def _odom_record_loop(self, controller: Controller, Right: Motor, Left: Motor):
+        while True:
+            
+            if not self.record:
+                break
+            
+            self.axis1=controller.axis1.position()
+            self.axis2=controller.axis2.position()
+            self.axis3=controller.axis3.position()
+            self.axis4=controller.axis4.position()
+            self.time_stamp=timer.time()
+            self.buttonspressed=bytearray()
+
+            if controller.buttonA.pressing():
+                self.buttonspressed.extend(b"A: ")
+
+            if controller.buttonB.pressing():
+                self.buttonspressed.extend(b"B: ")
+
+            if controller.buttonX.pressing():
+                self.buttonspressed.extend(b"X: ")
+
+            if controller.buttonY.pressing():
+                self.buttonspressed.extend(b"Y: ")
+
+            if controller.buttonUp.pressing():
+                self.buttonspressed.extend(b"Up: ")
+
+            if controller.buttonDown.pressing():
+                self.buttonspressed.extend(b"Down: ")
+
+            if controller.buttonLeft.pressing():
+                self.buttonspressed.extend(b"Left: ")
+
+            if controller.buttonRight.pressing():
+                self.buttonspressed.extend(b"Right: ")
+
+            if controller.buttonR1.pressing():
+                self.buttonspressed.extend(b"R1: ")
+
+            if controller.buttonR2.pressing():
+                self.buttonspressed.extend(b"R2: ")
+
+            if controller.buttonL1.pressing():
+                self.buttonspressed.extend(b"L1: ")
+
+            if controller.buttonL2.pressing():
+                self.buttonspressed.extend(b"L2: ")
+
+            brain.sdcard.appendfile("RecordingData.csv", bytearray(b"%d A1, %d A2, %d A3, %d A4, %d T, %s BP, %d RP, %d LP, %3.3f XP, %3.3f YP \n"%(self.axis1, self.axis2 , self.axis3, self.axis4, self.time_stamp , self.buttonspressed.decode("utf-8"), Right.position(DEGREES), Left.position(DEGREES), od.OD.Xodom, od.OD.Yodom)))
 
             wait(20, MSEC)
 

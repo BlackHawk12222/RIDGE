@@ -7,7 +7,6 @@ class odometry:
         self.rightEncodedMotor: Motor
         self.XPosition: float = 0.0
         self.YPosition: float = 0.0
-        self.HeadingI: float = 0.0
         self.Inertial: Inertial
         self.InertialSensorUse=False
         self.XSpeedLocalI: float = 0.0
@@ -27,23 +26,37 @@ class odometry:
         self.XOdomOffset: float = 0.0
         self.YOdomOffset: float = 0.0
         self.Weight: float = 0.98
+        self.GearRatio: float = 0.0
     
     @staticmethod
     def _Run() -> None:
         
         OD.XSpeedLocalI=(round(OD.Inertial.acceleration(AxisType.XAXIS), 3)*(0.01**2))
         OD.YSpeedLocalI=(round(OD.Inertial.acceleration(AxisType.YAXIS), 3)*(0.01**2))
-        OD.HeadingI=OD.Inertial.heading()
 
         LeftDegreesOld=OD.leftEncodedMotor.position()
         RightDegreesOld=OD.rightEncodedMotor.position()
-        HeadingM: float=0.0
+        FilteredRoll: float=0.0
+        FilteredPitch: float=0.0
+        FilteredYaw: float=0.0
 
         while True:
             StartTime=OD.Timer.time()
 
-            # Heading calculations.
-            OD.HeadingI=OD.Weight*OD.Inertial.heading() + (1-OD.Weight)*HeadingM
+            # Cleaining acceleration data.
+            LeftSpeed=((OD.leftEncodedMotor.position(DEGREES)-LeftDegreesOld) * math.pi * OD.WheelDiameterMM) / (0.01 * 360 *OD.GearRatio)
+            RightSpeed=((OD.rightEncodedMotor.position(DEGREES)-RightDegreesOld) * math.pi * OD.WheelDiameterMM) / (0.01 * 360 *OD.GearRatio)
+            HeadingRateM=(RightSpeed-LeftSpeed)/(OD.RobotWidthMM/1000)
+
+
+            AxisWeight=0.9
+            ZAxis=OD.Inertial.acceleration(AxisType.ZAXIS)
+            XAxis=OD.Inertial.acceleration(AxisType.XAXIS)
+            YAxis=OD.Inertial.acceleration(AxisType.YAXIS)
+
+            FilteredRoll=AxisWeight*(FilteredRoll + OD.Inertial.gyro_rate(XAXIS)) + (1-AxisWeight)*math.degrees(math.atan2(YAxis, XAxis))
+            FilteredPitch=AxisWeight*(FilteredPitch + OD.Inertial.gyro_rate(YAXIS)) + (1-AxisWeight)*math.degrees(math.atan2(0-XAxis, math.sqrt(ZAxis**2 + YAxis**2)))
+            FilteredYaw=AxisWeight*(FilteredYaw + OD.Inertial.gyro_rate(ZAXIS)) + (1-AxisWeight)*HeadingRateM
 
             # Inertial calulations.
             OD.XSpeedLocalI+=(round(OD.Inertial.acceleration(AxisType.XAXIS), 3)*(0.01**2))
@@ -51,18 +64,16 @@ class odometry:
             OD.XDistanceI=OD.XSpeedLocalI*0.01
             OD.YDistanceI=OD.YSpeedLocalI*0.01
 
-            XDistanceGlobalI: float=(OD.XDistanceI*math.cos(OD.HeadingI)) - (OD.YDistanceI*math.sin(OD.HeadingI))
-            YDistanceGlobalI: float=(OD.XDistanceI*math.cos(OD.HeadingI)) + (OD.YDistanceI*math.sin(OD.HeadingI))
+            XDistanceGlobalI: float=(OD.XDistanceI*math.degrees(math.cos(FilteredYaw))) - (OD.YDistanceI*math.degrees(math.sin(FilteredYaw)))
+            YDistanceGlobalI: float=(OD.XDistanceI*math.degrees(math.cos(FilteredYaw))) + (OD.YDistanceI*math.degrees(math.sin(FilteredYaw)))
 
             # Motor calulations.
             OD.LDistanceM=((OD.leftEncodedMotor.position()-LeftDegreesOld) / 360) * (OD.WheelDiameterMM*math.pi)
             OD.RDistanceM=((OD.rightEncodedMotor.position()-RightDegreesOld) / 360) * (OD.WheelDiameterMM*math.pi)
-            OD.HeadingI=OD.Inertial.heading()
-            HeadingM=(OD.LDistanceM-OD.RDistanceM)/(OD.RobotWidthMM / OD.WheelDiameterMM)
 
             OD.DistanceGlobalM=(OD.LDistanceM+OD.RDistanceM)/2
-            XDistanceGlobalM: float=OD.DistanceGlobalM*math.cos(OD.HeadingI)
-            YDistanceGlobalM: float=OD.DistanceGlobalM*math.sin(OD.HeadingI)
+            XDistanceGlobalM: float=OD.DistanceGlobalM*math.degrees(math.cos(FilteredYaw))
+            YDistanceGlobalM: float=OD.DistanceGlobalM*math.degrees(math.sin(FilteredYaw))
 
             # Slip ratio calculations for comp. filter weight.
             try:
@@ -77,8 +88,8 @@ class odometry:
             XDistanceO: float=(OD.Xodom.position()-XodomOffset) / 360 * (OD.OdomWheelDiameterMM*math.pi)
             YDistanceO: float=OD.Yodom.position() / 360 * (OD.OdomWheelDiameterMM*math.pi)
 
-            XDistanceGlobalO: float=XDistanceO*math.cos(OD.HeadingI) - YDistanceO*math.sin(OD.HeadingI)
-            YDistanceGlobalO: float=XDistanceO*math.cos(OD.HeadingI) + YDistanceO*math.sin(OD.HeadingI)
+            XDistanceGlobalO: float=XDistanceO*math.degrees(math.cos(FilteredYaw)) - YDistanceO*math.degrees(math.sin(FilteredYaw))
+            YDistanceGlobalO: float=XDistanceO*math.degrees(math.cos(FilteredYaw)) + YDistanceO*math.degrees(math.sin(FilteredYaw))
 
             # Final filtered distance calculations using powered motors and dead wheel odometry.
             XDistanceGlobalF: float=Mtrust*XDistanceGlobalM + (1-Mtrust)*XDistanceGlobalO
@@ -96,7 +107,7 @@ class odometry:
 
             wait(10 - (OD.Timer.time()-StartTime), MSEC)
 
-    def StartOD(self, Inertial: Inertial, LeftEncodedMotor: Motor, RightEncodedMotor: Motor, RobotWidthMM: float, WheelDiameterMM: float, Xodom: Rotation, Yodom: Rotation, OdomWheelDiameterMM: float, XOdomOffset: float, YodomOffset: float) -> Thread:
+    def StartOD(self, Inertial: Inertial, LeftEncodedMotor: Motor, RightEncodedMotor: Motor, RobotWidthMM: float, WheelDiameterMM: float, GearRatio: float, Xodom: Rotation, Yodom: Rotation, OdomWheelDiameterMM: float, XOdomOffset: float, YodomOffset: float) -> Thread:
         self.Inertial = Inertial
         self.leftEncodedMotor = LeftEncodedMotor
         self.rightEncodedMotor = RightEncodedMotor
@@ -107,6 +118,7 @@ class odometry:
         self.OdomWheelDiameterMM = OdomWheelDiameterMM
         self.XOdomOffset = XOdomOffset
         self.YOdomOffset = YodomOffset
+        self.GearRatio = GearRatio
         self.ODT=Thread(OD._Run)
 
         return self.ODT
