@@ -58,9 +58,17 @@ class odometry:
             FilteredPitch=AxisWeight*(FilteredPitch + OD.Inertial.gyro_rate(YAXIS)) + (1-AxisWeight)*math.degrees(math.atan2(0-XAxis, math.sqrt(ZAxis**2 + YAxis**2)))
             FilteredYaw=AxisWeight*(FilteredYaw + OD.Inertial.gyro_rate(ZAXIS)) + (1-AxisWeight)*HeadingRateM
 
+            TotalGravity=9.81
+            GX=TotalGravity*math.sin(FilteredPitch)
+            GY=TotalGravity*math.sin(FilteredRoll)*math.cos(FilteredPitch)
+            GZ=TotalGravity*math.cos(FilteredRoll)*math.cos(FilteredPitch)
+            PureXaxis=XAxis - GX
+            PureYaxis=YAxis - GY
+            PureZaxis=ZAxis - GZ
+
             # Inertial calulations.
-            OD.XSpeedLocalI+=(round(OD.Inertial.acceleration(AxisType.XAXIS), 3)*(0.01**2))
-            OD.YSpeedLocalI+=(round(OD.Inertial.acceleration(AxisType.YAXIS), 3)*(0.01**2))
+            OD.XSpeedLocalI+=(round(PureXaxis, 3)*(0.01**2))
+            OD.YSpeedLocalI+=(round(PureYaxis, 3)*(0.01**2))
             OD.XDistanceI=OD.XSpeedLocalI*0.01
             OD.YDistanceI=OD.YSpeedLocalI*0.01
 
