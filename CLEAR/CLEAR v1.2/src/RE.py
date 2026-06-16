@@ -107,11 +107,11 @@ class Recording:
         self.record=True
         self._record_loop(controller, Right, Left)
     
-    def odom_start(self, controller:Controller, Right: Motor, Left: Motor, inertial: Inertial, RobotWidthMM: float, WheelDiameterMM: float, Xodom: Rotation, Yodom: Rotation, OdomWheelDiameterMM: float, XOdomOffset: float, YOdomOffset: float):
+    def odom_start(self, controller:Controller, Right: Motor, Left: Motor, GearRatio: float, inertial: Inertial, InertialYoffset: float, InertialXoffset: float, InertialZoffset: float, RobotWidthMM: float, WheelDiameterMM: float, Xodom: Rotation, Yodom: Rotation, OdomWheelDiameterMM: float, XOdomOffset: float, YOdomOffset: float):
         
         brain.sdcard.savefile("RecordingDataOdom.csv")
         self.record=True
-        od.OD.StartOD(inertial, Right, Left, RobotWidthMM, WheelDiameterMM, 1, Xodom, Yodom, OdomWheelDiameterMM, XOdomOffset, YOdomOffset)
+        od.OD.StartOD(inertial, InertialYoffset, InertialXoffset, InertialZoffset, Left, Right, RobotWidthMM, WheelDiameterMM, GearRatio, Xodom, Yodom, OdomWheelDiameterMM, XOdomOffset, YOdomOffset)
         self._odom_record_loop(controller, Right, Left)
 
     def stop(self, NameOfFile: str, RightMotorsName: List[str], LeftMotorsName: List[str]):

@@ -113,7 +113,7 @@ if brain.sdcard.is_inserted() and brain.sdcard.exists("CLA.py"):
     controller_1.buttonA.pressed(toggle_recording)
     
     import OD
-    ODMainLoop=OD.OD.StartOD(inertial, left1, Right1, 1, 69.85, 1, Xodom, Yodom, 76.2, 81, 1)
+    ODMainLoop=OD.OD.StartOD(inertial,0, 0, 0, left1, Right1, 1, 69.85, 1, Xodom, Yodom, 76.2, 81, 1)
 
     def print_location_loop():
         while True:
