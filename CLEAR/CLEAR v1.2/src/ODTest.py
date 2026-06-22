@@ -1,5 +1,66 @@
-from vex import *
-import math
+import math, time
+
+class Motor:
+    def position(self) -> int:
+        return 0
+    
+    def velocity(self, rpm: float) -> float:
+        return 0.0
+    
+    def set_position(self, position: int):
+        pass
+
+RPM=0
+YAXIS=0
+XAXIS=0
+ZAXIS=0
+MSEC="MSEC"
+
+def wait(Number: int, Unit: str):
+    if Unit == "MSEC":
+        time.sleep(Number / 1000)
+    elif Unit == "SECONDS":
+        time.sleep(Number)
+
+class AxisType:
+    XAXIS = 0
+    YAXIS = 1
+    ZAXIS = 2
+
+class Inertial:
+    def calibrate(self):
+        pass
+    
+    def acceleration(self, axis) -> float:
+        return 1.0
+    
+    def gyro_rate(self, axis) -> float:
+        return 0.0
+    
+    def heading(self) -> float:
+        return 0.0
+
+class Timer:
+    
+    def time(self):
+        return int(time.time()*1000)
+
+class Thread():
+    def __init__(self, function):
+        pass
+
+    def stop(self):
+        pass
+
+class Rotation:
+    def position(self) -> int:
+        return 0
+    
+    def velocity(self, rpm: float) -> float:
+        return 0.0
+    
+    def set_position(self, position: int):
+        pass
 
 class odometry:
     def __init__(self):
