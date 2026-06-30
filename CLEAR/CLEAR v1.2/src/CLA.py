@@ -1119,7 +1119,7 @@ try:
                     if log_battery:
                         capture_battery()
                     
-                    print(timer()-start)
+                    #print(timer()-start)
 
                     lwait(wait_time_logging - (timer() - start))
 
