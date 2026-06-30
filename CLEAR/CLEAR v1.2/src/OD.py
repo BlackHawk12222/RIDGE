@@ -5,8 +5,8 @@ class odometry:
     def __init__(self):
         self.leftEncodedMotor: Motor
         self.rightEncodedMotor: Motor
-        self.XPosition: float = 0.0
-        self.YPosition: float = 0.0
+        self.XPosition_MM: float = 0.0
+        self.YPosition_MM: float = 0.0
         self.Inertial: Inertial
         self.InertialSensorUse=False
         self.XSpeedLocalI_MPS: float = 0.0
@@ -41,6 +41,7 @@ class odometry:
         self.FilteredPitch_Rad: float = 0.0
         self.FilteredYaw_Rad: float = 0.0
         self.Running=True
+        self.OdomWheelDiameter_M: float
 
     @staticmethod
     def calabrate_inertial():
@@ -58,19 +59,20 @@ class odometry:
 
         LeftDegOld=OD.leftEncodedMotor.position()
         RightDegOld=OD.rightEncodedMotor.position()
-        OldHeading: float = OD.Inertial.heading()
+        OldHeading_Deg: float = OD.Inertial.heading()
         AxisWeight: float=0.9
         DistancePerDegree_Mpd: float=(math.pi*(OD.WheelDiameterMM/1000))/360
         OldXOdomVelocity_RPM: float = 0.0
         OldYOdomVelocity_RPM: float = 0.0
         TotalGravity=9.81
-        OldXAxis: float = 0.0
-        OldYAxis: float = 0.0
-        OldZAxis: float = 0.0
+        OldXAxis_G: float = 0.0
+        OldYAxis_G: float = 0.0
+        OldZAxis_G: float = 0.0
         BaseI=1
         BaseM=1
         BaseO=1
         InertialWeight: float = 0.9
+        OD.OdomWheelDiameter_M=OD.OdomWheelDiameter_MM/1000
 
         while OD.Running:
             StartTime=OD.Timer.time()
@@ -95,9 +97,9 @@ class odometry:
 
             CentrificalAcceleration_G=(OD.Inertial.gyro_rate(ZAXIS)**2) * math.sqrt(OD.InertialXOffset**2 + OD.InertialYOffset**2)
             CentificalAngle_Rad=math.atan2(OD.InertialYOffset, OD.InertialXOffset)
-            OD.PureXaxis_G=(((((XAxis_G * math.sin(OD.FilteredPitch_Rad)) + (ZAxis_G * math.cos(OD.FilteredPitch_Rad))) - (TotalGravity*math.sin(OD.FilteredPitch_Rad))) - (CentrificalAcceleration_G * math.cos(CentificalAngle_Rad))) + OldXAxis) / 2
-            OD.PureYaxis_G=((((YAxis_G * math.sin(OD.FilteredRoll_Rad) + (ZAxis_G * math.cos(OD.FilteredRoll_Rad))) - (TotalGravity*math.sin(OD.FilteredRoll_Rad)*math.cos(OD.FilteredPitch_Rad))) - (CentrificalAcceleration_G * math.sin(CentificalAngle_Rad))) + OldYAxis) / 2
-            OD.PureZaxis_G=((((ZAxis_G * math.tan(OD.FilteredPitch_Rad/OD.FilteredRoll_Rad)) - (TotalGravity*math.cos(OD.FilteredRoll_Rad)*math.cos(OD.FilteredPitch_Rad))) - (CentrificalAcceleration_G * math.tan(CentificalAngle_Rad))) + OldZAxis) / 2
+            OD.PureXaxis_G=(((((XAxis_G * math.sin(OD.FilteredPitch_Rad)) + (ZAxis_G * math.cos(OD.FilteredPitch_Rad))) - (TotalGravity*math.sin(OD.FilteredPitch_Rad))) - (CentrificalAcceleration_G * math.cos(CentificalAngle_Rad))) + OldXAxis_G) / 2
+            OD.PureYaxis_G=((((YAxis_G * math.sin(OD.FilteredRoll_Rad) + (ZAxis_G * math.cos(OD.FilteredRoll_Rad))) - (TotalGravity*math.sin(OD.FilteredRoll_Rad)*math.cos(OD.FilteredPitch_Rad))) - (CentrificalAcceleration_G * math.sin(CentificalAngle_Rad))) + OldYAxis_G) / 2
+            OD.PureZaxis_G=((((ZAxis_G * math.tan(OD.FilteredPitch_Rad/OD.FilteredRoll_Rad)) - (TotalGravity*math.cos(OD.FilteredRoll_Rad)*math.cos(OD.FilteredPitch_Rad))) - (CentrificalAcceleration_G * math.tan(CentificalAngle_Rad))) + OldZAxis_G) / 2
             
             PureXaxis_MPS=OD.PureXaxis_G*TotalGravity
             PureYaxis_MPS=OD.PureYaxis_G*TotalGravity
@@ -105,8 +107,8 @@ class odometry:
             # Inertial calulations.
             OD.XDistanceI=OD.XSpeedLocalI_MPS*OD.TimeStep_Sec + 1/2*PureXaxis_MPS*(OD.TimeStep_Sec**2)
             OD.YDistanceI=OD.YSpeedLocalI_MPS*OD.TimeStep_Sec + 1/2*PureYaxis_MPS*(OD.TimeStep_Sec**2)
-            OD.XSpeedLocalI_MPS+=(InertialWeight * PureXaxis_MPS + (1-InertialWeight) * ((OD.Xodom.velocity(RPM)* ((OD.OdomWheelDiameter_MM/1000)*math.pi))/60))*OD.TimeStep_Sec
-            OD.YSpeedLocalI_MPS+=(InertialWeight * PureYaxis_MPS + (1-InertialWeight) * ((OD.Yodom.velocity(RPM)* ((OD.OdomWheelDiameter_MM/1000)*math.pi))/60))*OD.TimeStep_Sec
+            OD.XSpeedLocalI_MPS+=(InertialWeight * PureXaxis_MPS + (1-InertialWeight) * ((OD.Xodom.velocity(RPM)* (OD.OdomWheelDiameter_M*math.pi))/60))*OD.TimeStep_Sec
+            OD.YSpeedLocalI_MPS+=(InertialWeight * PureYaxis_MPS + (1-InertialWeight) * ((OD.Yodom.velocity(RPM)* (OD.OdomWheelDiameter_M*math.pi))/60))*OD.TimeStep_Sec
 
             # Motor calulations.
             OD.LDistanceM=((OD.leftEncodedMotor.position()-LeftDegOld) / 360) * DistancePerDegree_Mpd * OD.GearRatio
@@ -115,11 +117,13 @@ class odometry:
             OD.XDistanceLocalM=(OD.LDistanceM+OD.RDistanceM)/2
 
             # Odometer calculations.
-            XodomOffset=(OD.Inertial.heading() - OldHeading) * OD.XOdomOffset/OD.OdomWheelDiameter_MM
-            XDistanceO: float=(OD.Xodom.position()-XodomOffset) / 360 * (OD.OdomWheelDiameter_MM*math.pi)
-            YDistanceO: float=OD.Yodom.position() / 360 * (OD.OdomWheelDiameter_MM*math.pi)
-            # Final filtered distance calculations using powered motors and dead wheel odometry.
+            YodomOffset=(OD.Inertial.heading() - OldHeading_Deg) * OD.XOdomOffset/OD.OdomWheelDiameter_M
+            XDistanceO: float=OD.Xodom.position() / 360 * ((OD.OdomWheelDiameter_M)*math.pi)
+            YDistanceO: float=(OD.Yodom.position()-YodomOffset) / 360 * (OD.OdomWheelDiameter_M*math.pi)
 
+            
+
+            # Weighting calculations based on deviation from average.
             XBaseline=(OD.XDistanceI + OD.XDistanceLocalM + XDistanceO)/3
             XResidualI=abs(OD.XDistanceI - XBaseline)
             XResidualM=abs(OD.XDistanceLocalM - XBaseline)
@@ -145,11 +149,12 @@ class odometry:
             YIWeight=YInvVarI/YWeightTotal
             YOWeight=YInvVarO/YWeightTotal
 
-            XLocalDistanceTotal=((XIWeight * OD.XDistanceI) + (XMWeight * OD.XDistanceLocalM) + (XOWeight * XDistanceO))
-            YLocalDistanceTotal=(YIWeight * OD.YDistanceI) + (YOWeight * YDistanceO)
+            # Final filtered distance calculations using powered motor encoders, dead wheel odometry, and Inertial acceleromitor.
+            XLocalDistanceTotal_M=((XIWeight * OD.XDistanceI) + (XMWeight * OD.XDistanceLocalM) + (XOWeight * XDistanceO))
+            YLocalDistanceTotal_M=(YIWeight * OD.YDistanceI) + (YOWeight * YDistanceO)
 
-            OD.XPosition+=math.sin(OD.FilteredYaw_Rad) * XLocalDistanceTotal + math.cos(OD.FilteredYaw_Rad) * YLocalDistanceTotal
-            OD.YPosition+=math.cos(OD.FilteredYaw_Rad) * XLocalDistanceTotal - math.sin(OD.FilteredYaw_Rad) * YLocalDistanceTotal
+            OD.XPosition_MM+=(math.sin(OD.FilteredYaw_Rad) * XLocalDistanceTotal_M + math.cos(OD.FilteredYaw_Rad) * YLocalDistanceTotal_M) * 1000
+            OD.YPosition_MM+=(math.cos(OD.FilteredYaw_Rad) * XLocalDistanceTotal_M - math.sin(OD.FilteredYaw_Rad) * YLocalDistanceTotal_M) * 1000
 
             # Update the old positions for the next iteration.
             LeftDegOld=OD.leftEncodedMotor.position()
@@ -157,10 +162,11 @@ class odometry:
 
             OD.Xodom.set_position(0)
             OD.Yodom.set_position(0)
-            OldHeading=OD.Inertial.heading()
-            OldYAxis=OD.PureYaxis_G
-            OldXAxis=OD.PureXaxis_G
-            OldZAxis=OD.PureZaxis_G
+
+            OldHeading_Deg=OD.Inertial.heading()
+            OldYAxis_G=OD.PureYaxis_G
+            OldXAxis_G=OD.PureXaxis_G
+            OldZAxis_G=OD.PureZaxis_G
 
             wait(10 - (OD.Timer.time()-StartTime), MSEC)
 
