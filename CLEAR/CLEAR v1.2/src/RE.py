@@ -107,11 +107,11 @@ class Recording:
         self.record=True
         self._record_loop(controller, Right, Left)
     
-    def odom_start(self, controller:Controller, Right: Motor, Left: Motor, GearRatio: float, inertial: Inertial, InertialYoffset: float, InertialXoffset: float, InertialZoffset: float, RobotWidthMM: float, WheelDiameterMM: float, Xodom: Rotation, Yodom: Rotation, OdomWheelDiameterMM: float, XOdomOffset: float, YOdomOffset: float):
+    def odom_start(self, controller:Controller, Right: Motor, Left: Motor, GearRatio: float, inertial: Inertial, InertialYoffset: float, InertialXoffset: float, InertialZoffset: float, RobotWidthMM: float, WheelDiameterMM: float, Xodom: Rotation, ForwardYodom: Rotation, RearYodom: Rotation, OdomWheelDiameterMM: float, XOdomOffset: float, YOdomOffset: float):
         
         brain.sdcard.savefile("RecordingDataOdom.csv")
         self.record=True
-        od.OD.StartOD(inertial, InertialYoffset, InertialXoffset, InertialZoffset, Left, Right, RobotWidthMM, WheelDiameterMM, GearRatio, Xodom, Yodom, OdomWheelDiameterMM, XOdomOffset, YOdomOffset)
+        od.OD.StartOD(inertial, InertialYoffset, InertialXoffset, InertialZoffset, Left, Right, RobotWidthMM, WheelDiameterMM, GearRatio, Xodom, ForwardYodom, RearYodom, OdomWheelDiameterMM, XOdomOffset, YOdomOffset)
         self._odom_record_loop(controller, Right, Left)
 
     def stop(self, NameOfFile: str, RightMotorsName: List[str], LeftMotorsName: List[str]):
@@ -167,7 +167,7 @@ class Recording:
             if controller.buttonL2.pressing():
                 self.buttonspressed.extend(b"L2: ")
 
-            brain.sdcard.appendfile("RecordingDataOdom.csv", bytearray(b"%d A1, %d A2, %d A3, %d A4, %d T, %s BP, %d RP, %d LP, %3.3f XP, %3.3f YP \n"%(self.axis1, self.axis2 , self.axis3, self.axis4, self.time_stamp , self.buttonspressed.decode("utf-8"), Right.position(DEGREES), Left.position(DEGREES), od.OD.Xodom, od.OD.Yodom)))
+            brain.sdcard.appendfile("RecordingDataOdom.csv", bytearray(b"%d A1, %d A2, %d A3, %d A4, %d T, %s BP, %d RP, %d LP, %3.3f XP, %3.3f YP \n"%(self.axis1, self.axis2 , self.axis3, self.axis4, self.time_stamp , self.buttonspressed.decode("utf-8"), Right.position(DEGREES), Left.position(DEGREES), od.OD.Xodom, od.OD.ForwardYodom)))
 
             wait(20, MSEC)
     
@@ -220,7 +220,7 @@ class Recording:
             if controller.buttonL2.pressing():
                 self.buttonspressed.extend(b"L2: ")
 
-            brain.sdcard.appendfile("RecordingData.csv", bytearray(b"%d A1, %d A2, %d A3, %d A4, %d T, %s BP, %d RP, %d LP, %3.3f XP, %3.3f YP \n"%(self.axis1, self.axis2 , self.axis3, self.axis4, self.time_stamp , self.buttonspressed.decode("utf-8"), Right.position(DEGREES), Left.position(DEGREES), od.OD.Xodom, od.OD.Yodom)))
+            brain.sdcard.appendfile("RecordingData.csv", bytearray(b"%d A1, %d A2, %d A3, %d A4, %d T, %s BP, %d RP, %d LP, %3.3f XP, %3.3f YP \n"%(self.axis1, self.axis2 , self.axis3, self.axis4, self.time_stamp , self.buttonspressed.decode("utf-8"), Right.position(DEGREES), Left.position(DEGREES), od.OD.Xodom, od.OD.ForwardYodom)))
 
             wait(20, MSEC)
 
