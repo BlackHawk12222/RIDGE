@@ -10,15 +10,14 @@ def none():
 
 # Robot configuration code
 controller_1 = Controller(PRIMARY)
-Right1 = Motor(Ports.PORT18, GearSetting.RATIO_6_1, True)
-Right2 = Motor(Ports.PORT19, GearSetting.RATIO_6_1, False)
-Right3 = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)
+Right1 = Motor(Ports.PORT13, GearSetting.RATIO_6_1, True)
+Right2 = Motor(Ports.PORT14, GearSetting.RATIO_6_1, False)
 left1 = Motor(Ports.PORT11, GearSetting.RATIO_6_1, False)
 left2 = Motor(Ports.PORT12, GearSetting.RATIO_6_1, True)
-left3 = Motor(Ports.PORT13, GearSetting.RATIO_6_1, False)
-inertial = Inertial(Ports.PORT3)
+inertial = Inertial(Ports.PORT4)
 Xodom = Rotation(Ports.PORT1)
-Yodom = Rotation(Ports.PORT2)
+ForwardYodom = Rotation(Ports.PORT2)
+RearYodom = Rotation(Ports.PORT3)
 
 # wait for rotation sensor to fully initialize
 wait(30, MSEC)
@@ -113,7 +112,7 @@ if brain.sdcard.is_inserted() and brain.sdcard.exists("CLA.py"):
     controller_1.buttonA.pressed(toggle_recording)
     
     import OD
-    ODMainLoop=OD.OD.StartOD(inertial,0, 0, 0, left1, Right1, 1, 69.85, 1, Xodom, Yodom, Yodom, 76.2, 81, 1)
+    ODMainLoop=OD.OD.StartOD(inertial, 0, 0, 0, left1, Right1, 325, 69.85, 0.75, Xodom, ForwardYodom, RearYodom, 1, 50.8, 1, 1)
 
     def print_location_loop():
         while True:
