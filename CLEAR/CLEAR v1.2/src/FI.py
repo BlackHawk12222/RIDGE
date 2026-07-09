@@ -1,5 +1,5 @@
 from vex import *
-import math
+import math, cmath
 
 class FilteredInertial:
     def __init__(self, inertial: Inertial, XOffset_mm: float=0.0, YOffset_mm: float=0.0, ZOffset_mm: float=0.0, PollRate_Hz: int=50) -> None:
@@ -23,19 +23,19 @@ class FilteredInertial:
     def calabrate_inertial(self) -> None:
         self.Inertial.calibrate()
         try:
-            RollA=math.degrees(math.atan(self.Inertial.acceleration(AxisType.YAXIS)/self.Inertial.acceleration(AxisType.ZAXIS)))
+            RollA=math.atan2(self.Inertial.acceleration(AxisType.YAXIS), cmath.sqrt((self.Inertial.acceleration(AxisType.ZAXIS)**2) + (self.Inertial.acceleration(AxisType.XAXIS)**2)).real)
         except ZeroDivisionError:
             RollA=0
         self.XgravityOffsetDegrees=RollA
         try:
-            PitchA=math.degrees(math.asin(self.Inertial.acceleration(AxisType.XAXIS)/9.81))
+            PitchA=math.atan2(0-self.Inertial.acceleration(AxisType.XAXIS), cmath.sqrt((self.Inertial.acceleration(AxisType.YAXIS)**2) + (self.Inertial.acceleration(AxisType.ZAXIS)**2)).real)
         except ZeroDivisionError:
             PitchA=0
         self.YgravityOffsetDegrees=PitchA
     
     def _Run(self) -> None:
         AxisWeight=0.98
-        TotalGravity=9.81
+        TotalGravity_G=1
         self.TimeStep_Sec=1/self.PollRate_Hz
         self.calabrate_inertial()
         while self.Running:
@@ -44,37 +44,50 @@ class FilteredInertial:
             XAxis_G=self.Inertial.acceleration(AxisType.XAXIS)
             YAxis_G=self.Inertial.acceleration(AxisType.YAXIS)
             
-            if ZAxis_G + XAxis_G + YAxis_G != 1:
-                AngleOfGravity_Rad=math.acos(ZAxis_G/TotalGravity)
-                XAxisForGravity_G=XAxis_G - (XAxis_G - (TotalGravity*math.sin(AngleOfGravity_Rad)))
-                YAxisForGravity_G=YAxis_G - (YAxis_G - (TotalGravity*math.sin(AngleOfGravity_Rad)))
-                ZaxisForGravity_G=ZAxis_G - (ZAxis_G - (TotalGravity*math.cos(AngleOfGravity_Rad)))
-            else:
-                XAxisForGravity_G=self.Inertial.acceleration(AxisType.XAXIS)
-                YAxisForGravity_G=self.Inertial.acceleration(AxisType.YAXIS)
-                ZaxisForGravity_G=self.Inertial.acceleration(AxisType.ZAXIS)
+            # if ZAxis_G + XAxis_G + YAxis_G != 1:
+            #     AngleOfGravity_Rad=math.acos(ZAxis_G/TotalGravity_G)
+            #     XAxisForGravity_G=XAxis_G - (XAxis_G - (TotalGravity_G*math.sin(AngleOfGravity_Rad)))
+            #     YAxisForGravity_G=YAxis_G - (YAxis_G - (TotalGravity_G*math.sin(AngleOfGravity_Rad)))
+            #     ZaxisForGravity_G=ZAxis_G - (ZAxis_G - (TotalGravity_G*math.cos(AngleOfGravity_Rad)))
+            # else:
+            #     XAxisForGravity_G=self.Inertial.acceleration(AxisType.XAXIS)
+            #     YAxisForGravity_G=self.Inertial.acceleration(AxisType.YAXIS)
+            #     ZaxisForGravity_G=self.Inertial.acceleration(AxisType.ZAXIS)
 
+            # XAxisForGravity_G=self.Inertial.acceleration(AxisType.XAXIS)
+            # YAxisForGravity_G=self.Inertial.acceleration(AxisType.YAXIS)
+            # ZAxisForGravity_G=self.Inertial.acceleration(AxisType.ZAXIS)
 
-            try:
-                self.FilteredRoll_Rad=AxisWeight*(self.FilteredRoll_Rad + math.radians(self.Inertial.gyro_rate(YAXIS) * self.TimeStep_Sec)) + (1-AxisWeight)*((math.atan(YAxisForGravity_G/ZaxisForGravity_G))-self.XgravityOffsetDegrees)
-            except ZeroDivisionError:
-                self.FilteredRoll_Rad=AxisWeight*(self.FilteredRoll_Rad + math.radians(self.Inertial.gyro_rate(YAXIS) * self.TimeStep_Sec)) + (1-AxisWeight)*((math.atan(0))-self.XgravityOffsetDegrees)
-            
-            try:
-                self.FilteredPitch_Rad=AxisWeight*(self.FilteredPitch_Rad + math.radians(self.Inertial.gyro_rate(XAXIS) * self.TimeStep_Sec)) + (1-AxisWeight)*((math.asin(XAxisForGravity_G/TotalGravity))-self.YgravityOffsetDegrees)
-            except ZeroDivisionError:
-                self.FilteredPitch_Rad=AxisWeight*(self.FilteredPitch_Rad + math.radians(self.Inertial.gyro_rate(XAXIS) * self.TimeStep_Sec)) + (1-AxisWeight)*((math.asin(0))-self.YgravityOffsetDegrees)
+            # if XAxisForGravity_G==0:
+            #     XAxisForGravity_G=0.0000001
+            # if YAxisForGravity_G==0:
+            #     YAxisForGravity_G=0.0000001
+            # if ZAxisForGravity_G==0:
+            #     ZAxisForGravity_G=0.0000001
+
+            self.FilteredRoll_Rad=math.radians(self.Inertial.orientation(ROLL))
+            self.FilteredPitch_Rad=math.radians(self.Inertial.orientation(PITCH))
+
+            # try:
+            #     self.FilteredRoll_Rad=AxisWeight*(self.FilteredRoll_Rad + math.radians(self.Inertial.gyro_rate(YAXIS) * self.TimeStep_Sec)) + (1-AxisWeight)*(math.atan2(YAxisForGravity_G, cmath.sqrt((ZAxisForGravity_G**2) + (XAxisForGravity_G**2)).real)-self.XgravityOffsetDegrees)
+            # except ZeroDivisionError:
+            #     self.FilteredRoll_Rad=AxisWeight*(self.FilteredRoll_Rad + math.radians(self.Inertial.gyro_rate(YAXIS) * self.TimeStep_Sec)) + (1-AxisWeight)*(self.XgravityOffsetDegrees)
+
+            # try:
+            #     self.FilteredPitch_Rad=AxisWeight*(self.FilteredPitch_Rad + (math.radians(self.Inertial.gyro_rate(XAXIS) * self.TimeStep_Sec))) + (1-AxisWeight)*((math.atan2(0-XAxisForGravity_G, cmath.sqrt((YAxisForGravity_G**2) + (ZAxisForGravity_G**2)).real))-self.YgravityOffsetDegrees)
+            # except ZeroDivisionError:
+            #     self.FilteredPitch_Rad=AxisWeight*(self.FilteredPitch_Rad + (math.radians(self.Inertial.gyro_rate(XAXIS) * self.TimeStep_Sec))) + (1-AxisWeight)*(self.YgravityOffsetDegrees)
             
             CentrificalAcceleration_G=(self.Inertial.gyro_rate(ZAXIS)**2) * math.sqrt(self.XOffset_mm**2 + self.YOffset_mm**2)
             CentificalAngle_Rad=math.atan2(self.YOffset_mm, self.XOffset_mm)
             
-            self.ZFiltered_G=(ZAxis_G * math.cos(self.FilteredRoll_Rad) * math.cos(self.FilteredPitch_Rad)) - (TotalGravity*math.cos(self.FilteredRoll_Rad) * math.cos(self.FilteredPitch_Rad))
-            self.XFiltered_G=(XAxis_G * math.sin(self.FilteredPitch_Rad)  + self.ZFiltered_G * math.cos(self.FilteredPitch_Rad)) - (TotalGravity*math.sin(self.FilteredPitch_Rad)) - (CentrificalAcceleration_G * math.cos(CentificalAngle_Rad))
-            self.YFiltered_G=(YAxis_G * math.cos(self.FilteredRoll_Rad) - self.ZFiltered_G * math.sin(self.FilteredRoll_Rad)) - (TotalGravity*math.sin(self.FilteredRoll_Rad)) - (CentrificalAcceleration_G * math.sin(CentificalAngle_Rad))
+            self.ZFiltered_G=ZAxis_G - (TotalGravity_G*math.cos(self.FilteredRoll_Rad) * math.cos(self.FilteredPitch_Rad))
+            self.XFiltered_G=XAxis_G - (TotalGravity_G*math.sin(self.FilteredPitch_Rad)) - (CentrificalAcceleration_G * math.cos(CentificalAngle_Rad))
+            self.YFiltered_G=YAxis_G - (TotalGravity_G*math.sin(self.FilteredRoll_Rad)) - (CentrificalAcceleration_G * math.sin(CentificalAngle_Rad))
 
             self.FilteredYaw_Rad=math.radians(self.Inertial.orientation(YAW))
 
-            print("X: ", self.XFiltered_G, "Y: ", self.YFiltered_G, "Z: ", self.ZFiltered_G, "Yaw: ", self.FilteredYaw_Rad, "Pitch: ", self.FilteredPitch_Rad, "Roll: ", self.FilteredRoll_Rad)
+            print("X: ", self.XFiltered_G, "Y: ", self.YFiltered_G, "Z: ", self.ZFiltered_G, "Yaw: ", math.degrees(self.FilteredYaw_Rad), "Pitch: ", math.degrees(self.FilteredPitch_Rad), "Roll: ", math.degrees(self.FilteredRoll_Rad))
             
             wait((1000/self.PollRate_Hz) - (self.Timer.time()-StartTime), MSEC)
 

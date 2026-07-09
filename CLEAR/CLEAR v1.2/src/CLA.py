@@ -15,8 +15,10 @@ try:
     from vex import *
     from gc import collect, mem_alloc# type: ignore 
     from ustruct import pack_into
-    import uarray, OD
-    
+    import uarray, micropython  # type: ignore
+
+    print(dir(micropython))
+
     brain=Brain()
     log_time= Timer() # Main timer used.
     log_link=MessageLink(Ports.PORT21, "CLEAR32449", VexlinkType.MANAGER)

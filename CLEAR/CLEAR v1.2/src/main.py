@@ -1,6 +1,6 @@
 #region VEXcode Generated Robot Configuration
 from vex import *
-from FI import FilteredInertial
+#from FI import FilteredInertial
 import RE
 
 # Brain should be defined by default
@@ -16,7 +16,7 @@ Right2 = Motor(Ports.PORT14, GearSetting.RATIO_6_1, False)
 left1 = Motor(Ports.PORT11, GearSetting.RATIO_6_1, False)
 left2 = Motor(Ports.PORT12, GearSetting.RATIO_6_1, True)
 inertial = Inertial(Ports.PORT4)
-filteredInertial=FilteredInertial(inertial, 0, 0, 0, 50)
+#filteredInertial=FilteredInertial(inertial, 0, 0, 0, 50)
 Xodom = Rotation(Ports.PORT1)
 ForwardYodom = Rotation(Ports.PORT2)
 RearYodom = Rotation(Ports.PORT3)
