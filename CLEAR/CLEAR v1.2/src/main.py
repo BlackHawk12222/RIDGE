@@ -1,5 +1,6 @@
 #region VEXcode Generated Robot Configuration
 from vex import *
+from FI import FilteredInertial
 import RE
 
 # Brain should be defined by default
@@ -15,6 +16,7 @@ Right2 = Motor(Ports.PORT14, GearSetting.RATIO_6_1, False)
 left1 = Motor(Ports.PORT11, GearSetting.RATIO_6_1, False)
 left2 = Motor(Ports.PORT12, GearSetting.RATIO_6_1, True)
 inertial = Inertial(Ports.PORT4)
+filteredInertial=FilteredInertial(inertial, 0, 0, 0, 50)
 Xodom = Rotation(Ports.PORT1)
 ForwardYodom = Rotation(Ports.PORT2)
 RearYodom = Rotation(Ports.PORT3)
@@ -111,15 +113,15 @@ if brain.sdcard.is_inserted() and brain.sdcard.exists("CLA.py"):
             print("Recording Stopped")
     controller_1.buttonA.pressed(toggle_recording)
     
-    import OD
-    ODMainLoop=OD.OD.StartOD(inertial, 0, 0, 0, left1, Right1, 325, 69.85, 0.75, Xodom, ForwardYodom, RearYodom, 1, 50.8, 1, 1)
+    # import OD
+    # ODMainLoop=OD.OD.StartOD(inertial, 0, 0, 0, left1, Right1, 325, 69.85, 0.75, Xodom, ForwardYodom, RearYodom, 1, 50.8, 1, 1)
 
-    def print_location_loop():
-        while True:
-            print("X: ", OD.OD.XPosition_MM, " Y: ", OD.OD.YPosition_MM)
-            wait(100, MSEC)
+    # def print_location_loop():
+    #     while True:
+    #         print("X: ", OD.OD.XPosition_MM, " Y: ", OD.OD.YPosition_MM)
+    #         wait(100, MSEC)
             
-    ODLoop=Thread(print_location_loop)
+    # ODLoop=Thread(print_location_loop)
 
 # Event setup
 controller_1.axis2.changed(rightside)

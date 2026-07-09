@@ -1,5 +1,6 @@
 from vex import *
-import math, cmath
+from FI import FilteredInertial
+import math
 
 class odometry:
     def __init__(self):
@@ -56,7 +57,7 @@ class odometry:
         try:
             PitchA=math.degrees(math.asin(OD.Inertial.acceleration(AxisType.XAXIS)/9.81))
         except ZeroDivisionError:
-            RollA=0
+            PitchA=0
         OD.YgravityOffsetDegrees=PitchA
 
     @staticmethod
