@@ -1,7 +1,7 @@
 #region VEXcode Generated Robot Configuration
 from vex import *
 #from FI import FilteredInertial
-import RE, micropython  # type: ignore
+import RE, micropython, ASAP  # type: ignore
 
 
 
@@ -76,20 +76,7 @@ def leftside():
     left2.spin(FORWARD, leftspeed, VOLT)
 
 # Aton Functions
-
-def leftmove(leftspeed):
-    print("left: ", leftspeed)
-    if leftspeed != 0:
-        leftspeed=leftspeed/8.33
-    left1.spin(FORWARD, leftspeed, VOLT)
-    left2.spin(FORWARD, leftspeed, VOLT)
-
-def rightmove(rightspeed):
-    print("Right: ", rightspeed)
-    if rightspeed != 0:
-        rightspeed=rightspeed/8.33
-    Right1.spin(FORWARD, rightspeed, VOLT)
-    Right2.spin(FORWARD, rightspeed, VOLT)
+asap=ASAP.Start([left1, left2], [Right1, Right2], 0.75, 69.85, 600, controller_1, Xodom, 50.8)
 
 def aton():
     RE.encode.run("TestRecording")
