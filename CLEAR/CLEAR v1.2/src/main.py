@@ -1,10 +1,19 @@
 #region VEXcode Generated Robot Configuration
 from vex import *
 #from FI import FilteredInertial
-import RE
+import RE, micropython  # type: ignore
+
+
 
 # Brain should be defined by default
 brain=Brain()
+
+# micropython.opt_level(1)
+# print(micropython.qstr_info())
+# time1=brain.timer.time()
+# print(micropython.mem_info(1))
+# time2=brain.timer.time()
+# print("Time to get memory info: ", time2-time1, "ms")
 
 def none():
     pass

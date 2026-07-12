@@ -9,17 +9,16 @@
     # ---------------------------------------------------------------------------- #
 
 _errorcreated=False
+from vex import *
 import sys
+brain=Brain()
 
 try:
-    from vex import *
     from gc import collect, mem_alloc# type: ignore 
     from ustruct import pack_into
-    import uarray, micropython  # type: ignore
+    from micropython import const, mem_info  # type: ignore
 
-    print(dir(micropython))
-
-    brain=Brain()
+    
     log_time= Timer() # Main timer used.
     log_link=MessageLink(Ports.PORT21, "CLEAR32449", VexlinkType.MANAGER)
 
@@ -33,29 +32,29 @@ try:
 
                 def __init__(self):
                     self.modulelist={}
-                    self.memory=0
-                    self.currentMemory=0
-                    self.memory_tolrance=int(str(settings.settings.get('memory_tolrance_KB ')))
-                    self.aton=False
-                    self.driver=False
-                    self.comp_switch=False
-                    self.field=False
+                    self.memory: float=0
+                    self.currentMemory: float=0
+                    self.memory_tolrance: int=const(int(str(settings.settings.get('memory_tolrance_KB '))))
+                    self.aton: bool=False
+                    self.driver: bool=False
+                    self.comp_switch: bool=False
+                    self.field: bool=False
 
                 def memoryuse(self) -> None:
-                    self.currentMemory=mem_alloc()/1000  # type: ignore
+                    self.currentMemory: float=mem_alloc()/1000  # type: ignore
                     if not (self.memory >= self.currentMemory - self.memory_tolrance and self.memory <= self.currentMemory + self.memory_tolrance):
-                        log.add("DSM0", str(self.currentMemory) + " KB")
-                        self.memory=self.currentMemory
+                        log.add(log.memory_change, str(self.currentMemory) + " KB")
+                        self.memory: float=self.currentMemory
                 
                 def modules(self) -> None:
                     if self.modulelist != sys.modules:
                         filtered_list = [item for item in sys.modules if item not in self.modulelist]
-                        log.add("DSP0", filtered_list)
+                        log.add(log.module_change, filtered_list)
                         self.modulelist= sys.modules.copy()
 
                 def control(self, comp: Competition):
                     if comp.is_autonomous() and not self.aton:
-                        log.add("DSC0", "")
+                        log.add(log.aton_start, "")
                         self.aton=True
                         self.driver=False
                     elif comp.is_driver_control() and not self.driver:
@@ -82,12 +81,14 @@ try:
                     self.motor_power_monitoring={}  
                     self.motor_disconnected={}
                     self.motor_current_monitoring={}
-                    self.setup={}
+                    self.motor_name={}
+                    self.setup: dict[int, bool] = {}
+                    self.motor_id=0
                     self.optical_object={}
                     self.optical_color={}
                     self.optical_connected={}
-                    self.inertial_axis_tolerance=float(str(settings.settings.get('inertial_axis_tolrance_Gs ')))
-                    self.inertial_gyro_tolerance=int(str(settings.settings.get('inertial_gyro_tolrance_DEGREES ')))
+                    self.inertial_axis_tolerance=const(float(str(settings.settings.get('inertial_axis_tolrance_Gs '))))
+                    self.inertial_gyro_tolerance=const(int(str(settings.settings.get('inertial_gyro_tolrance_DEGREES '))))
                     self.inertial_calibrating=False
                     self.inertial_connected=True
                     self.inertial_rotation_history=0
@@ -100,7 +101,7 @@ try:
                     self.rotation_connection={}
                     self.rotation_angle_history={}
                     self.rotation_position_history={}
-                    self.distance_tolrance=int(str(settings.settings.get('distance_tolrance_MM ')))
+                    self.distance_tolrance=const(int(str(settings.settings.get('distance_tolrance_MM '))))
                     self.distance_connection={}
                     self.distance_object={}
                     self.distance_history={}
@@ -112,75 +113,70 @@ try:
                         log.Motors.append(motor)
 
                     for motor_ in log.Motors:
-                        motor_id=str(motor_)
-                        setup=self.setup
+                        self.motor_id=id(motor_)
                         
                         # Setup id to sets if not there.
-                        if motor_id not in setup:
-                            self.motor_temp_monitoring[motor_id] = 0
-                            self.motor_power_monitoring[motor_id] = 0
-                            self.motor_current_monitoring[motor_id] = 0
-                            self.motor_disconnected[motor_id] = False
-                            self.setup[motor_id]=True
+                        if self.motor_id not in self.setup:
+                            self.motor_temp_monitoring[self.motor_id] = 0
+                            self.motor_power_monitoring[self.motor_id] = 0
+                            self.motor_current_monitoring[self.motor_id] = 0
+                            self.motor_disconnected[self.motor_id] = False
+                            self.setup[self.motor_id]=True
+                            self.motor_name[self.motor_id]=str(motor_)
 
-                        self.motor_temp:int=motor_.temperature(PERCENT)
-                        self.current_motor_disconnected:int=self.motor_disconnected[motor_id]
+                        self.motor_temp: int=motor_.temperature(PERCENT)
 
                         if self.motor_temp==2:
-                            if not self.current_motor_disconnected:
-                                log.add("EM1", "%s"%(motor_))
-                                self.motor_disconnected[motor_id]=True
+                            if not self.motor_disconnected[self.motor_id]:
+                                log.add("EM1", "%s"%(self.motor_name[self.motor_id]))
+                                self.motor_disconnected[self.motor_id]=True
                             else:
                                 return
-                        elif self.motor_temp!=2 and self.current_motor_disconnected:
-                            self.motor_disconnected[motor_id]=False
+                        elif self.motor_temp!=2 and self.motor_disconnected[self.motor_id]:
+                            self.motor_disconnected[self.motor_id]=False
 
-                        self.current_motor_current_monitoring:int=self.motor_current_monitoring[motor_id]
-                        self.current_motor_temp_monitoring:int=self.motor_temp_monitoring[motor_id]
-                        self.current_motor_power_monitoring:int=self.motor_power_monitoring[motor_id]
-                        self.current_motor_power:int=int(motor_.power(PowerUnits.WATT))
-                        self.current_motor_current:int=int(motor_.current(CurrentUnits.AMP) * 10)
+                        self.current_motor_power=motor_.power(PowerUnits.WATT)
+                        self.current_motor_current:int=motor_.current(CurrentUnits.AMP)
                         
                         # Cheaks for the temps,  power, and cheaks for conecttions of motors(s).
                         if self.motor_temp<=50: 
-                            if self.current_motor_temp_monitoring>0:
-                                log.add("DM0", "Motor %s, Temp %s"%(motor_, self.motor_temp))
-                                self.motor_temp_monitoring[motor_id]=0
+                            if self.motor_temp_monitoring[self.motor_id]>0:
+                                log.add("DM0", "Motor %s, Temp %s"%(self.motor_name[self.motor_id], self.motor_temp))
+                                self.motor_temp_monitoring[self.motor_id]=0
                         elif self.motor_temp>70: 
-                            if (self.current_motor_temp_monitoring==0 or self.current_motor_temp_monitoring==2):
-                                log.add("EM0", "Motor %s, Temp %s"%(motor_, self.motor_temp))
-                                self.motor_temp_monitoring[motor_id]=1  
+                            if (self.motor_temp_monitoring[self.motor_id]==0 or self.motor_temp_monitoring[self.motor_id]==2):
+                                log.add("EM0", "Motor %s, Temp %s"%(self.motor_name[self.motor_id], self.motor_temp))
+                                self.motor_temp_monitoring[self.motor_id]=1  
                         elif self.motor_temp>50: 
-                            if self.current_motor_temp_monitoring==0:
-                                log.add("WM0", "Motor %s, Temp %s"%(motor_, self.motor_temp))
-                                self.motor_temp_monitoring[motor_id]=2
+                            if self.motor_temp_monitoring[self.motor_id]==0:
+                                log.add("WM0", "Motor %s, Temp %s"%(self.motor_name[self.motor_id], self.motor_temp))
+                                self.motor_temp_monitoring[self.motor_id]=2
                         
-
                         if self.current_motor_power<=12: 
-                            if self.current_motor_power_monitoring>0:
-                                log.add("DM1", "Motor %s, Power %s"%(str(motor_), str(self.current_motor_power)))
-                                self.motor_power_monitoring[motor_id]=0
+                            if self.motor_power_monitoring[self.motor_id]>0:
+                                log.add("DM1", "Motor %s, Power %s"%(self.motor_name[self.motor_id], str(self.current_motor_power)))
+                                self.motor_power_monitoring[self.motor_id]=0
                         elif self.current_motor_power>20: 
-                            if (self.current_motor_power_monitoring==0 or self.current_motor_power_monitoring==2):
-                                log.add("EM2", "Motor %s, Power %s"%(str(motor_), str(self.current_motor_power)))
-                                self.motor_power_monitoring[motor_id]=1
+                            if (self.motor_power_monitoring[self.motor_id]==0 or self.motor_power_monitoring[self.motor_id]==2):
+                                log.add("EM2", "Motor %s, Power %s"%(self.motor_name[self.motor_id], str(self.current_motor_power)))
+                                self.motor_power_monitoring[self.motor_id]=1
                         elif self.current_motor_power>12: 
-                            if self.current_motor_power_monitoring==0:
-                                log.add("WM1", "Motor %s, Power %s"%(str(motor_), str(self.current_motor_power)))
-                                self.motor_power_monitoring[motor_id]=2
+                            if self.motor_power_monitoring[self.motor_id]==0:
+                                log.add("WM1", "Motor %s, Power %s"%(self.motor_name[self.motor_id], str(self.current_motor_power)))
+                                self.motor_power_monitoring[self.motor_id]=2
 
                         if self.current_motor_current<=15: 
-                            if self.current_motor_current_monitoring>0:
-                                log.add("DM2", "Motor %s, Current %1.1f"%(str(motor_), float(self.current_motor_current)/10))
-                                self.motor_current_monitoring[motor_id]=0
+                            if self.motor_current_monitoring[self.motor_id]>0:
+                                log.add("DM2", "Motor %s, Current %1.1f"%(self.motor_name[self.motor_id], self.current_motor_current))
+                                self.motor_current_monitoring[self.motor_id]=0
                         elif self.current_motor_current>20: 
-                            if (self.current_motor_current_monitoring==0 or self.current_motor_current_monitoring==2):
-                                log.add("EM3", "Motor %s, Current %1.1f"%(str(motor_), float(self.current_motor_current)/10))
-                                self.motor_current_monitoring[motor_id]=1
+                            if (self.motor_current_monitoring[self.motor_id]==0 or self.motor_current_monitoring[self.motor_id]==2):
+                                log.add("EM3", "Motor %s, Current %1.1f"%(self.motor_name[self.motor_id], self.current_motor_current))
+                                self.motor_current_monitoring[self.motor_id]=1
                         elif self.current_motor_current>15:
-                            if self.current_motor_current_monitoring==0:
-                                log.add("WM2", "Motor %s, Current %1.1f"%(str(motor_), float(self.current_motor_current)/10))
-                                self.motor_current_monitoring[motor_id]=2
+                            if self.motor_current_monitoring[self.motor_id]==0:
+                                log.add("WM2", "Motor %s, Current %1.1f"%(self.motor_name[self.motor_id], self.current_motor_current))
+                                self.motor_current_monitoring[self.motor_id]=2
                 
                 def optical(self, opticalsensor: Optical) -> None:
                     """Capture for an optical sensor. Enter optical sensor to Capture."""
@@ -451,21 +447,18 @@ try:
                 # set for variables id.
                 self.variables={}
                 self.valueid=0
-                
-                # Variables used to not have spam in log.  
-                # self.battery_voltage_monitoring=0
-                # self.battery_capacity_monitoring=0
-                # self.battery_current_monitoring=0
-                # self.battery_watt_monitoring=0
-                # self.battery_temp_monitoring=0
-                self.battery_values=uarray.array('H', [0, 0, 0, 0, 0])
-                self.battery_monitoring=uarray.array('H', [0, 0, 0, 0, 0])
-                # self.voltage:int=0
-                # self.current:int=0
-                # self.capacity:int=0
+                self.battery_voltage=0
+                self.battery_current=0
+                self.battery_capacity=0
+                self.battery_watts=0
+                self.battery_voltage_monitoring=0
+                self.battery_current_monitoring=0
+                self.battery_capacity_monitoring=0
+                self.battery_watts_monitoring=0
+                self.ctrl_name={}
                 self.watts:int=0
                 self.axis={}
-                self.button_objs=[]
+                self.button_objs={}
                 self.button_names = [
                     "A", "B", "X", "Y",
                     "UP", "DOWN", "LEFT", "RIGHT",
@@ -481,84 +474,63 @@ try:
                 None
                 """
                 
-
-                self.battery_values[0]=int(brain.battery.voltage(VoltageUnits.VOLT))
-                self.battery_values[1]=int(brain.battery.current(CurrentUnits.AMP) * 10)
-                self.battery_values[2]=brain.battery.capacity()
-                self.battery_values[3]=int(brain.battery.current(CurrentUnits.AMP) * int(brain.battery.voltage(VoltageUnits.VOLT)) / 10)
-                self.battery_values[4]=int(brain.battery.temperature(PERCENT))
-
-                # self.voltage:int=int(brain.battery.voltage(VoltageUnits.VOLT))
-                # self.current:int=brain.battery.current(CurrentUnits.AMP)
-                # self.capacity:int=brain.battery.capacity()
-                # self.watts:int=int(brain.battery.current(CurrentUnits.AMP)) * int(brain.battery.voltage(VoltageUnits.VOLT))
-                # self.temps:int=int(brain.battery.temperature(PERCENT))
+                self.battery_voltage=brain.battery.voltage(VOLT)
+                self.battery_current=brain.battery.current(CurrentUnits.AMP)
+                self.battery_capacity=brain.battery.capacity()
+                self.battery_watts=self.battery_current * self.battery_voltage
 
                 # Battery monitoring for voltage, capacity, and current.
-                if self.battery_values[0]>=12:
-                    if self.battery_monitoring[0]==1 or self.battery_monitoring[0]==2:
-                        log.add("DB0", "%s"%(self.battery_values[0]))
-                        self.battery_monitoring[0]=0
-                elif self.battery_values[0]<12:
-                    if self.battery_monitoring[0]==0 or self.battery_monitoring[0]==1:
-                        log.add("WB0", "%s"%(self.battery_values[0]))
-                        self.battery_monitoring[0]=2
-                elif self.battery_values[0]<11:
-                    if self.battery_monitoring[0]==0 or self.battery_monitoring[0]==2:
-                        log.add("EB0", "%s"%(self.battery_values[0]))
-                        self.battery_monitoring[0]=1
+                if self.battery_voltage>=12:
+                    if self.battery_voltage_monitoring==1 or self.battery_voltage_monitoring==2:
+                        log.add("DB0", "%s"%(self.battery_voltage))
+                        self.battery_voltage_monitoring=0
+                elif self.battery_voltage<12:
+                    if self.battery_voltage_monitoring==0 or self.battery_voltage_monitoring==1:
+                        log.add("WB0", "%s"%(self.battery_voltage))
+                        self.battery_voltage_monitoring=2
+                elif self.battery_voltage<11:
+                    if self.battery_voltage_monitoring==0 or self.battery_voltage_monitoring==2:
+                        log.add("EB0", "%s"%(self.battery_voltage))
+                        self.battery_voltage_monitoring=1
 
-                if self.battery_values[2]>=50:
-                    if self.battery_monitoring[2]!=self.battery_values[2]:
-                        log.add("DB3", "%s"%(self.battery_values[2]))
-                        self.battery_monitoring[2]=self.battery_values[2]
-                elif self.battery_values[2]<50:
-                    if self.battery_monitoring[2]!=self.battery_values[2]:
-                        log.add("WB1", "%s"%(self.battery_values[2]))
-                        self.battery_monitoring[2]=self.battery_values[2]
-                elif self.battery_values[2]<25:
-                    if self.battery_monitoring[2]!=self.battery_values[2]:
-                        log.add("EB1", "%s"%(self.battery_values[2]))
-                        self.battery_monitoring[2]=self.battery_values[2]
+                if self.battery_capacity>=50:
+                    if self.battery_capacity_monitoring!=self.battery_capacity:
+                        log.add("DB3", "%s"%(self.battery_capacity))
+                        self.battery_capacity_monitoring=self.battery_capacity
+                elif self.battery_capacity<50:
+                    if self.battery_capacity_monitoring!=self.battery_capacity:
+                        log.add("WB1", "%s"%(self.battery_capacity))
+                        self.battery_capacity_monitoring=self.battery_capacity
+                elif self.battery_capacity<25:
+                    if self.battery_capacity_monitoring!=self.battery_capacity:
+                        log.add("EB1", "%s"%(self.battery_capacity))
+                        self.battery_capacity_monitoring=self.battery_capacity
 
-                if self.battery_values[1]<=10:
-                    if self.battery_monitoring[1]==1 or self.battery_monitoring[1]==2:
-                        log.add("DB1", "%s"%(self.battery_values[1]))
-                        self.battery_monitoring[1]=0
-                elif self.battery_values[1]>10:
-                    if self.battery_monitoring[1]==0 or self.battery_monitoring[1]==1:
-                        log.add("WB2", "%s"%(self.battery_values[1]))
-                        self.battery_monitoring[1]=2
-                elif self.battery_values[1]>15:
-                    if self.battery_monitoring[1]==0 or self.battery_monitoring[1]==2:
-                        log.add("EB2", "%s"%(self.battery_values[1]))
-                        self.battery_monitoring[1]=1
+                if self.battery_current<=10:
+                    if self.battery_current_monitoring==1 or self.battery_current_monitoring==2:
+                        log.add("DB1", "%s"%(self.battery_current))
+                        self.battery_current_monitoring=0
+                elif self.battery_current>10:
+                    if self.battery_current_monitoring==0 or self.battery_current_monitoring==1:
+                        log.add("WB2", "%s"%(self.battery_current))
+                        self.battery_current_monitoring=2
+                elif self.battery_current>15:
+                    if self.battery_current_monitoring==0 or self.battery_current_monitoring==2:
+                        log.add("EB2", "%s"%(self.battery_current))
+                        self.battery_current_monitoring=1
                 
-                if self.battery_values[3]<=150:
-                    if self.battery_monitoring[3]==1 or self.battery_monitoring[3]==2:
-                        log.add("DB2", "%s"%(self.battery_values[3]))
-                        self.battery_monitoring[3]=0
-                elif self.battery_values[3]>150:
-                    if self.battery_monitoring[3]==0 or self.battery_monitoring[3]==1:
-                        log.add("WB3", "%s"%(self.battery_values[3]))
-                        self.battery_monitoring[3]=2
-                elif self.battery_values[3]>200:
-                    if self.battery_monitoring[3]==0 or self.battery_monitoring[3]==3:
-                        log.add("EB3", "%s"%(self.battery_values[3]))
-                        self.battery_monitoring[3]=1
-
-                if self.battery_values[4]<=30:
-                    if self.battery_monitoring[4]==1 or self.battery_monitoring[4]==2:
-                        log.add("DB4", "%s"%(self.battery_values[4]))
-                        self.battery_monitoring[4]=0
-                elif self.battery_values[4]>30:
-                    if self.battery_monitoring[4]==0 or self.battery_monitoring[4]==1:
-                        log.add("WB4", "%s"%(self.battery_values[4]))
-                        self.battery_monitoring[4]=2
-                elif self.battery_values[4]>50:
-                    if self.battery_monitoring[4]==0 or self.battery_monitoring[4]==3:
-                        log.add("EB4", "%s"%(self.battery_values[4]))
-                        self.battery_monitoring[4]=1  
+                if self.battery_watts<=150:
+                    if self.battery_watts_monitoring==1 or self.battery_watts_monitoring==2:
+                        log.add("DB2", "%s"%(self.battery_watts))
+                        self.battery_watts_monitoring=0
+                elif self.battery_watts>150:
+                    if self.battery_watts_monitoring==0 or self.battery_watts_monitoring==1:
+                        log.add("WB3", "%s"%(self.battery_watts))
+                        self.battery_watts_monitoring=2
+                elif self.battery_watts>200:
+                    if self.battery_watts_monitoring==0 or self.battery_watts_monitoring==3:
+                        log.add("EB3", "%s"%(self.battery_watts))
+                        self.battery_watts_monitoring=1
 
             def controller(self, controller: Controller) -> None:
                 """
@@ -568,53 +540,13 @@ try:
                 Args:
                 controller= Controller()
                 """
-                controllerid=str(controller)
+
+                controllerid=const(id(controller))
 
                 if controllerid not in self.button_values:
                     self.button_values[controllerid]=[True,True,True,True,True,True,True,True,True,True,True,True]
 
-                
-                if controllerid not in self.axis:
-                    self.axis[controllerid]=[0, 0, 0, 0]
-
-                self.ctrl_name = str(controller)
-                self.c_axis1 = controller.axis1.position()
-                self.c_axis2 = controller.axis2.position()
-                self.c_axis3 = controller.axis3.position()
-                self.c_axis4 = controller.axis4.position()
-
-                if self.c_axis1 != 0 and not (self.axis[controllerid][0] >= self.c_axis1 - log.tolrance and self.axis[controllerid][0] <= self.c_axis1 + log.tolrance):
-                    log.add("DC1", "%s, Axis1, %d"%(self.ctrl_name, self.c_axis1))
-                    self.axis[controllerid][0] = self.c_axis1
-                elif self.c_axis1 == 0 and self.axis[controllerid][0] != 0:
-                    log.add("DC1", "%s, Axis1, %d"%(self.ctrl_name, 0))
-                    self.axis[controllerid][0] = 0
-
-                if self.c_axis2 != 0 and not (self.axis[controllerid][1] >= self.c_axis2 - log.tolrance and self.axis[controllerid][1] <= self.c_axis2 + log.tolrance):
-                    log.add("DC1", "%s, Axis2, %d"%(self.ctrl_name, self.c_axis2))
-                    self.axis[controllerid][1] = self.c_axis2
-                elif self.c_axis2 == 0 and self.axis[controllerid][1] != 0:
-                    log.add("DC1", "%s, Axis2, %d"%(self.ctrl_name, 0))
-                    self.axis[controllerid][1] = 0
-
-                if self.c_axis3 != 0 and not (self.axis[controllerid][2] >= self.c_axis3 - log.tolrance and self.axis[controllerid][2] <= self.c_axis3 + log.tolrance):
-                    log.add("DC1", "%s, Axis3, %d"%(self.ctrl_name, self.c_axis3))
-                    self.axis[controllerid][2] = self.c_axis3
-                elif self.c_axis3 == 0 and self.axis[controllerid][2] != 0:
-                    log.add("DC1", "%s, Axis3, %d"%(self.ctrl_name, 0))
-                    self.axis[controllerid][2] = 0
-
-                if self.c_axis4 != 0 and not (self.axis[controllerid][3] >= self.c_axis4 - log.tolrance and self.axis[controllerid][3] <= self.c_axis4 + log.tolrance):
-                    log.add("DC1", "%s, Axis4, %d"%(self.ctrl_name, self.c_axis4))
-                    self.axis[controllerid][3] = self.c_axis4
-                elif self.c_axis4 == 0 and self.axis[controllerid][3] != 0:
-                    log.add("DC1", "%s, Axis4, %d"%(self.ctrl_name, 0))
-                    self.axis[controllerid][3] = 0
-
-                # Button logging for controller.
-
-                
-                self.button_objs = [
+                    self.button_objs[controllerid] = [
                     controller.buttonA,
                     controller.buttonB,
                     controller.buttonX,
@@ -627,17 +559,57 @@ try:
                     controller.buttonL2,
                     controller.buttonR1,
                     controller.buttonR2,
-                ]
+                    ]
+
+                    self.ctrl_name[controllerid]=str(controller)
+
                 
+                if controllerid not in self.axis:
+                    self.axis[controllerid]=[0, 0, 0, 0]
+
+                self.c_axis1 = controller.axis1.position()
+                self.c_axis2 = controller.axis2.position()
+                self.c_axis3 = controller.axis3.position()
+                self.c_axis4 = controller.axis4.position()
+
+                if self.c_axis1 != 0 and not (self.axis[controllerid][0] >= self.c_axis1 - log.tolrance and self.axis[controllerid][0] <= self.c_axis1 + log.tolrance):
+                    log.add(log.controller_axis, "%s, Axis1, %d"%(self.ctrl_name[controllerid], self.c_axis1))
+                    self.axis[controllerid][0] = self.c_axis1
+                elif self.c_axis1 == 0 and self.axis[controllerid][0] != 0:
+                    log.add(log.controller_axis, "%s, Axis1, 0"%(self.ctrl_name[controllerid]))
+                    self.axis[controllerid][0] = 0
+
+                if self.c_axis2 != 0 and not (self.axis[controllerid][1] >= self.c_axis2 - log.tolrance and self.axis[controllerid][1] <= self.c_axis2 + log.tolrance):
+                    log.add(log.controller_axis, "%s, Axis2, %d"%(self.ctrl_name[controllerid], self.c_axis2))
+                    self.axis[controllerid][1] = self.c_axis2
+                elif self.c_axis2 == 0 and self.axis[controllerid][1] != 0:
+                    log.add(log.controller_axis, "%s, Axis2, 0"%(self.ctrl_name[controllerid]))
+                    self.axis[controllerid][1] = 0
+
+                if self.c_axis3 != 0 and not (self.axis[controllerid][2] >= self.c_axis3 - log.tolrance and self.axis[controllerid][2] <= self.c_axis3 + log.tolrance):
+                    log.add(log.controller_axis, "%s, Axis3, %d"%(self.ctrl_name[controllerid], self.c_axis3))
+                    self.axis[controllerid][2] = self.c_axis3
+                elif self.c_axis3 == 0 and self.axis[controllerid][2] != 0:
+                    log.add(log.controller_axis, "%s, Axis3, 0"%(self.ctrl_name[controllerid]))
+                    self.axis[controllerid][2] = 0
+
+                if self.c_axis4 != 0 and not (self.axis[controllerid][3] >= self.c_axis4 - log.tolrance and self.axis[controllerid][3] <= self.c_axis4 + log.tolrance):
+                    log.add(log.controller_axis, "%s, Axis4, %d"%(self.ctrl_name[controllerid], self.c_axis4))
+                    self.axis[controllerid][3] = self.c_axis4
+                elif self.c_axis4 == 0 and self.axis[controllerid][3] != 0:
+                    log.add(log.controller_axis, "%s, Axis4, 0"%(self.ctrl_name[controllerid]))
+                    self.axis[controllerid][3] = 0
+
+                # Button logging for controller.
 
                 for i in range(12):
-                    if self.button_objs[i].pressing():
+                    if self.button_objs[controllerid][i].pressing():
                         if self.button_values[controllerid][i]:
-                            log.add("DC0", "%s, %s, Pressed"%(self.ctrl_name, self.button_names[i]))
+                            log.add(log.controller_button, "%s, %s, Pressed"%(self.ctrl_name[controllerid], self.button_names[i]))
                             self.button_values[controllerid][i] = False
                     else:
                         if not self.button_values[controllerid][i]:
-                            log.add("DC0", "%s, %s, Released"%(self.ctrl_name, self.button_names[i]))
+                            log.add(log.controller_button, "%s, %s, Released"%(self.ctrl_name[controllerid], self.button_names[i]))
                             self.button_values[controllerid][i] = True
 
             def variable(self, name: str, value: Any) -> None:
@@ -650,7 +622,7 @@ try:
                 value= Int, Boolean, Float
                 """
 
-                self.valueid=str(name)
+                self.valueid=const(str(name))
 
                 # Adds id if not in set.
                 if self.valueid not in self.variables:
@@ -661,7 +633,7 @@ try:
                         self.variables[self.valueid]=0
                 
                 if value != self.variables[self.valueid]:
-                    log.add("DV0", "%s, Val %s"%(name, value))
+                    log.add(log.variable, "%s, Val %s"%(name, value))
                     self.variables[self.valueid] = value
 
     class Log:
@@ -686,90 +658,96 @@ try:
             self._last_write=0
             self.Motors: list[Motor]=[]
             self.robot_active=False
+            self.memory_change=const("DSM0")
+            self.module_change=const("DSP0")
+            self.aton_start=const("DSC0")
+            self.controller_axis=const("DC1")
+            self.controller_button=const("DC0")
+            self.variable=const("DV0")
 
             brain.sdcard.savefile("Logstart.txt")  # Clears Logstart file for refresh of instructions in it.
 
             # Predefined Log Codes dictionary
             self.codes:dict={
             """Main dictionary for CLEAR"""
-                    "EB0": "<Batt ERR: Very Low Volt>",
-                    "EB1": "<Batt ERR: Very Low Batt>",
-                    "EB2": "<Batt ERR: Very High Curr>",
-                    "EB3": "<Batt ERR: Very High Watt>",
-                    "EB4": "<Batt ERR: Very High Temp>",
-                    "WB0": "<Batt WARN: Low Volt>",
-                    "WB1": "<Batt WARN: Low Batt>",
-                    "WB2": "<Batt WARN: High Curr>",
-                    "WB3": "<Batt WARN: High Watt>",
-                    "WB4": "<Batt WARN: High Temp>",
-                    "DB0": "<Batt DATA: Volt Normal>",
-                    "DB1": "<Batt DATA: Curr Normal>",
-                    "DB2": "<Batt DATA: Watt Normal>",
-                    "DB3": "<Batt DATA: Capacity Changed>",
-                    "DB4": "<Batt DATA: Temp Normal>",
-                    "DA1": "<Aton DATA: Recording Stopped>",
-                    "DA2": "<Aton DATA: Recording Saved>",
-                    "DA3": "<Aton DATA: Recording Loaded>",
-                    "DS0": "<System DATA: Init setup Done>",
-                    "DS1": "<System DATA: Archived Log>",
-                    "DS2": "<System DATA: Index Log History Done>",
-                    "DS3": "<System DATA: Archived Recording>",
-                    "DS5": "<System DATA: Recalled Recording>",
-                    "EM0": "<Motor ERR: Very Hot>",
-                    "EM1": "<Motor ERR: Disconnected>",
-                    "EM2": "<Motor ERR: Very High Power>",
-                    "EM3": "<Motor ERR: Very High Current>",
-                    "WM0": "<Motor WARN: Hot>",
-                    "WM1": "<Motor WARN: High Power>",
-                    "WM2": "<Motor WARN: High Current>",
-                    "DM0": "<Motor DATA: Temp Normal>",
-                    "DM1": "<Motor DATA: Power Normal>",
-                    "DM2": "<Motor DATA: Current Back To Normal>",
-                    "DV0": "<Variable DATA: Changed>",
-                    "DC0": "<Cont DATA: Button Changed>",
-                    "DC1": "<Cont DATA: Axis Changed>",
-                    "DPW0": "<Pwm DATA: Value Changed>",
-                    "DP0": "<Pot DATA: Value Changed>",
-                    "DLS1": "<Limit DATA: Released>",
-                    "DLS0": "<Limit DATA: Pressed>",
-                    "DO3": "<Optical DATA: Installed>",
-                    "EO0": "<Optical ERROR: Disconnected>",
-                    "DO1": "<Optical DATA: Detected Object>",
-                    "DO0": "<Optical DATA: Color Changed. Color:",
-                    "DO2": "<Optical DATA: Lost Object>",
-                    "DI7": "<Inertial DATA: Installed>",
-                    "DI2": "<Inertial DATA: Calibrating>",
-                    "DI3": "<Inertial DATA: Calibration Complete>",
-                    "DI0": "<Inertial DATA: Rotation Changed>",
-                    "DI9": "<Inertial DATA: Roll Changed>",
-                    "DI8": "<Inertial DATA: Pitch Changed>",
-                    "DI1": "<Inertial DATA: Heading Changed>",
-                    "DI4": "<Inertial DATA: X Axis Changed>",
-                    "DI5": "<Inertial DATA: Y Axis Changed>",
-                    "DI6": "<Inertial DATA: Z Axis Changed>",
-                    "EI0": "<Inertial ERROR: Disconnected>",
-                    "DDS3": "<Distance DATA: Installed>",
-                    "EDS0": "<Distance ERROR: Disconnected>",
-                    "DDS0": "<Distance DATA: Detected Object>",
-                    "DDS1": "<Distance DATA: Distance Changed>",
-                    "DDS4": "<Distance DATA: Lost Object>",
-                    "DR0": "<Rotation DATA: Installed>",
-                    "ER0": "<Rotation ERROR: Disconnected>",
-                    "DR1": "<Rotation DATA: Angle Changed>",
-                    "DR2": "<Rotation DATA: Position Changed>",
-                    "DDI0": "<Digital DATA: High>",
-                    "DDI1": "<Digital DATA: Low>",
-                    "DAI0": "<Analog DATA: Changed Value>",
-                    "DBS0": "<Bumper DATA: Pressed>",
-                    "DBS1": "<Bumper DATA: Released>",
-                    "DSM0": "<Mem DATA: Memory Useage Changed> ",
-                    "DSP0": "<Sys DATA: New module(s) added>",
-                    "DSC0": "<Comp DATA: Aton Started>",
-                    "DSC1": "<Comp DATA: Driver Started>",
-                    "DSC2": "<Comp DATA: Connected>",
-                    "DSC3": "<Comp DATA: Field Connected>",
-                    "DSC4": "<Comp DATA: Field Disconnected>",
-                    "DSC5": "<Comp DATA: Disconnected>"
+                    "EB0": b"<Batt ERR: Very Low Volt>",
+                    "EB1": b"<Batt ERR: Very Low Batt>",
+                    "EB2": b"<Batt ERR: Very High Curr>",
+                    "EB3": b"<Batt ERR: Very High Watt>",
+                    "EB4": b"<Batt ERR: Very High Temp>",
+                    "WB0": b"<Batt WARN: Low Volt>",
+                    "WB1": b"<Batt WARN: Low Batt>",
+                    "WB2": b"<Batt WARN: High Curr>",
+                    "WB3": b"<Batt WARN: High Watt>",
+                    "WB4": b"<Batt WARN: High Temp>",
+                    "DB0": b"<Batt DATA: Volt Normal>",
+                    "DB1": b"<Batt DATA: Curr Normal>",
+                    "DB2": b"<Batt DATA: Watt Normal>",
+                    "DB3": b"<Batt DATA: Capacity Changed>",
+                    "DB4": b"<Batt DATA: Temp Normal>",
+                    "DA1": b"<Aton DATA: Recording Stopped>",
+                    "DA2": b"<Aton DATA: Recording Saved>",
+                    "DA3": b"<Aton DATA: Recording Loaded>",
+                    "DS0": b"<System DATA: Init setup Done>",
+                    "DS1": b"<System DATA: Archived Log>",
+                    "DS2": b"<System DATA: Index Log History Done>",
+                    "DS3": b"<System DATA: Archived Recording>",
+                    "DS5": b"<System DATA: Recalled Recording>",
+                    "EM0": b"<Motor ERR: Very Hot>",
+                    "EM1": b"<Motor ERR: Disconnected>",
+                    "EM2": b"<Motor ERR: Very High Power>",
+                    "EM3": b"<Motor ERR: Very High Current>",
+                    "WM0": b"<Motor WARN: Hot>",
+                    "WM1": b"<Motor WARN: High Power>",
+                    "WM2": b"<Motor WARN: High Current>",
+                    "DM0": b"<Motor DATA: Temp Normal>",
+                    "DM1": b"<Motor DATA: Power Normal>",
+                    "DM2": b"<Motor DATA: Current Back To Normal>",
+                    "DV0": b"<Variable DATA: Changed>",
+                    "DC0": b"<Cont DATA: Button Changed>",
+                    "DC1": b"<Cont DATA: Axis Changed>",
+                    "DPW0": b"<Pwm DATA: Value Changed>",
+                    "DP0": b"<Pot DATA: Value Changed>",
+                    "DLS1": b"<Limit DATA: Released>",
+                    "DLS0": b"<Limit DATA: Pressed>",
+                    "DO3": b"<Optical DATA: Installed>",
+                    "EO0": b"<Optical ERROR: Disconnected>",
+                    "DO1": b"<Optical DATA: Detected Object>",
+                    "DO0": b"<Optical DATA: Color Changed. Color:",
+                    "DO2": b"<Optical DATA: Lost Object>",
+                    "DI7": b"<Inertial DATA: Installed>",
+                    "DI2": b"<Inertial DATA: Calibrating>",
+                    "DI3": b"<Inertial DATA: Calibration Complete>",
+                    "DI0": b"<Inertial DATA: Rotation Changed>",
+                    "DI9": b"<Inertial DATA: Roll Changed>",
+                    "DI8": b"<Inertial DATA: Pitch Changed>",
+                    "DI1": b"<Inertial DATA: Heading Changed>",
+                    "DI4": b"<Inertial DATA: X Axis Changed>",
+                    "DI5": b"<Inertial DATA: Y Axis Changed>",
+                    "DI6": b"<Inertial DATA: Z Axis Changed>",
+                    "EI0": b"<Inertial ERROR: Disconnected>",
+                    "DDS3": b"<Distance DATA: Installed>",
+                    "EDS0": b"<Distance ERROR: Disconnected>",
+                    "DDS0": b"<Distance DATA: Detected Object>",
+                    "DDS1": b"<Distance DATA: Distance Changed>",
+                    "DDS4": b"<Distance DATA: Lost Object>",
+                    "DR0": b"<Rotation DATA: Installed>",
+                    "ER0": b"<Rotation ERROR: Disconnected>",
+                    "DR1": b"<Rotation DATA: Angle Changed>",
+                    "DR2": b"<Rotation DATA: Position Changed>",
+                    "DDI0": b"<Digital DATA: High>",
+                    "DDI1": b"<Digital DATA: Low>",
+                    "DAI0": b"<Analog DATA: Changed Value>",
+                    "DBS0": b"<Bumper DATA: Pressed>",
+                    "DBS1": b"<Bumper DATA: Released>",
+                    "DSM0": b"<Mem DATA: Memory Useage Changed> ",
+                    "DSP0": b"<Sys DATA: New module(s) added>",
+                    "DSC0": b"<Comp DATA: Aton Started>",
+                    "DSC1": b"<Comp DATA: Driver Started>",
+                    "DSC2": b"<Comp DATA: Connected>",
+                    "DSC3": b"<Comp DATA: Field Connected>",
+                    "DSC4": b"<Comp DATA: Field Disconnected>",
+                    "DSC5": b"<Comp DATA: Disconnected>"
                     }
             
             # Setting up Log Files if they dont exist and setting index.
@@ -795,6 +773,7 @@ try:
             Args:
             entry= String
             """
+
             if ((log_time.time()-self._last_write>3000 and self._bufferSize !=0) and self.robot_active) or self._buffer_offset > 2200: 
                 brain.sdcard.appendfile("Log.csv", self.buffer[0:self._buffer_offset])
                 print("saved.")
@@ -832,7 +811,7 @@ try:
             """
 
             if not self.adding:
-                self._cache.extend(b"%d [%d], %s, %s\n" % (self._index, log_time.time(), self.codes.get(add_code), add_details))
+                self._cache.extend(const(b"%d [%d], %b, %s\n" % (self._index, log_time.time(), self.codes.get(add_code), add_details)))
                 return 
             else:
                 if self._cache:
@@ -846,7 +825,7 @@ try:
                     self._cache=bytearray()
                     return
                 
-            self.entry=b"%d [%d ms], %s, %s\n" %(self._index, log_time.time(), self.codes.get(add_code), add_details)
+            self.entry=const(b"%d [%d ms], %s, %s\n" %(self._index, log_time.time(), self.codes.get(add_code), add_details))
             self._bufferSize=len(self.entry)
 
             pack_into("=%ds"%(self._bufferSize), self.buffer, self._buffer_offset, self.entry)
@@ -941,44 +920,44 @@ try:
             if brain.sdcard.filesize("Log.csv") > 100000:
                 self.archive.log()
             
-            self.format:str=str(settings.settings.get('format_used '))
-            self.tolrance:int=int(str(settings.settings.get('default_tolrance ')))
-            wait_time_logging:int=int(str(settings.settings.get('logging_loop_wait ')))
+            self.format:str=const(str(settings.settings.get('format_used ')))
+            self.tolrance:int=const(int(str(settings.settings.get('default_tolrance '))))
+            wait_time_logging:int=const(int(str(settings.settings.get('logging_loop_wait '))))
 
             if "True" in str(settings.settings.get('gc_use ')):
-                gc_use:bool=True
+                gc_use:bool=const(True)
             else:
-                gc_use:bool=False
+                gc_use:bool=const(False)
 
             if "True" in str(settings.settings.get('log_battery ')):
-                log_battery:bool=True
+                log_battery:bool=const(True)
             else:
-                log_battery:bool=False
+                log_battery:bool=const(False)
 
             if "True" in str(settings.settings.get('log_memory ')):
-                log_memory:bool=True
+                log_memory:bool=const(True)
             else:
-                log_memory:bool=False
+                log_memory:bool=const(False)
 
             if "True" in str(settings.settings.get('log_modules ')):
-                log_modules:bool=True
+                log_modules:bool=const(True)
             else:
-                log_modules:bool=False
+                log_modules:bool=const(False)
 
             if "True" in str(settings.settings.get('print_read ')):
-                self.printing:bool=True
+                self.printing:bool=const(True)
             else:
-                self.printing:bool=False
+                self.printing:bool=const(False)
 
             if "True" in str(settings.settings.get('sdcard_read ')):
-                self.logging:bool=True
+                self.logging:bool=const(True)
             else:
-                self.logging:bool=False
+                self.logging:bool=const(False)
 
             if "True" in str(settings.settings.get('brain_read ')):
-                self.brainscreen:bool=True
+                self.brainscreen:bool=const(True)
             else:
-                self.brainscreen:bool=False
+                self.brainscreen:bool=const(False)
 
             if self.brainscreen:
                 brain.screen.set_font(FontType.MONO12)
@@ -987,38 +966,38 @@ try:
             self.add("DS0", "")
             
             if "True" in str(settings.settings.get('auto_do_variables ')):
-                auto_do_variables:bool=True
+                auto_do_variables:bool=const(True)
             else:
-                auto_do_variables:bool=False
+                auto_do_variables:bool=const(False)
 
             if "True" in str(settings.settings.get('auto_do_control ')):
-                auto_do_control:bool=True
+                auto_do_control:bool=const(True)
             else:
-                auto_do_control:bool=False
+                auto_do_control:bool=const(False)
 
             if "True" in str(settings.settings.get('auto_do_three_wire ')):
-                auto_do_three_wire:bool=True
+                auto_do_three_wire:bool=const(True)
             else:
-                auto_do_three_wire:bool=False
+                auto_do_three_wire:bool=const(False)
 
             if "True" in str(settings.settings.get('auto_do_smart_port ')):
-                auto_do_smart_port:bool=True
+                auto_do_smart_port:bool=const(True)
             else:
-                auto_do_smart_port:bool=False
+                auto_do_smart_port:bool=const(False)
 
             if "True" in str(settings.settings.get('auto_do_motors ')):
-                auto_do_motors:bool=True
+                auto_do_motors:bool=const(True)
             else:
-                auto_do_motors:bool=False
+                auto_do_motors:bool=const(False)
 
             if "True" in str(settings.settings.get('auto_do_controller ')):
-                auto_do_controller:bool=True
+                auto_do_controller:bool=const(True)
             else:
-                auto_do_controller:bool=False
+                auto_do_controller:bool=const(False)
 
             controllers: List[Controller]=[]
 
-            globallogging=dir()
+            globallogging=const(dir())
 
             #print(globallogging)
 
@@ -1058,8 +1037,8 @@ try:
 
             del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port
 
-            print("Logstart: ")
-            print(brain.sdcard.loadfile("Logstart.txt").decode(self.format))
+            # print("Logstart: ")
+            # print(brain.sdcard.loadfile("Logstart.txt").decode(self.format))
 
             _exec=exec
             lwait=wait
@@ -1076,19 +1055,19 @@ try:
             try:
                 addedfuntion=brain.sdcard.loadfile("Logstart.txt").decode(self.format)
                 added_bytes=compile(addedfuntion, '<string>' ,'exec', 0,  False, 2)
-                added_bytes_used=True
+                added_bytes_used=const(True)
             except AttributeError:
                 addedfuntion=""
                 added_bytes=compile("", '<string>' ,'exec', 0,  True, 2)
-                added_bytes_used=False
+                added_bytes_used=const(False)
             
             del addedfuntion
             
             gc_collect()
 
             while True:
-                for _ in range(20):
-                    start:int=timer()
+                for _ in range(200):
+                    start:int=const(timer())
 
                     if not self.robot_active:
                         if not auto_do_controller:
@@ -1122,6 +1101,9 @@ try:
                         capture_battery()
                     
                     #print(timer()-start)
+
+                    # mem_info(1)
+                    print(mem_alloc())
 
                     lwait(wait_time_logging - (timer() - start))
 
@@ -1373,6 +1355,6 @@ except Exception as e:
     exeption_string=uio.StringIO(500)
     sys.print_exception(e, exeption_string)  # type: ignore
     print(exeption_string.getvalue())
-    brain.sdcard.appendfile("Error.txt", bytearray(b"<System ERROR> Python Runtime Error. \n %s "%(exeption_string.getvalue()))) 
+    brain.sdcard.appendfile("Error.txt", bytearray(b"<System ERROR> Python Runtime Error. \n %s "%(exeption_string.getvalue())))
     
     del exeption_string, uio
