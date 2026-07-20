@@ -5,5 +5,5 @@ import CLA, Interface, RE, OD
 class V5TK:
     @staticmethod
     def RunAll() -> Thread:
-        V5TKThread=CLA.log.start()
+        V5TKThread=CLA.log.auto_start()
         return V5TKThread

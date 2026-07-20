@@ -109,10 +109,10 @@ try:
                 def motor(self, motor: Motor|None=None) -> None:
                     """Capture for any general smart motor. Enter motor you wish to log as input. (Can take motor groups as well.)"""
 
-                    if motor!=None and motor not in log.Motors:
-                        log.Motors.append(motor)
+                    if motor!=None and motor not in log.MiscMotors:
+                        log.MiscMotors.append(motor)
 
-                    for motor_ in log.Motors:
+                    for motor_ in log.MiscMotors:
                         self.motor_id=id(motor_)
                         
                         # Setup id to sets if not there.
@@ -465,6 +465,96 @@ try:
                     "L1", "L2", "R1", "R2",
                 ]
                 self.button_values = {}
+                self.drivetrain_temp_monitoring={}
+                self.drivetrain_power_monitoring={}
+                self.drivetrain_current_monitoring={}
+                self.drivetrain_disconnected={}
+                self.drivetrain_setup={}
+                self.drivetrain_name={}
+
+            def drivetrain(self, leftmotors: list[Motor], rightmotors: list[Motor]) -> None:
+                """
+                Initialize the drivetrain with left and right motors.
+
+                Args:
+                    leftmotors: List of left motors.
+                    rightmotors: List of right motors.
+                """
+                self.LeftMotors = leftmotors
+                self.RightMotors = rightmotors
+
+                leftside=MotorGroup(self.LeftMotors)
+                rightside=MotorGroup(self.RightMotors)
+
+                motor_list = [leftside, rightside]
+
+                for motor_ in motor_list:
+                    self.motor_id=id(motor_)
+                        
+                    # Setup id to sets if not there.
+                    if self.motor_id not in self.drivetrain_setup:
+                        self.drivetrain_temp_monitoring[self.motor_id] = 0
+                        self.drivetrain_power_monitoring[self.motor_id] = 0
+                        self.drivetrain_current_monitoring[self.motor_id] = 0
+                        self.drivetrain_disconnected[self.motor_id] = False
+                        self.drivetrain_setup[self.motor_id]=True
+                        self.drivetrain_name[self.motor_id]=str(motor_)
+
+                    self.motor_temp: int=motor_.temperature(TemperatureUnits.CELSIUS)
+
+                    if self.motor_temp==2:
+                        if not self.drivetrain_disconnected[self.motor_id]:
+                            log.add("EM1", "%s"%(self.drivetrain_name[self.motor_id]))
+                            self.drivetrain_disconnected[self.motor_id]=True
+                        else:
+                            return
+                    elif self.motor_temp!=2 and self.drivetrain_disconnected[self.motor_id]:
+                        self.drivetrain_disconnected[self.motor_id]=False
+
+                    self.current_motor_power=motor_.power(PowerUnits.WATT)
+                    self.current_motor_current:int=motor_.current(CurrentUnits.AMP)
+                    
+                    # Cheaks for the temps,  power, and cheaks for conecttions of motors(s).
+                    if self.motor_temp<=50: 
+                        if self.drivetrain_temp_monitoring[self.motor_id]>0:
+                            log.add("DM0", "Motor %s, Temp %s"%(self.drivetrain_name[self.motor_id], self.motor_temp))
+                            self.drivetrain_temp_monitoring[self.motor_id]=0
+                    elif self.motor_temp>70: 
+                        if (self.drivetrain_temp_monitoring[self.motor_id]==0 or self.drivetrain_temp_monitoring[self.motor_id]==2):
+                            log.add("EM0", "Motor %s, Temp %s"%(self.drivetrain_name[self.motor_id], self.motor_temp))
+                            self.drivetrain_temp_monitoring[self.motor_id]=1  
+                    elif self.motor_temp>50: 
+                        if self.drivetrain_temp_monitoring[self.motor_id]==0:
+                            log.add("WM0", "Motor %s, Temp %s"%(self.drivetrain_name[self.motor_id], self.motor_temp))
+                            self.drivetrain_temp_monitoring[self.motor_id]=2
+                    
+                    if self.current_motor_power<=12: 
+                        if self.drivetrain_power_monitoring[self.motor_id]>0:
+                            log.add("DM1", "Motor %s, Power %s"%(self.drivetrain_name[self.motor_id], str(self.current_motor_power)))
+                            self.drivetrain_power_monitoring[self.motor_id]=0
+                    elif self.current_motor_power>20: 
+                        if (self.drivetrain_power_monitoring[self.motor_id]==0 or self.drivetrain_power_monitoring[self.motor_id]==2):
+                            log.add("EM2", "Motor %s, Power %s"%(self.drivetrain_name[self.motor_id], str(self.current_motor_power)))
+                            self.drivetrain_power_monitoring[self.motor_id]=1
+                    elif self.current_motor_power>12: 
+                        if self.drivetrain_power_monitoring[self.motor_id]==0:
+                            log.add("WM1", "Motor %s, Power %s"%(self.drivetrain_name[self.motor_id], str(self.current_motor_power)))
+                            self.drivetrain_power_monitoring[self.motor_id]=2
+
+                    if self.current_motor_current<=15: 
+                        if self.drivetrain_current_monitoring[self.motor_id]>0:
+                            log.add("DM2", "Motor %s, Current %1.1f"%(self.drivetrain_name[self.motor_id], self.current_motor_current))
+                            self.drivetrain_current_monitoring[self.motor_id]=0
+                    elif self.current_motor_current>20: 
+                        if (self.drivetrain_current_monitoring[self.motor_id]==0 or self.drivetrain_current_monitoring[self.motor_id]==2):
+                            log.add("EM3", "Motor %s, Current %1.1f"%(self.drivetrain_name[self.motor_id], self.current_motor_current))
+                            self.drivetrain_current_monitoring[self.motor_id]=1
+                    elif self.current_motor_current>15:
+                        if self.drivetrain_current_monitoring[self.motor_id]==0:
+                            log.add("WM2", "Motor %s, Current %1.1f"%(self.drivetrain_name[self.motor_id], self.current_motor_current))
+                            self.drivetrain_current_monitoring[self.motor_id]=2
+
+
 
             def battery(self) -> None:
                 """
@@ -629,9 +719,21 @@ try:
 
                     if type(value)==bool:
                         self.variables[self.valueid]=False
-                    else:
+                    elif type(value)==int:
                         self.variables[self.valueid]=0
-                
+                    elif type(value)==float:
+                        self.variables[self.valueid]=0.0
+                    elif type(value)==str:
+                        self.variables[self.valueid]=""
+                    elif type(value)==list:
+                        self.variables[self.valueid]=[]
+                    elif type(value)==dict:
+                        self.variables[self.valueid]={}
+                    elif type(value)==tuple:
+                        self.variables[self.valueid]=()
+                    else:
+                        self.variables[self.valueid]="Unknown Type: %s"%(type(value))
+
                 if value != self.variables[self.valueid]:
                     log.add(log.variable, "%s, Val %s"%(name, value))
                     self.variables[self.valueid] = value
@@ -642,6 +744,9 @@ try:
         def __init__(self):
             if not brain.sdcard.exists("loghistory.txt"):
                 brain.sdcard.savefile("loghistory.txt")
+            self.MiscMotors: list[Motor]=[]
+            self.LeftMotors: list[Motor]=[]
+            self.RightMotors: list[Motor]=[]
             self.capture=Capture()
             self.archive=Archive()
             self._index:int=0
@@ -656,7 +761,6 @@ try:
             self._bufferSize=0
             self._buffer_offset=0
             self._last_write=0
-            self.Motors: list[Motor]=[]
             self.robot_active=False
             self.memory_change=const("DSM0")
             self.module_change=const("DSP0")
@@ -1008,10 +1112,15 @@ try:
                 except NameError:
                     continue
 
-                if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>") and auto_do_variables:
+                if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>") and auto_do_variables:
                     log.add_logstart("log.capture.variable('%s', %s)"%(item, item.replace("'", "")))
                 elif item_type == "<class 'motor'>" and auto_do_motors:
-                    self.Motors+=[eval(item)]
+                    if "Left" in str(item) or "left" in str(item):
+                        self.LeftMotors+=[eval(item)]
+                    elif "Right" in str(item) or "right" in str(item):
+                        self.RightMotors+=[eval(item)]
+                    else:
+                        self.MiscMotors+=[eval(item)]
                 elif item_type == "<class 'controller'>" and auto_do_controller:
                     controllers+=[eval(item)]
                 elif item_type == "<class 'inertial'>" and auto_do_smart_port:
@@ -1034,6 +1143,7 @@ try:
                     log.add_logstart("log.capture.threewire.analog(%s)"%(item.replace("'", "")))
                 elif item_type == "<class 'comp'>" and auto_do_control:
                     log.add_logstart("log.capture.system.control(%s)"%(item.replace("'", "")))
+                    
 
             del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port
 
@@ -1048,6 +1158,7 @@ try:
             timer=log_time.time
             gc_collect=collect
             motorcapture=log.capture.smartport.motor
+            drivetraincapture=log.capture.drivetrain
             controllercapture=log.capture.controller
             log_check=log.append_log
 
@@ -1088,8 +1199,11 @@ try:
                     if added_bytes_used:
                         _exec(added_bytes)
                     
-                    if self.Motors:
+                    if self.MiscMotors:
                         motorcapture()
+
+                    if self.LeftMotors and self.RightMotors:
+                        drivetraincapture(self.LeftMotors, self.RightMotors)
 
                     if log_memory:
                         capture_memory()
@@ -1102,7 +1216,6 @@ try:
                     
                     #print(timer()-start)
 
-                    # mem_info(1)
                     print(mem_alloc())
 
                     lwait(wait_time_logging - (timer() - start))
@@ -1113,9 +1226,53 @@ try:
         def start(self) -> Thread:
             cla=Thread(self.auto_start)
             return cla
+        
+        def in_function_auto_start(self):
+            globallogging=const(dir())
+
+            #print(globallogging)
+
+            for item in globallogging:
+                try:
+                    item_type=str(type(eval(item)))
+                except NameError:
+                    continue
+
+                if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>"):
+                    log.add_logstart("log.capture.variable('%s', %s)"%(item, item.replace("'", "")))
+
+            # Loads extra funtions from file.
+            try:
+                addedfuntion=brain.sdcard.loadfile("Logstart.txt").decode(self.format)
+                added_bytes=compile(addedfuntion, '<string>' ,'exec', 0,  False, 2)
+                added_bytes_used=const(True)
+            except AttributeError:
+                addedfuntion=""
+                added_bytes=compile("", '<string>' ,'exec', 0,  True, 2)
+                added_bytes_used=const(False)
+            
+            del addedfuntion
+
+            while True:
+                start:int=const(log_time.time())
+
+                if added_bytes_used:
+                    exec(added_bytes)
+                
+                #print(timer()-start)
+
+                # mem_info(1)
+                print(mem_alloc())
+
+                wait(100 - (log_time.time() - start))
+
+        
+        def in_function_start(self) -> Thread:
+            cla=Thread(self.in_function_auto_start)
+            return cla
 
         def __enter__(self) -> Thread:
-            self.Thread=Thread(log.auto_start)
+            self.Thread=log.in_function_start()
             return self.Thread
 
         def __exit__(self) -> None:
