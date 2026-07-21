@@ -1,10 +1,10 @@
     # ---------------------------------------------------------------------------- #
     #                                                                              #
-    # 	Module:       CLEAR.py                                                     #
+    # 	Module:       CLA.py                                                       #
     # 	Author:       Micah Bow                                                    #
     # 	Created:      1/27/2026, 12:42 PM                                          #
-    #   Last Edited:  3/22/2026, 2:00 PM                                           #
-    # 	Description:  Capture, Logging, Encoding, Archiving, Recording.            #
+    #   Last Edited:  7/20/2026, 12:00 AM                                          #
+    # 	Description:  Capture, Logging, Archiving.                                 #
     #                                                                              #
     # ---------------------------------------------------------------------------- #
 
@@ -17,7 +17,6 @@ try:
     from gc import collect, mem_alloc# type: ignore 
     from ustruct import pack_into
     from micropython import const, mem_info  # type: ignore
-
     
     log_time= Timer() # Main timer used.
     log_link=MessageLink(Ports.PORT21, "CLEAR32449", VexlinkType.MANAGER)
@@ -81,7 +80,6 @@ try:
                     self.motor_power_monitoring={}  
                     self.motor_disconnected={}
                     self.motor_current_monitoring={}
-                    self.motor_name={}
                     self.setup: dict[int, bool] = {}
                     self.motor_id=0
                     self.optical_object={}
@@ -106,13 +104,17 @@ try:
                     self.distance_object={}
                     self.distance_history={}
 
-                def motor(self, motor: Motor|None=None) -> None:
+                def motor(self, motor: Motor|None=None, motorName: str|None=None) -> None:
                     """Capture for any general smart motor. Enter motor you wish to log as input. (Can take motor groups as well.)"""
 
                     if motor!=None and motor not in log.MiscMotors:
                         log.MiscMotors.append(motor)
+                    
+                    if motorName!=None and motorName not in log.MiscMotorsName:
+                        log.MiscMotorsName.append(motorName)
 
-                    for motor_ in log.MiscMotors:
+                    for i in range(len(log.MiscMotors)):
+                        motor_=log.MiscMotors[i]
                         self.motor_id=id(motor_)
                         
                         # Setup id to sets if not there.
@@ -122,13 +124,12 @@ try:
                             self.motor_current_monitoring[self.motor_id] = 0
                             self.motor_disconnected[self.motor_id] = False
                             self.setup[self.motor_id]=True
-                            self.motor_name[self.motor_id]=str(motor_)
 
                         self.motor_temp: int=motor_.temperature(PERCENT)
 
                         if self.motor_temp==2:
                             if not self.motor_disconnected[self.motor_id]:
-                                log.add("EM1", "%s"%(self.motor_name[self.motor_id]))
+                                log.add("EM1", "%s"%(log.MiscMotorsName[self.motor_id]))
                                 self.motor_disconnected[self.motor_id]=True
                             else:
                                 return
@@ -141,41 +142,41 @@ try:
                         # Cheaks for the temps,  power, and cheaks for conecttions of motors(s).
                         if self.motor_temp<=50: 
                             if self.motor_temp_monitoring[self.motor_id]>0:
-                                log.add("DM0", "Motor %s, Temp %s"%(self.motor_name[self.motor_id], self.motor_temp))
+                                log.add("DM0", "Motor %s, Temp %s"%(log.MiscMotorsName[i], self.motor_temp))
                                 self.motor_temp_monitoring[self.motor_id]=0
                         elif self.motor_temp>70: 
                             if (self.motor_temp_monitoring[self.motor_id]==0 or self.motor_temp_monitoring[self.motor_id]==2):
-                                log.add("EM0", "Motor %s, Temp %s"%(self.motor_name[self.motor_id], self.motor_temp))
+                                log.add("EM0", "Motor %s, Temp %s"%(log.MiscMotorsName[i], self.motor_temp))
                                 self.motor_temp_monitoring[self.motor_id]=1  
                         elif self.motor_temp>50: 
                             if self.motor_temp_monitoring[self.motor_id]==0:
-                                log.add("WM0", "Motor %s, Temp %s"%(self.motor_name[self.motor_id], self.motor_temp))
+                                log.add("WM0", "Motor %s, Temp %s"%(log.MiscMotorsName[i], self.motor_temp))
                                 self.motor_temp_monitoring[self.motor_id]=2
                         
                         if self.current_motor_power<=12: 
                             if self.motor_power_monitoring[self.motor_id]>0:
-                                log.add("DM1", "Motor %s, Power %s"%(self.motor_name[self.motor_id], str(self.current_motor_power)))
+                                log.add("DM1", "Motor %s, Power %s"%(log.MiscMotorsName[i], str(self.current_motor_power)))
                                 self.motor_power_monitoring[self.motor_id]=0
                         elif self.current_motor_power>20: 
                             if (self.motor_power_monitoring[self.motor_id]==0 or self.motor_power_monitoring[self.motor_id]==2):
-                                log.add("EM2", "Motor %s, Power %s"%(self.motor_name[self.motor_id], str(self.current_motor_power)))
+                                log.add("EM2", "Motor %s, Power %s"%(log.MiscMotorsName[i], str(self.current_motor_power)))
                                 self.motor_power_monitoring[self.motor_id]=1
                         elif self.current_motor_power>12: 
                             if self.motor_power_monitoring[self.motor_id]==0:
-                                log.add("WM1", "Motor %s, Power %s"%(self.motor_name[self.motor_id], str(self.current_motor_power)))
+                                log.add("WM1", "Motor %s, Power %s"%(log.MiscMotorsName[i], str(self.current_motor_power)))
                                 self.motor_power_monitoring[self.motor_id]=2
 
                         if self.current_motor_current<=15: 
                             if self.motor_current_monitoring[self.motor_id]>0:
-                                log.add("DM2", "Motor %s, Current %1.1f"%(self.motor_name[self.motor_id], self.current_motor_current))
+                                log.add("DM2", "Motor %s, Current %1.1f"%(log.MiscMotorsName[i], self.current_motor_current))
                                 self.motor_current_monitoring[self.motor_id]=0
                         elif self.current_motor_current>20: 
                             if (self.motor_current_monitoring[self.motor_id]==0 or self.motor_current_monitoring[self.motor_id]==2):
-                                log.add("EM3", "Motor %s, Current %1.1f"%(self.motor_name[self.motor_id], self.current_motor_current))
+                                log.add("EM3", "Motor %s, Current %1.1f"%(log.MiscMotorsName[i], self.current_motor_current))
                                 self.motor_current_monitoring[self.motor_id]=1
                         elif self.current_motor_current>15:
                             if self.motor_current_monitoring[self.motor_id]==0:
-                                log.add("WM2", "Motor %s, Current %1.1f"%(self.motor_name[self.motor_id], self.current_motor_current))
+                                log.add("WM2", "Motor %s, Current %1.1f"%(log.MiscMotorsName[i], self.current_motor_current))
                                 self.motor_current_monitoring[self.motor_id]=2
                 
                 def optical(self, opticalsensor: Optical) -> None:
@@ -471,8 +472,11 @@ try:
                 self.drivetrain_disconnected={}
                 self.drivetrain_setup={}
                 self.drivetrain_name={}
+                self.rightside
+                self.leftside
+                self.DrivetrainSetup=False
 
-            def drivetrain(self, leftmotors: list[Motor], rightmotors: list[Motor]) -> None:
+            def drivetrain(self, leftmotors: list[Motor]|None=None, rightmotors: list[Motor]|None=None) -> None:
                 """
                 Initialize the drivetrain with left and right motors.
 
@@ -480,15 +484,30 @@ try:
                     leftmotors: List of left motors.
                     rightmotors: List of right motors.
                 """
-                self.LeftMotors = leftmotors
-                self.RightMotors = rightmotors
 
-                leftside=MotorGroup(self.LeftMotors)
-                rightside=MotorGroup(self.RightMotors)
+                if (leftmotors !=None and rightmotors!=None and log.LeftMotors != leftmotors) or not self.DrivetrainSetup:
+                    if self.DrivetrainSetup and leftmotors!=None and rightmotors!=None:
+                        log.LeftMotors = leftmotors
+                        log.RightMotors = rightmotors
 
-                motor_list = [leftside, rightside]
+                    if len(log.LeftMotors) == 1:
+                        self.leftside=log.LeftMotors[0]
+                        self.rightside=log.RightMotors[0]
+                    elif len(log.LeftMotors) == 2:
+                        self.leftside=MotorGroup(log.LeftMotors[0], log.LeftMotors[1])
+                        self.rightside=MotorGroup(log.RightMotors[0], log.RightMotors[1])
+                    elif len(log.LeftMotors) == 3:
+                        self.leftside=MotorGroup(log.LeftMotors[0], log.LeftMotors[1], log.LeftMotors[2])
+                        self.rightside=MotorGroup(log.RightMotors[0], log.RightMotors[1], log.RightMotors[2])
+                    elif len(log.LeftMotors) == 4:
+                        self.leftside=MotorGroup(log.LeftMotors[0], log.LeftMotors[1], log.LeftMotors[2], log.LeftMotors[3])
+                        self.rightside=MotorGroup(log.RightMotors[0], log.RightMotors[1], log.RightMotors[2], log.RightMotors[3])
+                    self.DrivetrainSetup=True
 
-                for motor_ in motor_list:
+                motor_list = [self.leftside, self.rightside]
+
+                for i in range(2):
+                    motor_=motor_list[i]
                     self.motor_id=id(motor_)
                         
                     # Setup id to sets if not there.
@@ -498,9 +517,15 @@ try:
                         self.drivetrain_current_monitoring[self.motor_id] = 0
                         self.drivetrain_disconnected[self.motor_id] = False
                         self.drivetrain_setup[self.motor_id]=True
-                        self.drivetrain_name[self.motor_id]=str(motor_)
+                        if i == 1:
+                            self.drivetrain_name[self.motor_id]="LeftSide"
+                        elif i == 2:
+                            self.drivetrain_name[self.motor_id]="RightSide"
+                        else:
+                            self.drivetrain_name[self.motor_id]="ERROR"
+                            
 
-                    self.motor_temp: int=motor_.temperature(TemperatureUnits.CELSIUS)
+                    self.motor_temp: int=motor_.temperature(PERCENT)  # type: ignore
 
                     if self.motor_temp==2:
                         if not self.drivetrain_disconnected[self.motor_id]:
@@ -553,8 +578,6 @@ try:
                         if self.drivetrain_current_monitoring[self.motor_id]==0:
                             log.add("WM2", "Motor %s, Current %1.1f"%(self.drivetrain_name[self.motor_id], self.current_motor_current))
                             self.drivetrain_current_monitoring[self.motor_id]=2
-
-
 
             def battery(self) -> None:
                 """
@@ -745,6 +768,7 @@ try:
             if not brain.sdcard.exists("loghistory.txt"):
                 brain.sdcard.savefile("loghistory.txt")
             self.MiscMotors: list[Motor]=[]
+            self.MiscMotorsName: list[str]=[]
             self.LeftMotors: list[Motor]=[]
             self.RightMotors: list[Motor]=[]
             self.capture=Capture()
@@ -768,6 +792,7 @@ try:
             self.controller_axis=const("DC1")
             self.controller_button=const("DC0")
             self.variable=const("DV0")
+            self.VariablesAdded=[]
 
             brain.sdcard.savefile("Logstart.txt")  # Clears Logstart file for refresh of instructions in it.
 
@@ -807,7 +832,7 @@ try:
                     "DM0": b"<Motor DATA: Temp Normal>",
                     "DM1": b"<Motor DATA: Power Normal>",
                     "DM2": b"<Motor DATA: Current Back To Normal>",
-                    "DV0": b"<Variable DATA: Changed>",
+                    "DV0": b"<Var DATA: Changed>",
                     "DC0": b"<Cont DATA: Button Changed>",
                     "DC1": b"<Cont DATA: Axis Changed>",
                     "DPW0": b"<Pwm DATA: Value Changed>",
@@ -819,22 +844,22 @@ try:
                     "DO1": b"<Optical DATA: Detected Object>",
                     "DO0": b"<Optical DATA: Color Changed. Color:",
                     "DO2": b"<Optical DATA: Lost Object>",
-                    "DI7": b"<Inertial DATA: Installed>",
-                    "DI2": b"<Inertial DATA: Calibrating>",
-                    "DI3": b"<Inertial DATA: Calibration Complete>",
-                    "DI0": b"<Inertial DATA: Rotation Changed>",
-                    "DI9": b"<Inertial DATA: Roll Changed>",
-                    "DI8": b"<Inertial DATA: Pitch Changed>",
-                    "DI1": b"<Inertial DATA: Heading Changed>",
-                    "DI4": b"<Inertial DATA: X Axis Changed>",
-                    "DI5": b"<Inertial DATA: Y Axis Changed>",
-                    "DI6": b"<Inertial DATA: Z Axis Changed>",
-                    "EI0": b"<Inertial ERROR: Disconnected>",
-                    "DDS3": b"<Distance DATA: Installed>",
-                    "EDS0": b"<Distance ERROR: Disconnected>",
-                    "DDS0": b"<Distance DATA: Detected Object>",
-                    "DDS1": b"<Distance DATA: Distance Changed>",
-                    "DDS4": b"<Distance DATA: Lost Object>",
+                    "DI7": b"<Inert DATA: Installed>",
+                    "DI2": b"<Inert DATA: Calibrating>",
+                    "DI3": b"<Inert DATA: Calibration Complete>",
+                    "DI0": b"<Inert DATA: Rotation Changed>",
+                    "DI9": b"<Inert DATA: Roll Changed>",
+                    "DI8": b"<Inert DATA: Pitch Changed>",
+                    "DI1": b"<Inert DATA: Heading Changed>",
+                    "DI4": b"<Inert DATA: X Axis Changed>",
+                    "DI5": b"<Inert DATA: Y Axis Changed>",
+                    "DI6": b"<Inert DATA: Z Axis Changed>",
+                    "EI0": b"<Inert ERROR: Disconnected>",
+                    "DDS3": b"<Dist DATA: Installed>",
+                    "EDS0": b"<Dist ERROR: Disconnected>",
+                    "DDS0": b"<Dist DATA: Detected Object>",
+                    "DDS1": b"<Dist DATA: Distance Changed>",
+                    "DDS4": b"<Dist DATA: Lost Object>",
                     "DR0": b"<Rotation DATA: Installed>",
                     "ER0": b"<Rotation ERROR: Disconnected>",
                     "DR1": b"<Rotation DATA: Angle Changed>",
@@ -1114,6 +1139,7 @@ try:
 
                 if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>") and auto_do_variables:
                     log.add_logstart("log.capture.variable('%s', %s)"%(item, item.replace("'", "")))
+                    self.VariablesAdded.append(str(item))
                 elif item_type == "<class 'motor'>" and auto_do_motors:
                     if "Left" in str(item) or "left" in str(item):
                         self.LeftMotors+=[eval(item)]
@@ -1121,6 +1147,7 @@ try:
                         self.RightMotors+=[eval(item)]
                     else:
                         self.MiscMotors+=[eval(item)]
+                        self.MiscMotorsName+=[item]
                 elif item_type == "<class 'controller'>" and auto_do_controller:
                     controllers+=[eval(item)]
                 elif item_type == "<class 'inertial'>" and auto_do_smart_port:
@@ -1144,7 +1171,6 @@ try:
                 elif item_type == "<class 'comp'>" and auto_do_control:
                     log.add_logstart("log.capture.system.control(%s)"%(item.replace("'", "")))
                     
-
             del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port
 
             # print("Logstart: ")
@@ -1161,6 +1187,7 @@ try:
             drivetraincapture=log.capture.drivetrain
             controllercapture=log.capture.controller
             log_check=log.append_log
+            drivetrainuse= True if self.LeftMotors and self.RightMotors else False
 
             # Loads extra funtions from file.
             try:
@@ -1202,7 +1229,7 @@ try:
                     if self.MiscMotors:
                         motorcapture()
 
-                    if self.LeftMotors and self.RightMotors:
+                    if drivetrainuse:
                         drivetraincapture(self.LeftMotors, self.RightMotors)
 
                     if log_memory:
@@ -1216,67 +1243,10 @@ try:
                     
                     #print(timer()-start)
 
-                    print(mem_alloc())
-
                     lwait(wait_time_logging - (timer() - start))
 
                 if gc_use:
                     gc_collect()
-        
-        def start(self) -> Thread:
-            cla=Thread(self.auto_start)
-            return cla
-        
-        def in_function_auto_start(self):
-            globallogging=const(dir())
-
-            #print(globallogging)
-
-            for item in globallogging:
-                try:
-                    item_type=str(type(eval(item)))
-                except NameError:
-                    continue
-
-                if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>"):
-                    log.add_logstart("log.capture.variable('%s', %s)"%(item, item.replace("'", "")))
-
-            # Loads extra funtions from file.
-            try:
-                addedfuntion=brain.sdcard.loadfile("Logstart.txt").decode(self.format)
-                added_bytes=compile(addedfuntion, '<string>' ,'exec', 0,  False, 2)
-                added_bytes_used=const(True)
-            except AttributeError:
-                addedfuntion=""
-                added_bytes=compile("", '<string>' ,'exec', 0,  True, 2)
-                added_bytes_used=const(False)
-            
-            del addedfuntion
-
-            while True:
-                start:int=const(log_time.time())
-
-                if added_bytes_used:
-                    exec(added_bytes)
-                
-                #print(timer()-start)
-
-                # mem_info(1)
-                print(mem_alloc())
-
-                wait(100 - (log_time.time() - start))
-
-        
-        def in_function_start(self) -> Thread:
-            cla=Thread(self.in_function_auto_start)
-            return cla
-
-        def __enter__(self) -> Thread:
-            self.Thread=log.in_function_start()
-            return self.Thread
-
-        def __exit__(self) -> None:
-            self.Thread.stop()     
     
     class Archive:
             """
@@ -1359,34 +1329,34 @@ try:
                 log.add("DS1", str(log_time.time() - speed) + " MSEC")
                 del speed
 
-            def recording(self, recordingname: str) -> None:
-                """
-                Archives recording file. 
-                Enter full name of file.
+            # def recording(self, recordingname: str) -> None:
+            #     """
+            #     Archives recording file. 
+            #     Enter full name of file.
 
-                Args:
-                recordingname= String
-                """
+            #     Args:
+            #     recordingname= String
+            #     """
 
-                print("Archiving...")
-                filename=str(recordingname).replace(".txt", "_archived.txt")
-                brain.sdcard.savefile(filename)
-                with open(recordingname, 'rb') as recording:
-                    chunk_buffer=bytearray(10240)
-                    buffer=bytearray()
-                    while True:
-                        chunk=recording.readinto(chunk_buffer)
-                        if not chunk:
-                            break
+            #     print("Archiving...")
+            #     filename=str(recordingname).replace(".txt", "_archived.txt")
+            #     brain.sdcard.savefile(filename)
+            #     with open(recordingname, 'rb') as recording:
+            #         chunk_buffer=bytearray(10240)
+            #         buffer=bytearray()
+            #         while True:
+            #             chunk=recording.readinto(chunk_buffer)
+            #             if not chunk:
+            #                 break
                         
-                        list=chunk_buffer.split(b"\n")
-                        for line in list:
-                            prelist=line.split(b' ')
-                            buffer.extend(b"%b %b %b %b \n" %(prelist[2], prelist[9], prelist[10], prelist[11]))
-                        brain.sdcard.appendfile(filename, buffer)
+            #             list=chunk_buffer.split(b"\n")
+            #             for line in list:
+            #                 prelist=line.split(b' ')
+            #                 buffer.extend(b"%b %b %b %b \n" %(prelist[2], prelist[9], prelist[10], prelist[11]))
+            #             brain.sdcard.appendfile(filename, buffer)
     
-                brain.sdcard.savefile(recordingname)
-                log.add("DS3", recordingname)
+            #     brain.sdcard.savefile(recordingname)
+            #     log.add("DS3", recordingname)
 
             def index_history(self) -> None:
                 """
@@ -1430,25 +1400,25 @@ try:
                         brain.sdcard.appendfile(filename, bytearray("%d [%s ms], %s, %s\n"%(int(prelist[0], 16),int(prelist[1], 16) , log.codes.get(prelist[2], prelist[2]), details), log.format))
                 print("Recall done.")
             
-            def recall_recording(self, name: str) -> None:
-                """
-                Restores recording file to an uncompressed state. 
-                Enter full name of the archived file.
+            # def recall_recording(self, name: str) -> None:
+            #     """
+            #     Restores recording file to an uncompressed state. 
+            #     Enter full name of the archived file.
 
-                Args:
-                name=String, full name of file
-                """
+            #     Args:
+            #     name=String, full name of file
+            #     """
 
-                recording=brain.sdcard.loadfile(name).decode(log.format).split('\n')
-                filename=name.replace("_archived.txt", ".txt")
-                brain.sdcard.savefile(filename)
-                for item in recording:
-                    prelist=item.split(' ')
-                    if "Moved" in item:
-                        brain.sdcard.appendfile(filename, bytearray("[',', '0', %s ':Controller', 'DATA:', 'Axis', 'Changed.', 'Axis:', '', %s %s 'Moved', '0', 'Degrees', ''] \n"%(prelist[0], prelist[1], prelist[2]), log.format))
-                    elif "Pressed" in item or "Released" in item:
-                        brain.sdcard.appendfile(filename, bytearray("[',', '0', %s ':Controller', 'DATA:', 'Button', 'Changed.', 'Button:', '', %s %s %s ''] \n"%(prelist[0], prelist[1], prelist[2], prelist[3]), log.format))
-                log.add("DS5", name)
+            #     recording=brain.sdcard.loadfile(name).decode(log.format).split('\n')
+            #     filename=name.replace("_archived.txt", ".txt")
+            #     brain.sdcard.savefile(filename)
+            #     for item in recording:
+            #         prelist=item.split(' ')
+            #         if "Moved" in item:
+            #             brain.sdcard.appendfile(filename, bytearray("[',', '0', %s ':Controller', 'DATA:', 'Axis', 'Changed.', 'Axis:', '', %s %s 'Moved', '0', 'Degrees', ''] \n"%(prelist[0], prelist[1], prelist[2]), log.format))
+            #         elif "Pressed" in item or "Released" in item:
+            #             brain.sdcard.appendfile(filename, bytearray("[',', '0', %s ':Controller', 'DATA:', 'Button', 'Changed.', 'Button:', '', %s %s %s ''] \n"%(prelist[0], prelist[1], prelist[2], prelist[3]), log.format))
+            #     log.add("DS5", name)
 
     class Settings:
         """Used to congigure the log in a more permenet way using the Sd card"""
@@ -1504,6 +1474,90 @@ try:
     
     settings=Settings()
     log=Log()
+
+    class IFCLA:
+        def __init__(self):
+            self.OldExcVals=[]
+        
+        def in_function_auto_start(self):
+            GlobalLogging=const(dir())
+
+            for Item in GlobalLogging:
+                try:
+                    item_type=str(type(eval(Item)))
+                except NameError:
+                    continue
+
+                if str(Item) not in log.VariablesAdded and  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>"):
+                    log.add_logstart("log.capture.variable('%s', %s)"%(Item, Item.replace("'", "")))
+
+            # Loads extra funtions from file.
+            try:
+                AddedFuntion=brain.sdcard.loadfile("Logstart.txt").decode(log.format)
+                AddedBytes=compile(AddedFuntion, '<string>' ,'exec', 0,  False, 2)
+                AddedBytesUsed=const(True)
+            except AttributeError:
+                AddedFuntion=""
+                AddedBytes=compile("", '<string>' ,'exec', 0,  True, 2)
+                AddedBytesUsed=const(False)
+            
+            del AddedFuntion
+
+            collect()
+
+            while True:
+                start:int=const(log_time.time())
+
+                if AddedBytesUsed:
+                    exec(AddedBytes)
+
+                wait(100 - (log_time.time() - start))
+        
+        def in_function_start(self) -> Thread:
+            cla=Thread(self.in_function_auto_start)
+            return cla
+
+        def __enter__(self) -> Thread:
+            self.Thread=self.in_function_start()
+            return self.Thread
+
+        def __exit__(self, ExcType, ExcVal, ExcTb) -> bool:
+            if ExcType!=None:
+
+                if ExcVal in self.OldExcVals:
+                    return True
+                
+                self.OldExcVals.append(ExcVal)
+
+                import uio
+                if not _errorcreated:
+                    brain.sdcard.savefile("Error.txt")
+                exeption_string=uio.StringIO(500)
+                sys.print_exception(ExcTb, exeption_string)  # type: ignore
+                print(exeption_string.getvalue())
+                brain.sdcard.appendfile("Error.txt", bytearray(b"<System ERROR> Python Runtime Error. \n %s "%(exeption_string.getvalue())))
+            
+                del exeption_string, uio
+                return True
+            else:
+                self.Thread.stop()
+                return False
+            
+    
+    def Monitor(func):
+        """
+        Function decorator for using CLA in functions.
+        """
+
+        def Monitor_wrapper(*args, **kwargs):
+            with IFCLA():
+                func()
+        
+        return Monitor_wrapper
+    
+    def start() -> Thread:
+        cla=Thread(log.auto_start)
+        return cla
 
 except Exception as e:
     import uio

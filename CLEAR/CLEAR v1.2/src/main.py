@@ -1,19 +1,9 @@
 #region VEXcode Generated Robot Configuration
 from vex import *
-#from FI import FilteredInertial
-import RE, micropython, ASAP  # type: ignore
-
-
+import ASAP
 
 # Brain should be defined by default
 brain=Brain()
-
-# micropython.opt_level(1)
-# print(micropython.qstr_info())
-# time1=brain.timer.time()
-# print(micropython.mem_info(1))
-# time2=brain.timer.time()
-# print("Time to get memory info: ", time2-time1, "ms")
 
 def none():
     pass
@@ -65,21 +55,22 @@ inertial.calibrate()
 
 # Driver Control Functions
 
-def rightside():
-    rightspeed = controller_1.axis2.position() / 8.33
-    Right1.spin(FORWARD, rightspeed, VOLT)
-    Right2.spin(FORWARD, rightspeed, VOLT)
+# def rightside():
+#     rightspeed = controller_1.axis2.position() / 8.33
+#     Right1.spin(FORWARD, rightspeed, VOLT)
+#     Right2.spin(FORWARD, rightspeed, VOLT)
 
-def leftside():
-    leftspeed = controller_1.axis3.position() / 8.33
-    left1.spin(FORWARD, leftspeed, VOLT)
-    left2.spin(FORWARD, leftspeed, VOLT)
+# def leftside():
+#     leftspeed = controller_1.axis3.position() / 8.33
+#     left1.spin(FORWARD, leftspeed, VOLT)
+#     left2.spin(FORWARD, leftspeed, VOLT)
 
 # Aton Functions
 asap=ASAP.Start([left1, left2], [Right1, Right2], 0.75, 69.85, 600, controller_1, Xodom, 50.8)
 
 def aton():
-    RE.encode.run("TestRecording")
+    # RE.encode.run("TestRecording")
+    pass
 
 comp=Competition(none, aton)
 
@@ -93,21 +84,22 @@ if brain.sdcard.is_inserted() and brain.sdcard.exists("CLA.py"):
     rightmotorlist=["Right1", "Right2", "Right3"]
     leftmotorlist=["left1", "left2", "left3"]
     import CLA
-    CLA.log.start()
+    CLA.start()
     
-    def toggle_recording():
-        global recording_state
-        if recording_state == 0:
-            recording_state = 1
-            Thread(lambda: RE.recording.start(controller_1, Right1, left1))
-            controller_1.rumble("-")
-            print("Recording Started")
-        else:
-            recording_state = 0
-            RE.recording.stop("TestRecording", rightmotorlist, leftmotorlist)
-            controller_1.rumble("--")
-            print("Recording Stopped")
-    controller_1.buttonA.pressed(toggle_recording)
+    # @CLA.Monitor
+    # def toggle_recording():
+    #     global recording_state
+    #     if recording_state == 0:
+    #         recording_state = 1
+    #         Thread(lambda: RE.recording.start(controller_1, Right1, left1))
+    #         controller_1.rumble("-")
+    #         print("Recording Started")
+    #     else:
+    #         recording_state = 0
+    #         RE.recording.stop("TestRecording", rightmotorlist, leftmotorlist)
+    #         controller_1.rumble("--")
+    #         print("Recording Stopped")
+    # controller_1.buttonA.pressed(toggle_recording)
     
     # import OD
     # ODMainLoop=OD.OD.StartOD(inertial, 0, 0, 0, left1, Right1, 325, 69.85, 0.75, Xodom, ForwardYodom, RearYodom, 1, 50.8, 1, 1)
@@ -120,6 +112,5 @@ if brain.sdcard.is_inserted() and brain.sdcard.exists("CLA.py"):
     # ODLoop=Thread(print_location_loop)
 
 # Event setup
-controller_1.axis2.changed(rightside)
-controller_1.axis3.changed(leftside)
-controller_1.buttonL1.pressed(state_test)
+# controller_1.axis2.changed(rightside)
+# controller_1.axis3.changed(leftside)
