@@ -129,7 +129,7 @@ try:
 
                         if self.motor_temp==2:
                             if not self.motor_disconnected[self.motor_id]:
-                                log.add("EM1", "%s"%(log.MiscMotorsName[self.motor_id]))
+                                log.add("EM1", "%s"%(log.MiscMotorsName[i]))
                                 self.motor_disconnected[self.motor_id]=True
                             else:
                                 return
@@ -318,10 +318,10 @@ try:
                         log.add("DDS4", distancesensor)
                         self.distance_object[distance_id]=False
 
-                def rotation(self, rotationsensor: Rotation) -> None:
+                def rotation(self, RotationSensor: Rotation, RotaionSensorName: str) -> None:
                     """Capture for a rotation sensor. Enter rotation sensor to log"""
 
-                    rotaion_id=id(rotationsensor)
+                    rotaion_id=id(RotationSensor)
 
                     if rotaion_id not in self.rotation_angle_history:
                         self.rotation_angle_history[rotaion_id]=0
@@ -330,24 +330,24 @@ try:
                     if rotaion_id not in self.rotation_connection:
                         self.rotation_connection[rotaion_id]=True
                     
-                    if rotationsensor.installed() and self.rotation_connection[rotaion_id]==False:
+                    if RotationSensor.installed() and self.rotation_connection[rotaion_id]==False:
 
-                        log.add("DR0", str(rotationsensor))
+                        log.add("DR0", RotaionSensorName)
                         self.rotation_connection[rotaion_id]=True
-                    elif not rotationsensor.installed() and self.rotation_connection[rotaion_id]==True:
+                    elif not RotationSensor.installed() and self.rotation_connection[rotaion_id]==True:
 
-                        log.add("ER0", str(rotationsensor))
+                        log.add("ER0", RotaionSensorName)
                         self.rotation_connection[rotaion_id]=False
                     
-                    if not (self.rotation_angle_history[rotaion_id] >= rotationsensor.angle() - log.tolrance and self.rotation_angle_history[rotaion_id] <= rotationsensor.angle() + log.tolrance):
+                    if not (self.rotation_angle_history[rotaion_id] >= RotationSensor.angle() - log.tolrance and self.rotation_angle_history[rotaion_id] <= RotationSensor.angle() + log.tolrance):
 
-                        log.add("DR1", str(rotationsensor.angle()) + ", Sensor " + str(rotationsensor))
-                        self.rotation_angle_history[rotaion_id]= rotationsensor.angle()
+                        log.add("DR1", "%d, Sensor %s"%(RotationSensor.angle(), RotaionSensorName))
+                        self.rotation_angle_history[rotaion_id]= RotationSensor.angle()
                     
-                    if not (self.rotation_position_history[rotaion_id] >= rotationsensor.position() - log.tolrance and self.rotation_position_history[rotaion_id] <= rotationsensor.position() + log.tolrance):
+                    if not (self.rotation_position_history[rotaion_id] >= RotationSensor.position() - log.tolrance and self.rotation_position_history[rotaion_id] <= RotationSensor.position() + log.tolrance):
 
-                        log.add("DR2", str(rotationsensor.position()) + ", Sensor " + str(rotationsensor))
-                        self.rotation_position_history[rotaion_id]= rotationsensor.position()
+                        log.add("DR2", "%d, Sensor %s"%(RotationSensor.position(), RotaionSensorName))
+                        self.rotation_position_history[rotaion_id]= RotationSensor.position()
                 
             class Threewire:
                 def __init__(self):
@@ -472,8 +472,8 @@ try:
                 self.drivetrain_disconnected={}
                 self.drivetrain_setup={}
                 self.drivetrain_name={}
-                self.rightside
-                self.leftside
+                self.rightside=Motor(Ports.PORT21)
+                self.leftside=Motor(Ports.PORT21)
                 self.DrivetrainSetup=False
 
             def drivetrain(self, leftmotors: list[Motor]|None=None, rightmotors: list[Motor]|None=None) -> None:
@@ -489,19 +489,8 @@ try:
                     if self.DrivetrainSetup and leftmotors!=None and rightmotors!=None:
                         log.LeftMotors = leftmotors
                         log.RightMotors = rightmotors
-
-                    if len(log.LeftMotors) == 1:
                         self.leftside=log.LeftMotors[0]
                         self.rightside=log.RightMotors[0]
-                    elif len(log.LeftMotors) == 2:
-                        self.leftside=MotorGroup(log.LeftMotors[0], log.LeftMotors[1])
-                        self.rightside=MotorGroup(log.RightMotors[0], log.RightMotors[1])
-                    elif len(log.LeftMotors) == 3:
-                        self.leftside=MotorGroup(log.LeftMotors[0], log.LeftMotors[1], log.LeftMotors[2])
-                        self.rightside=MotorGroup(log.RightMotors[0], log.RightMotors[1], log.RightMotors[2])
-                    elif len(log.LeftMotors) == 4:
-                        self.leftside=MotorGroup(log.LeftMotors[0], log.LeftMotors[1], log.LeftMotors[2], log.LeftMotors[3])
-                        self.rightside=MotorGroup(log.RightMotors[0], log.RightMotors[1], log.RightMotors[2], log.RightMotors[3])
                     self.DrivetrainSetup=True
 
                 motor_list = [self.leftside, self.rightside]
@@ -517,9 +506,9 @@ try:
                         self.drivetrain_current_monitoring[self.motor_id] = 0
                         self.drivetrain_disconnected[self.motor_id] = False
                         self.drivetrain_setup[self.motor_id]=True
-                        if i == 1:
+                        if i == 0:
                             self.drivetrain_name[self.motor_id]="LeftSide"
-                        elif i == 2:
+                        elif i == 1:
                             self.drivetrain_name[self.motor_id]="RightSide"
                         else:
                             self.drivetrain_name[self.motor_id]="ERROR"
@@ -536,8 +525,8 @@ try:
                     elif self.motor_temp!=2 and self.drivetrain_disconnected[self.motor_id]:
                         self.drivetrain_disconnected[self.motor_id]=False
 
-                    self.current_motor_power=motor_.power(PowerUnits.WATT)
-                    self.current_motor_current:int=motor_.current(CurrentUnits.AMP)
+                    self.current_motor_power=motor_.power(PowerUnits.WATT)  # type: ignore
+                    self.current_motor_current:int=motor_.current(CurrentUnits.AMP)  # type: ignore
                     
                     # Cheaks for the temps,  power, and cheaks for conecttions of motors(s).
                     if self.motor_temp<=50: 
@@ -1048,7 +1037,9 @@ try:
             self.archive.index_history()
             if brain.sdcard.filesize("Log.csv") > 100000:
                 self.archive.log()
-            
+
+            start:int=log_time.time()
+
             self.format:str=const(str(settings.settings.get('format_used ')))
             self.tolrance:int=const(int(str(settings.settings.get('default_tolrance '))))
             wait_time_logging:int=const(int(str(settings.settings.get('logging_loop_wait '))))
@@ -1090,9 +1081,6 @@ try:
 
             if self.brainscreen:
                 brain.screen.set_font(FontType.MONO12)
-
-            # Logs system start.
-            self.add("DS0", "")
             
             if "True" in str(settings.settings.get('auto_do_variables ')):
                 auto_do_variables:bool=const(True)
@@ -1134,16 +1122,18 @@ try:
                 
                 try:
                     item_type=str(type(eval(item)))
+                    # print(item, item_type)
                 except NameError:
                     continue
 
                 if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>") and auto_do_variables:
                     log.add_logstart("log.capture.variable('%s', %s)"%(item, item.replace("'", "")))
-                    self.VariablesAdded.append(str(item))
+                    self.VariablesAdded.append(item)
                 elif item_type == "<class 'motor'>" and auto_do_motors:
-                    if "Left" in str(item) or "left" in str(item):
+
+                    if "Left" in item or "left" in item:
                         self.LeftMotors+=[eval(item)]
-                    elif "Right" in str(item) or "right" in str(item):
+                    elif "Right" in item or "right" in item:
                         self.RightMotors+=[eval(item)]
                     else:
                         self.MiscMotors+=[eval(item)]
@@ -1155,7 +1145,7 @@ try:
                 elif item_type == "<class 'optical'>" and auto_do_smart_port:
                     log.add_logstart("log.capture.smartport.optical(%s)"%(item.replace("'", "")))
                 elif item_type == "<class 'rotation'>" and auto_do_smart_port:
-                    log.add_logstart("log.capture.smartport.rotation(%s)"%(item.replace("'", "")))
+                    log.add_logstart("log.capture.smartport.rotation(%s, '%s')"%(item.replace("'", ""), item))
                 elif item_type == "<class 'distance'>" and auto_do_smart_port:
                     log.add_logstart("log.capture.smartport.distance(%s)"%(item.replace("'", "")))
                 elif item_type == "<class 'triport_bumper'>" and auto_do_three_wire:
@@ -1170,6 +1160,76 @@ try:
                     log.add_logstart("log.capture.threewire.analog(%s)"%(item.replace("'", "")))
                 elif item_type == "<class 'comp'>" and auto_do_control:
                     log.add_logstart("log.capture.system.control(%s)"%(item.replace("'", "")))
+
+            #print(sys.modules)
+
+            ModulesChecked=[]
+
+            for Module, ModuleType in sys.modules.items():
+
+                if Module in ModulesChecked:
+                    continue
+
+                exec("import %s"%(Module))
+
+                #print(ModuleType)
+
+                ModulesChecked.append(Module)
+                try:
+                    ModuleLogging=dir(ModuleType)
+                    #print(Module)
+                except NameError:
+                    #print(Module)
+                    continue
+
+                # print(ModuleLogging)
+
+                for item in ModuleLogging:
+                    
+                    try:
+                        item_type=str(type(eval("%s.%s"%(Module, item))))
+                        # print(item, item_type)
+                    except NameError:
+                        # print(Module)
+                        continue
+
+                    if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>") and auto_do_variables and item not in self.VariablesAdded:
+                        log.add_logstart("log.capture.variable('%s.%s', %s.%s)"%(Module, item, Module, item.replace("'", "")))
+                        self.VariablesAdded.append(item)
+                    elif item_type == "<class 'motor'>" and auto_do_motors:
+
+                        if "Left" in item or "left" in item:
+                            self.LeftMotors+=[eval(item)]
+                        elif "Right" in item or "right" in item:
+                            self.RightMotors+=[eval(item)]
+                        else:
+                            self.MiscMotors+=[eval(item)]
+                            self.MiscMotorsName+=[item]
+                    elif item_type == "<class 'controller'>" and auto_do_controller:
+                        controllers+=[eval(item)]
+                    elif item_type == "<class 'inertial'>" and auto_do_smart_port:
+                        log.add_logstart("log.capture.smartport.inertial(%s)"%(item.replace("'", "")))
+                    elif item_type == "<class 'optical'>" and auto_do_smart_port:
+                        log.add_logstart("log.capture.smartport.optical(%s)"%(item.replace("'", "")))
+                    elif item_type == "<class 'rotation'>" and auto_do_smart_port:
+                        log.add_logstart("log.capture.smartport.rotation(%s, '%s')"%(item.replace("'", ""), item))
+                    elif item_type == "<class 'distance'>" and auto_do_smart_port:
+                        log.add_logstart("log.capture.smartport.distance(%s)"%(item.replace("'", "")))
+                    elif item_type == "<class 'triport_bumper'>" and auto_do_three_wire:
+                        log.add_logstart("log.capture.threewire.bumper(%s)"%(item.replace("'", "")))
+                    elif item_type == "<class 'triport_limit'>" and auto_do_three_wire:
+                        log.add_logstart("log.capture.threewire.limit(%s)"%(item.replace("'", "")))
+                    elif item_type == "<class 'triport_digitalin'>" and auto_do_three_wire:
+                        log.add_logstart("log.capture.threewire.digitalinput(%s)"%(item.replace("'", "")))
+                    elif item_type == "<class 'triport_potv2'>" and auto_do_three_wire:
+                        log.add_logstart("log.capture.threewire.potentiometer(%s)"%(item.replace("'", "")))
+                    elif item_type == "<class 'triport_analog'>" and auto_do_three_wire:
+                        log.add_logstart("log.capture.threewire.analog(%s)"%(item.replace("'", "")))
+                    elif item_type == "<class 'comp'>" and auto_do_control:
+                        log.add_logstart("log.capture.system.control(%s)"%(item.replace("'", "")))
+
+                    # exec("del %s"%(Module))
+
                     
             del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port
 
@@ -1200,6 +1260,9 @@ try:
                 added_bytes_used=const(False)
             
             del addedfuntion
+
+            # Logs system start.
+            self.add("DS0", "%d MSEC"%(log_time.time()-start))
             
             gc_collect()
 
