@@ -1,5 +1,8 @@
+"""Auto Configuration Package. Call start() and fill inputs."""
+
+from .ASAP import *
+import CLA
 from vex import *
-import CLA, ASAP
 
 def _none():
     pass
@@ -39,4 +42,6 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
 
     cla=CLA.start()
 
-    return comp     
+    return comp
+
+__all__=["CLA", "ASAP"]

@@ -1,6 +1,6 @@
 #region VEXcode Generated Robot Configuration
 from vex import *
-import ACP
+import ACPv1
 
 # Brain should be defined by default
 brain=Brain()
@@ -41,6 +41,6 @@ def aton():
 print(dir(test))
 
 # Aton Functions
-comp=ACP.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Arcade", AtonFunc=aton)
+comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Arcade", AtonFunc=aton)
 
 test=2
