@@ -6,91 +6,91 @@ brain = Brain()
 timer=Timer()
 
 class Encode:
-        def __init__(self):
-            self.axis2History=0
-            self.axis3History=0
-            self.degreesoffsetright=0
-            self.degreesoffsetleft=0
-            self.codeobjectoffset=0
+    def __init__(self):
+        self.axis2History=0
+        self.axis3History=0
+        self.degreesoffsetright=0
+        self.degreesoffsetleft=0
+        self.codeobjectoffset=0
 
-        def rightmoveCLEAR(self, Motors: List[Motor], Velocity: int):
-            for motor in Motors:
-                motor.set_velocity(Velocity, PERCENT)
-            
-        def leftmoveCLEAR(self, Motors: List[Motor], Velocity: int):
-            for motor in Motors:
-                motor.set_velocity(Velocity, PERCENT)
+    def rightmoveCLEAR(self, Motors: List[Motor], Velocity: int):
+        for motor in Motors:
+            motor.set_velocity(Velocity, PERCENT)
         
-        def rightDegreesCLEAR(self, Motors: List[Motor], degrees):
-            for motor in Motors:
-                motor.spin_for(FORWARD, degrees, DEGREES)
+    def leftmoveCLEAR(self, Motors: List[Motor], Velocity: int):
+        for motor in Motors:
+            motor.set_velocity(Velocity, PERCENT)
+    
+    def rightDegreesCLEAR(self, Motors: List[Motor], degrees):
+        for motor in Motors:
+            motor.spin_for(FORWARD, degrees, DEGREES)
 
-        def leftDegreesCELAR(self, Motors: List[Motor], degrees):
-            for motor in Motors:
-                motor.spin_for(FORWARD, degrees, DEGREES)
+    def leftDegreesCELAR(self, Motors: List[Motor], degrees):
+        for motor in Motors:
+            motor.spin_for(FORWARD, degrees, DEGREES)
 
-        def run(self, Name: str):
-            exec(brain.sdcard.loadfile(Name + ".txt").decode("utf-8"))
+    def run(self, Name: str):
+        exec(brain.sdcard.loadfile(Name + ".txt").decode("utf-8"))
 
-        def encode(self, Name: str, RightMotorsName: List[str], LeftMotorsName: List[str], dotank=True):
+    def encode(self, Name: str, RightMotorsName: List[str], LeftMotorsName: List[str], dotank=True):
 
-            prelist:List[List[str]]=[]
-            file=brain.sdcard.loadfile("RecordingData.csv").decode("utf-8").split("\n")
-            for line in file:
-                if line:
-                    prelist.append(line.split(','))
+        prelist:List[List[str]]=[]
+        file=brain.sdcard.loadfile("RecordingData.csv").decode("utf-8").split("\n")
+        for line in file:
+            if line:
+                prelist.append(line.split(','))
 
-            codeobject=bytearray(50000)
+        codeobject=bytearray(50000)
+        
+        for i in range(len(prelist)):
+            axis1=int(prelist[i][0].replace("A1", ""))
+            axis2=int(prelist[i][1].replace("A2", ""))
+            axis3=int(prelist[i][2].replace("A3", ""))
+            axis4=int(prelist[i][3].replace("A4", ""))
+            timestamp=int(prelist[i][4].replace("T", ""))
+            rightposition=int(prelist[i][6].replace("RP", ""))
+            leftposition=int(prelist[i][7].replace("LP", ""))
+            pressedbuttons: List[str] = prelist[i][5].replace("BP", "").split(":")
+            print(axis1, axis2, axis3, axis4, timestamp, pressedbuttons, rightposition, leftposition)
+
+            if dotank:
+                codestring=b", encode.rightmoveCLEAR(%s, %s), encode.leftmoveCLEAR(%s, %s)"%(RightMotorsName, axis2, LeftMotorsName, axis3)
+            else:
+                pass
+
+            if axis2 > 0:
+                axis2sign=True
+            else:
+                axis2sign=False
             
-            for i in range(len(prelist)):
-                axis1=int(prelist[i][0].replace("A1", ""))
-                axis2=int(prelist[i][1].replace("A2", ""))
-                axis3=int(prelist[i][2].replace("A3", ""))
-                axis4=int(prelist[i][3].replace("A4", ""))
-                timestamp=int(prelist[i][4].replace("T", ""))
-                rightposition=int(prelist[i][6].replace("RP", ""))
-                leftposition=int(prelist[i][7].replace("LP", ""))
-                pressedbuttons: List[str] = prelist[i][5].replace("BP", "").split(":")
-                print(axis1, axis2, axis3, axis4, timestamp, pressedbuttons, rightposition, leftposition)
+            if axis3 > 0:
+                axis3sign=True
+            else:
+                axis3sign=False
 
-                if dotank:
-                    codestring=b", encode.rightmoveCLEAR(%s, %s), encode.leftmoveCLEAR(%s, %s)"%(RightMotorsName, axis2, LeftMotorsName, axis3)
-                else:
-                    pass
+            codestringdegreeright=b""
+            codestringdegreeleft=b""
+            
+            if axis2sign != self.axis2History:
+                self.axis2History=axis2sign
+                degrees=rightposition-self.degreesoffsetright
+                codestringdegreeright=b", rightDegreesCLEAR(%s, %s)"%(RightMotorsName, degrees)
+                self.degreesoffsetright=rightposition
 
-                if axis2 > 0:
-                    axis2sign=True
-                else:
-                    axis2sign=False
-                
-                if axis3 > 0:
-                    axis3sign=True
-                else:
-                    axis3sign=False
+            if axis3sign != self.axis3History:
+                self.axis3History=axis3sign
+                degrees=leftposition-self.degreesoffsetleft
+                codestringdegreeleft=b", leftDegreesCLEAR(%s, %s)"%(LeftMotorsName, degrees)
+                self.degreesoffsetright=rightposition
+            
+            fullstring="%s%s%s"%(codestring.decode("utf-8"), codestringdegreeright.decode("utf-8"), codestringdegreeleft.decode("utf-8"))
+            
+            stringsize=len(fullstring)
+            pack_into("=%ds"%(stringsize), codeobject, self.codeobjectoffset, fullstring)
 
-                codestringdegreeright=b""
-                codestringdegreeleft=b""
-                
-                if axis2sign != self.axis2History:
-                    self.axis2History=axis2sign
-                    degrees=rightposition-self.degreesoffsetright
-                    codestringdegreeright=b", rightDegreesCLEAR(%s, %s)"%(RightMotorsName, degrees)
-                    self.degreesoffsetright=rightposition
+            self.codeobjectoffset+=stringsize 
 
-                if axis3sign != self.axis3History:
-                    self.axis3History=axis3sign
-                    degrees=leftposition-self.degreesoffsetleft
-                    codestringdegreeleft=b", leftDegreesCLEAR(%s, %s)"%(LeftMotorsName, degrees)
-                    self.degreesoffsetright=rightposition
-                
-                fullstring="%s%s%s"%(codestring.decode("utf-8"), codestringdegreeright.decode("utf-8"), codestringdegreeleft.decode("utf-8"))
-                
-                stringsize=len(fullstring)
-                pack_into("=%ds"%(stringsize), codeobject, self.codeobjectoffset, fullstring)
-
-                self.codeobjectoffset+=stringsize 
-
-            brain.sdcard.savefile(Name + ".txt", codeobject[0:self.codeobjectoffset])
+        brain.sdcard.savefile(Name + ".txt", codeobject[0:self.codeobjectoffset])
 
 
 class Recording:
@@ -165,3 +165,50 @@ class Recording:
 
 recording=Recording()
 encode=Encode()
+
+def archive_recording(self, recordingname: str) -> None:
+    """
+    Archives recording file. 
+    Enter full name of file.
+
+    Args:
+    recordingname= String
+    """
+
+    print("Archiving...")
+    filename=str(recordingname).replace(".txt", "_archived.txt")
+    brain.sdcard.savefile(filename)
+    with open(recordingname, 'rb') as recording:
+        chunk_buffer=bytearray(10240)
+        buffer=bytearray()
+        while True:
+            chunk=recording.readinto(chunk_buffer)
+            if not chunk:
+                break
+            
+            list=chunk_buffer.split(b"\n")
+            for line in list:
+                prelist=line.split(b' ')
+                buffer.extend(b"%b %b %b %b \n" %(prelist[2], prelist[9], prelist[10], prelist[11]))
+            brain.sdcard.appendfile(filename, buffer)
+
+    brain.sdcard.savefile(recordingname)
+
+def recall_recording(self, name: str) -> None:
+    """
+    Restores recording file to an uncompressed state. 
+    Enter full name of the archived file.
+
+    Args:
+    name=String, full name of file
+    """
+
+    recording=brain.sdcard.loadfile(name).decode("utf-8").split('\n')
+    filename=name.replace("_archived.txt", ".txt")
+    brain.sdcard.savefile(filename)
+    for item in recording:
+        prelist=item.split(' ')
+        if "Moved" in item:
+            brain.sdcard.appendfile(filename, bytearray("[',', '0', %s ':Controller', 'DATA:', 'Axis', 'Changed.', 'Axis:', '', %s %s 'Moved', '0', 'Degrees', ''] \n"%(prelist[0], prelist[1], prelist[2]), "utf-8"))
+        elif "Pressed" in item or "Released" in item:
+            brain.sdcard.appendfile(filename, bytearray("[',', '0', %s ':Controller', 'DATA:', 'Button', 'Changed.', 'Button:', '', %s %s %s ''] \n"%(prelist[0], prelist[1], prelist[2], prelist[3]), "utf-8"))

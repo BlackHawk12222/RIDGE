@@ -20,16 +20,6 @@ wait(200, MSEC)
 # clear the console to make sure we don't have the REPL in the console
 print("\033[2J")
 
-# ---------------------------------------------------------------------------- #
-#                                                                              #
-# 	Module:       CLEAR.py                                                     #
-# 	Author:       Micah Bow                                                    #
-# 	Created:      1/27/2026, 12:42 PM                                          #
-#   Last Edited:  2/23/2026, 10:00 PM                                          #
-# 	Description:  Capture, logging, Encoding, Archiving, Recording.            #
-#                                                                              #
-# ---------------------------------------------------------------------------- #
-
 test=1
 
 inertial.calibrate()

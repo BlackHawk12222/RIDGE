@@ -1,8 +1,6 @@
 import utime  # type: ignore
 
-
 """Used for debugging functions in code."""
-
 
 def start(func):
     """Does error handling, prints all variables, and gives time fof funtion."""
