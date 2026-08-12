@@ -17,44 +17,54 @@ async def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRati
             RightPos = Controller.axis2.position()
             LeftPos = Controller.axis3.position()
 
-            LeftSpeed=((LeftMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*WheelSize_MM
-            RightSpeed=((RightMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*WheelSize_MM
+            RequestedRightRPM= RightPos*(MotorRpmMax/100)
+            RequestedLeftRPM= LeftPos*(MotorRpmMax/100)
+            AcutalRightRPM= (RightMotorList[0].velocity(RPM) + RightMotorList[1].velocity(RPM))/2
+            AcutalLeftRPM= (LeftMotorList[0].velocity(RPM) + LeftMotorList[1].velocity(RPM))/2
+
+            VelocityDiffrenceRight=RightMotorList[0].velocity(RPM) - RightMotorList[1].velocity(RPM)
+            VelocityDiffrenceLeft=LeftMotorList[0].velocity(RPM) - LeftMotorList[1].velocity(RPM)
+
+            LeftWheelSpeed=((LeftMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*WheelSize_MM
+            RightWheelSpeed=((RightMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*WheelSize_MM
             Truespeed=XOdom.velocity(RPM)*((2*3.14159)/60)*OdomWheelSize_MM
 
-            sliprate=((Truespeed-((LeftSpeed+RightSpeed)/2))/Truespeed)*100
+            SlipRateRight=Truespeed-RightWheelSpeed
+            SlipRateLeft=Truespeed-LeftWheelSpeed
 
-            SpeedOffsetLeft=min(sliprate-100, 0)
-            SpeedOffsetRight=min(sliprate-100, 0)
+            TargetRightRPM=RequestedRightRPM-SlipRateRight
+            TargetLeftRPM=RequestedLeftRPM-SlipRateLeft
 
-            ControllerMultipyer=MotorRpmMax/100
+            ErrorRightRPM=TargetRightRPM-AcutalRightRPM
+            ErrorLeftRPM=TargetLeftRPM-AcutalLeftRPM
 
-            for motor in LeftMotorList:
-                motor.spin(FORWARD, (LeftPos-SpeedOffsetLeft)*ControllerMultipyer, RPM)
             
-            for motor in RightMotorList:
-                motor.spin(FORWARD, (RightPos-SpeedOffsetRight)*ControllerMultipyer, RPM)
             
             await uasyncio.sleep_ms(20 - StartTime)
         elif StickType == "Arcade" or StickType == "arcade":
             RightPos = Controller.axis3.position() - Controller.axis4.position()
             LeftPos = Controller.axis3.position() + Controller.axis4.position()
 
-            LeftSpeed=((LeftMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*WheelSize_MM
-            RightSpeed=((RightMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*WheelSize_MM
+            RequestedRightRPM= RightPos*(MotorRpmMax/100)
+            RequestedLeftRPM= LeftPos*(MotorRpmMax/100)
+
+            LeftWheelSpeed=((LeftMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*WheelSize_MM
+            RightWheelSpeed=((RightMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*WheelSize_MM
             Truespeed=XOdom.velocity(RPM)*((2*3.14159)/60)*OdomWheelSize_MM
 
-            sliprate=((Truespeed-((LeftSpeed+RightSpeed)/2))/Truespeed)*100
+            SlipRateRight=((Truespeed-RightWheelSpeed)/Truespeed)*100
+            SlipRateLeft=((Truespeed-LeftWheelSpeed)/Truespeed)*100
 
-            SpeedOffsetLeft=min(sliprate-100, 0)
-            SpeedOffsetRight=min(sliprate-100, 0)
+            SpeedOffsetLeft=min(SlipRateLeft-100, 0)
+            SpeedOffsetRight=min(SlipRateRight-100, 0)
 
             ControllerMultipyer=MotorRpmMax/100
 
             for motor in LeftMotorList:
-                motor.spin(FORWARD, (LeftPos-SpeedOffsetLeft)*ControllerMultipyer, RPM)
+                motor.spin(FORWARD, (RequestedLeftRPM-SpeedOffsetLeft)*ControllerMultipyer, RPM)
             
             for motor in RightMotorList:
-                motor.spin(FORWARD, (RightPos-SpeedOffsetRight)*ControllerMultipyer, RPM)
+                motor.spin(FORWARD, (RequestedRightRPM-SpeedOffsetRight)*ControllerMultipyer, RPM)
             
             await uasyncio.sleep_ms(20 - StartTime)
 
