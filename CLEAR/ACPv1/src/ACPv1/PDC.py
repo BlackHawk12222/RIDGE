@@ -1,3 +1,7 @@
+from vex import *
+
+timer = Timer()
+
 class PD:
     def __init__(self, Name, Kp, Kd):
         self.Name = Name
@@ -32,7 +36,8 @@ class AutoTune:
 
     def start_tuning(self):
         self.tuning = True
-        # Additional logic for starting the tuning process can be added here
+        while self.tuning:
+            pass
 
     def stop_tuning(self):
         self.tuning = False
