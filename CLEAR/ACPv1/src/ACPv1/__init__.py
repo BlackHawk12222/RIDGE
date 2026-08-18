@@ -1,6 +1,6 @@
 """Auto Configuration Package. Call start() and fill inputs."""
 
-from .ASAP import *
+import ASAP
 import CLA
 from vex import *
 
@@ -32,11 +32,13 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
                 LeftMotors+=[eval(item)]
         elif item_type == "<class 'rotation'>" and ("Xodom" in item or "XOdom" in item or "xodom" in item):
             XOdom=eval(item)
+        elif item_type == "<class 'inertial'>":
+            inertial=eval(item)
     
     del ObjList
 
     def _driver():
-        ASAP.Start(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType)
+        ASAP.Start(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial)
 
     comp=Competition(_driver, AtonFunc)
 

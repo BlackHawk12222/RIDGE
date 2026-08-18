@@ -1,5 +1,7 @@
 from vex import *
 
+brain = Brain()
+
 timer = Timer()
 
 class PD:
@@ -27,17 +29,41 @@ class PD:
         return OutputClamped
 
 class AutoTune:
-    def __init__(self, PD_controller: PD):
+    def __init__(self, PD_controller: PD, InitalZeta, InitalOmega):
         self.Name = PD_controller.Name + "_AutoTune"
         self.tuning = False  
         self.PD_controller = PD_controller
         self.Kp = PD_controller.Kp
         self.Kd = PD_controller.Kd
+        self.Zeta= InitalZeta
+        self.Omega = InitalOmega
+        if brain.sdcard.exists("PDC_config.txt"):
+            ConfigData = brain.sdcard.loadfile("PDC_config.txt").decode("utf-8")
+            if self.Name not in ConfigData:
+                brain.sdcard.appendfile("PDC_config.txt", bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega)))
+            else:
+                ConfigDataList=[] 
+                for line in ConfigData:
+                    ConfigDataList.append(line)
 
-    def start_tuning(self):
+                for i in range(len(ConfigDataList)):
+                    if self.Name in ConfigDataList[i]:
+                        self.kp=ConfigDataList[i+1]
+                        self.kd=ConfigDataList[i+2]
+                        self.Zeta=ConfigDataList[i+3]
+                        self.Omega=ConfigDataList[i+4]
+                        break
+        else:
+            brain.sdcard.appendfile("PDC_config.txt", bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega)))
+
+    def start_tuning(self, a1, a0, B):
         self.tuning = True
         while self.tuning:
-            pass
+            desired_s1_coff = 2 * self.Zeta * self.Omega
+            desired_s0_coff = self.Omega ** 2
+    
+            self.Kp = (desired_s1_coff + a1) / B
+            self.Kd = (desired_s0_coff + a0) / B
 
     def stop_tuning(self):
         self.tuning = False
