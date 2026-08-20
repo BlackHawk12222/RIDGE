@@ -1,4 +1,5 @@
 from vex import *
+from .RLS import RLS, Matrix
 
 brain = Brain()
 
@@ -29,7 +30,7 @@ class PD:
         return OutputClamped
 
 class AutoTune:
-    def __init__(self, PD_controller: PD, InitalZeta, InitalOmega):
+    def __init__(self, PD_controller: PD, InitalZeta, InitalOmega, InitalTheta: Matrix):
         self.Name = PD_controller.Name + "_AutoTune"
         self.tuning = False  
         self.PD_controller = PD_controller
@@ -37,10 +38,11 @@ class AutoTune:
         self.Kd = PD_controller.Kd
         self.Zeta= InitalZeta
         self.Omega = InitalOmega
-        if brain.sdcard.exists("PDC_config.txt"):
-            ConfigData = brain.sdcard.loadfile("PDC_config.txt").decode("utf-8")
+        self.Theta = InitalTheta
+        if brain.sdcard.exists("PDCconfig%s.txt"%(self.Name)):
+            ConfigData = brain.sdcard.loadfile("PDCconfig%s.txt"%(self.Name)).decode("utf-8")
             if self.Name not in ConfigData:
-                brain.sdcard.appendfile("PDC_config.txt", bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega)))
+                brain.sdcard.appendfile("PDCconfig%s.txt"%(self.Name), bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta))))
             else:
                 ConfigDataList=[] 
                 for line in ConfigData:
@@ -52,22 +54,38 @@ class AutoTune:
                         self.kd=ConfigDataList[i+2]
                         self.Zeta=ConfigDataList[i+3]
                         self.Omega=ConfigDataList[i+4]
+                        self.Theta=Matrix([[float(x) for x in ConfigDataList[i+5].split(": ")[1].split(", ")]])
                         break
         else:
-            brain.sdcard.appendfile("PDC_config.txt", bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega)))
+            print(brain.sdcard.savefile("PDCconfig%s.txt"%(self.Name), bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta)))))
 
-    def start_tuning(self, a1, a0, B):
+    def start_tuning(self,y, u, a1=0, a0=0, B0=0, B1=0):
         self.tuning = True
+        self.RLS_filter = RLS(self.Name + "_RLS", 0.98, Matrix([[1000, 0, 0, 0], [0, 1000, 0, 0], [0, 0, 1000, 0], [0, 0, 0, 1000]]), Matrix([[0], [0], [0], [0]]))
+        print("Starting AutoTune for %s" % self.Name)
         while self.tuning:
+            self.Theta = self.RLS_filter.update(y, u)
+
+            a0=self.Theta[0][0]
+            a1=self.Theta[1][0]
+            B0=self.Theta[2][0]
+            B1=self.Theta[3][0]
+
             desired_s1_coff = 2 * self.Zeta * self.Omega
             desired_s0_coff = self.Omega ** 2
     
-            self.Kp = (desired_s1_coff + a1) / B
-            self.Kd = (desired_s0_coff + a0) / B
+            self.Kp = max(min((desired_s1_coff + a1) / B0, 0.0), 1.0)
+            self.Kd = max(min((desired_s0_coff + a0) / B1, 0.0), 0.5)
+
+            brain.sdcard.savefile("PDCconfig%s.txt"%(self.Name), bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta))))
+
+            self.update_gains(self.Kp, self.Kd)
+
+            wait(10, MSEC)
+
 
     def stop_tuning(self):
         self.tuning = False
-        # Additional logic for stopping the tuning process can be added here
 
     def update_gains(self, new_Kp, new_Kd):
         if self.tuning:

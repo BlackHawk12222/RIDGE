@@ -1,4 +1,4 @@
-from MatrixMath import Matrix
+from .MatrixMath import Matrix
 
 class LinearKalmanFilter:
     def __init__(self, A: Matrix, B: Matrix, H: Matrix, Q: Matrix, R: Matrix, x0: Matrix, P0: Matrix):

@@ -27,4 +27,4 @@ def aton():
     pass
 
 # Aton Functions
-comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
+comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Arcade", AtonFunc=aton)

@@ -1,7 +1,7 @@
 """Auto Configuration Package. Call start() and fill inputs."""
 
-import ASAP
-import CLA
+from .ASAP import *
+from .CLA import Start
 from vex import *
 
 def _none():
@@ -42,7 +42,7 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
 
     comp=Competition(_driver, AtonFunc)
 
-    cla=CLA.start()
+    cla=Start()
 
     return comp
 
