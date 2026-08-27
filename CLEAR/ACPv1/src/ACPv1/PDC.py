@@ -39,12 +39,20 @@ class AutoTune:
         self.Zeta= InitalZeta
         self.Omega = InitalOmega
         self.Theta = InitalTheta
-        if brain.sdcard.exists("PDCconfig%s.txt"%(self.Name)):
-            ConfigData = brain.sdcard.loadfile("PDCconfig%s.txt"%(self.Name)).decode("utf-8")
-            if self.Name not in ConfigData:
-                brain.sdcard.appendfile("PDCconfig%s.txt"%(self.Name), bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta))))
+        if brain.sdcard.exists("PDCconfig.txt"):
+            print("Loading config for %s"%(self.Name))
+            Configfile = brain.sdcard.loadfile("PDCconfig.txt")
+
+            if Configfile is not None:
+                ConfigData = Configfile.decode("utf-8").split("\n")
             else:
-                ConfigDataList=[] 
+                return
+
+            if self.Name not in ConfigData:
+                self.configdata="%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta))
+                brain.sdcard.appendfile("PDCconfig.txt", bytearray(self.configdata, "utf-8"))
+            else:
+                ConfigDataList=[]
                 for line in ConfigData:
                     ConfigDataList.append(line)
 
@@ -55,15 +63,30 @@ class AutoTune:
                         self.Zeta=ConfigDataList[i+3]
                         self.Omega=ConfigDataList[i+4]
                         self.Theta=Matrix([[float(x) for x in ConfigDataList[i+5].split(": ")[1].split(", ")]])
+                        self.configdata="%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta))
                         break
         else:
-            print(brain.sdcard.savefile("PDCconfig%s.txt"%(self.Name), bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta)))))
+            print("No config found for %s, creating new config"%(self.Name))
+            print(brain.sdcard.savefile("PDCconfig.txt", bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta)))))
+            self.configdata="%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta))
+    
+    def update_gains(self, new_Kp, new_Kd):
+        if self.tuning:
+            self.Kp = new_Kp
+            self.Kd = new_Kd
+
+            # Update the PD controller's gains
+            self.PD_controller.Kp = new_Kp
+            self.PD_controller.Kd = new_Kd
 
     def start_tuning(self,y, u, a1=0, a0=0, B0=0, B1=0):
+
         self.tuning = True
         self.RLS_filter = RLS(self.Name + "_RLS", 0.98, Matrix([[1000, 0, 0, 0], [0, 1000, 0, 0], [0, 0, 1000, 0], [0, 0, 0, 1000]]), Matrix([[0], [0], [0], [0]]))
         print("Starting AutoTune for %s" % self.Name)
         while self.tuning:
+            StartTime=timer.time()
+
             self.Theta = self.RLS_filter.update(y, u)
 
             a0=self.Theta[0][0]
@@ -73,25 +96,29 @@ class AutoTune:
 
             desired_s1_coff = 2 * self.Zeta * self.Omega
             desired_s0_coff = self.Omega ** 2
-    
-            self.Kp = max(min((desired_s1_coff + a1) / B0, 0.0), 1.0)
-            self.Kd = max(min((desired_s0_coff + a0) / B1, 0.0), 0.5)
 
-            brain.sdcard.savefile("PDCconfig%s.txt"%(self.Name), bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta))))
+            current_s1_coff = desired_s1_coff + a1
+            current_s0_coff = desired_s0_coff + a0
+
+            if B0 != 0:
+                self.Kp = max(min(current_s1_coff / B0, 0.0), 1.0)
+            if B1 != 0:
+                self.Kd = max(min(current_s0_coff / B1, 0.0), 0.5)
 
             self.update_gains(self.Kp, self.Kd)
 
-            wait(10, MSEC)
+            with open("PDCconfig.txt", "r") as file:
+                data= file.read()
 
+                data.replace(self.configdata, "%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta)))
+                self.configdata="%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta))
+
+            with open("PDCconfig.txt", "w") as file:
+                file.write(data)
+
+            print(timer.time()-StartTime)
+
+            wait(20 - (timer.time()-StartTime), MSEC)
 
     def stop_tuning(self):
         self.tuning = False
-
-    def update_gains(self, new_Kp, new_Kd):
-        if self.tuning:
-            self.Kp = new_Kp
-            self.Kd = new_Kd
-
-            # Update the PD controller's gains
-            self.PD_controller.Kp = new_Kp
-            self.PD_controller.Kd = new_Kd

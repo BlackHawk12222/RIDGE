@@ -1,15 +1,15 @@
 #Anti Slip Asyncronis Protocol
 from vex import *
 
-import uasyncio
 from .LKF import LinearKalmanFilter, Matrix
 from .PDC import PD, AutoTune
 
 def Start(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: float, WheelSize_MM: float, MotorRpmMax: int, Controller: Controller, XOdom: Rotation, OdomWheelSize_MM, StickType: str, Inertial: Inertial):
-    RunLoop=uasyncio.create_task(_run(LeftMotorList, RightMotorList, GearRatio, WheelSize_MM, MotorRpmMax, Controller, XOdom, OdomWheelSize_MM, StickType, Inertial))
+    RunLoop=Thread(_run, (LeftMotorList, RightMotorList, GearRatio, WheelSize_MM, MotorRpmMax, Controller, XOdom, OdomWheelSize_MM, StickType, Inertial))
+    print("ASAP started with %s and %s"%(LeftMotorList, RightMotorList))
     return RunLoop
 
-async def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: float, WheelSize_MM: float, MotorRpmMax: int, Controller: Controller, XOdom: Rotation, OdomWheelSize_MM, StickType: str, Inertial: Inertial):
+def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: float, WheelSize_MM: float, MotorRpmMax: int, Controller: Controller, XOdom: Rotation, OdomWheelSize_MM, StickType: str, Inertial: Inertial):
     timer=Timer()
     KP=0.5
     KD=0.1
@@ -18,12 +18,12 @@ async def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRati
     RightPD=PD("RightSide", KP, KD)
     print("PD config done")
     print("AutoTune config start")
-    LeftAutoTune=AutoTune(LeftPD, 0.7, 1.0, Matrix([[0], [0], [0], [0]]))
-    RightAutoTune=AutoTune(RightPD, 0.7, 1.0, Matrix([[0], [0], [0], [0]]))
+    LeftAutoTune=AutoTune(LeftPD, 0.7, 1.0, Matrix([[0.0], [0.0], [0.0], [0.0]]))
+    RightAutoTune=AutoTune(RightPD, 0.7, 1.0, Matrix([[0.0], [0.0], [0.0], [0.0]]))
     Thread(LeftAutoTune.start_tuning, (0, 0, 0, 0, 0, 0))
     Thread(RightAutoTune.start_tuning, (0, 0, 0, 0, 0, 0))
     print("AutoTune config done")
-    TrueSpeedFilter=LinearKalmanFilter(A=Matrix([[1]]), B=Matrix([[0.02]]), H=Matrix([[1/(WheelSize_MM/1000)]]), Q=Matrix([[0.05]]), R=Matrix([[0.25]]), x0=Matrix([[0]]), P0=Matrix([[9]]))
+    TrueSpeedFilter=LinearKalmanFilter(A=Matrix([[1.0]]), B=Matrix([[0.02]]), H=Matrix([[1/(WheelSize_MM/1000)]]), Q=Matrix([[0.05]]), R=Matrix([[0.25]]), x0=Matrix([[0.0]]), P0=Matrix([[9.0]]))
 
     AntiFightGain=300/MotorRpmMax
     Controllertolrance=5
@@ -32,10 +32,15 @@ async def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRati
     headingTolrance=2
     HeadingCorrectionGain=5
 
-    while True:
-        StartTime=timer.time()
+    
+        
 
-        if StickType == "Tank" or StickType == "tank":
+    if "Tank" in StickType or "tank" in StickType:
+
+        while True:
+
+            StartTime=timer.time()
+
             RightPos = Controller.axis2.position()
             LeftPos = Controller.axis3.position()
 
@@ -53,8 +58,15 @@ async def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRati
             VelocityDiffrenceRight=RightMotorList[0].velocity(RPM) - RightMotorList[1].velocity(RPM)
             VelocityDiffrenceLeft=LeftMotorList[0].velocity(RPM) - LeftMotorList[1].velocity(RPM)
 
-            LeftWheelSpeed=((LeftMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*(WheelSize_MM/1000)
-            RightWheelSpeed=((RightMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*(WheelSize_MM/1000)
+            if LeftMotorList[0].velocity(RPM) != 0 and LeftMotorList[1].velocity(RPM) != 0:
+                LeftWheelSpeed=((LeftMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*(WheelSize_MM/1000)
+            else:
+                LeftWheelSpeed=0
+
+            if RightMotorList[0].velocity(RPM) != 0 and RightMotorList[1].velocity(RPM) != 0:
+                RightWheelSpeed=((RightMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*(WheelSize_MM/1000)
+            else:
+                LeftWheelSpeed=0
 
             
             TrueSpeedFilter.predict(Matrix([[Inertial.acceleration(XAXIS)*9.81]]))
@@ -62,8 +74,20 @@ async def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRati
 
             TrueSpeed= TrueSpeedFilter.x.data[0][0]
 
-            SlipRateRight=(TrueSpeed-RightWheelSpeed)/TrueSpeed*100
-            SlipRateLeft=(TrueSpeed-LeftWheelSpeed)/TrueSpeed*100
+            if TrueSpeed != 0:
+                if RightWheelSpeed !=0:
+                    SlipRateRight=(TrueSpeed-RightWheelSpeed)/TrueSpeed*100
+                else:
+                    SlipRateRight=0
+
+                if LeftWheelSpeed !=0:
+                    SlipRateLeft=(TrueSpeed-LeftWheelSpeed)/TrueSpeed*100
+                else:
+                    SlipRateLeft=0
+            else:
+                SlipRateRight=0
+                SlipRateLeft=0
+
             if not StaySraight:
                 TargetRightRPM=RequestedRightRPM
                 TargetLeftRPM=RequestedLeftRPM
@@ -82,14 +106,22 @@ async def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRati
             AntiFightOutputRight=[RightOutput-((VelocityDiffrenceRight/2)*AntiFightGain), RightOutput+((VelocityDiffrenceRight/2)*AntiFightGain)]
             AntiFightOutputLeft=[LeftOutput-((VelocityDiffrenceLeft/2)*AntiFightGain), LeftOutput+((VelocityDiffrenceLeft/2)*AntiFightGain)]
 
+            #print(AntiFightOutputRight, AntiFightOutputLeft)
+            
             for i in range(len(LeftMotorList)):
                 LeftMotorList[i].spin(FORWARD, AntiFightOutputLeft[i], VOLT)
 
             for i in range(len(RightMotorList)):
                 RightMotorList[i].spin(FORWARD, AntiFightOutputRight[i], VOLT)
 
-            await uasyncio.sleep_ms(20 - StartTime)
-        elif StickType == "Arcade" or StickType == "arcade":
+            #print(timer.time() -StartTime)
+
+            wait(20 - (timer.time() - StartTime), MSEC)
+    elif "Arcade" in StickType or "arcade" in StickType:
+        while True:
+
+            StartTime=timer.time()
+
             RightPos = Controller.axis3.position() - Controller.axis4.position()
             LeftPos = Controller.axis3.position() + Controller.axis4.position()
 
@@ -142,6 +174,8 @@ async def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRati
             for i in range(len(RightMotorList)):
                 RightMotorList[i].spin(FORWARD, AntiFightOutputRight[i], VOLT)
 
-            await uasyncio.sleep_ms(20 - StartTime)
+            wait(20 - StartTime, MSEC)
+    else:
+        raise ValueError("Invalid StickType. Must be 'Tank' or 'Arcade'.")
 
 

@@ -1567,7 +1567,7 @@ try:
         
         return Monitor_wrapper
     
-    def Start() -> Thread:
+    def CLAStart() -> Thread:
         cla=Thread(log.auto_start)
         return cla
 

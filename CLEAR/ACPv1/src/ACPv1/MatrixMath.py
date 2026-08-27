@@ -1,11 +1,13 @@
 class Matrix():
     def __init__(self, data=None, rows=0, cols=0):
-        self.rows = rows
-        self.cols = cols
         if data is not None:
             self.data: list[list[float]] = data
+            self.rows = rows or len(data)
+            self.cols = cols or (len(data[0]) if data else 0)
         else:
-            self.data: list[list[float]] = [[0 for _ in range(cols)] for _ in range(rows)]
+            self.rows = rows
+            self.cols = cols
+            self.data: list[list[float]] = [[0.0 for _ in range(cols)] for _ in range(rows)]
 
     def __getitem__(self, row: int, col: int):
         return self.data[row][col]
@@ -27,6 +29,15 @@ class Matrix():
                     result.data[i][j] = self.data[i][j] + other.data[i][j]
 
             return result
+        elif isinstance(other, (int, float)):
+            result = Matrix(rows=self.rows, cols=self.cols)
+
+            for i in range(self.rows):
+
+                for j in range(self.cols):
+                    result.data[i][j] = self.data[i][j] + other
+
+            return result
         else:
             raise ValueError("The other operand must be a Matrix.")
 
@@ -44,6 +55,15 @@ class Matrix():
                     result.data[i][j] = self.data[i][j] - other.data[i][j]
 
             return result
+        elif isinstance(other, (int, float)):
+            result = Matrix(rows=self.rows, cols=self.cols)
+
+            for i in range(self.rows):
+
+                for j in range(self.cols):
+                    result.data[i][j] = self.data[i][j] - other
+
+            return result
         else:
             raise ValueError("The other operand must be a Matrix.")
         
@@ -52,17 +72,47 @@ class Matrix():
 
             if self.cols != other.rows:
                 raise ValueError("Matrices must have compatible dimensions for multiplication.")
-            
-            result = Matrix(rows=self.rows, cols=other.cols)
+
+            data=[[0.0 for _ in range(other.cols)] for _ in range(self.rows)]
 
             for i in range(self.rows):
 
                 for j in range(other.cols):
-                    result.data[i][j] = sum(self.data[i][k] * other.data[k][j] for k in range(self.cols))
+                    data[i][j] = sum(self.data[i][k] * other.data[k][j] for k in range(self.cols))
+
+            result = Matrix(data=data, rows=self.rows, cols=other.cols)
+        elif isinstance(other, (int, float)):
+            result = Matrix(rows=self.rows, cols=self.cols)
+
+            for i in range(self.rows):
+
+                for j in range(self.cols):
+                    result.data[i][j] = self.data[i][j] * other
+        else:
+            raise ValueError("The other operand must be a Matrix.")
+        
+        return result
+
+    def __truediv__(self, other):
+        if isinstance(other, (int, float)):
+            result = Matrix(rows=self.rows, cols=self.cols)
+
+            for i in range(self.rows):
+
+                for j in range(self.cols):
+                    result.data[i][j] = self.data[i][j] / other
 
             return result
         else:
-            raise ValueError("The other operand must be a Matrix.")
+            raise ValueError("The other operand must be a scalar (int or float).")
+
+    def __str__(self):
+        string = ""
+
+        for row in self.data:
+            string += "[%s] \n"%(str(row))
+
+        return string
 
     def matrix_multiply(self, other):
         if not isinstance(other, Matrix):
@@ -94,28 +144,28 @@ class Matrix():
     def inverse(self):
         if self.rows != self.cols:
             raise ValueError("Only square matrices can be inverted.")
-        
-        n = self.rows
-        A = Matrix([row[:] for row in self.data])  # Create a copy of the matrix
-        I = Matrix([[1 if i == j else 0 for j in range(n)] for i in range(n)])  # Identity matrix
 
-        for i in range(n):
-            # Find the pivot
-            pivot = A.data[i][i]
-            if pivot == 0:
+        size = self.rows
+        augmented = [self.data[row][:] + [1.0 if row == col else 0.0 for col in range(size)] for row in range(size)]
+
+        for column in range(size):
+            pivot_row = max(range(column, size),key=lambda row: abs(augmented[row][column]))
+            pivot = augmented[pivot_row][column]
+
+            if abs(pivot) <= 1e-12:
                 raise ValueError("Matrix is singular and cannot be inverted.")
-            
-            # Normalize the pivot row
-            for j in range(n):
-                A.data[i][j] /= pivot
-                I.data[i][j] /= pivot
-            
-            # Eliminate other rows
-            for k in range(n):
-                if k != i:
-                    factor = A.data[k][i]
-                    for j in range(n):
-                        A.data[k][j] -= factor * A.data[i][j]
-                        I.data[k][j] -= factor * I.data[i][j]
 
-        return Matrix(data=I, rows=n, cols=n)
+            if pivot_row != column:
+                augmented[column], augmented[pivot_row] = (augmented[pivot_row], augmented[column])
+
+            pivot = augmented[column][column]
+            augmented[column] = [value / pivot for value in augmented[column]]
+
+            for row in range(size):
+                if row == column:
+                    continue
+
+                factor = augmented[row][column]
+                augmented[row] = [current - factor * pivot_value for current, pivot_value in zip(augmented[row], augmented[column])]
+
+        return Matrix(data=[row[size:] for row in augmented], rows=size, cols=size)
