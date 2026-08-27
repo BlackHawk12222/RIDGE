@@ -25,10 +25,6 @@ class RLS:
 
         # Compute the Kalman gain
         P_phi = self.delta_matrix * phi
-        # print(self.delta_matrix.data)
-        # print(phi.data)
-        # print(P_phi.data)
-        # print((phi.transpose() * P_phi).data)
         gain_denominator = (self.lambda_ + (phi.transpose() * P_phi).data[0][0])
         K: Matrix = P_phi * (1 / gain_denominator)
 
@@ -39,5 +35,5 @@ class RLS:
         # Update the covariance matrix
         self.delta_matrix = (self.delta_matrix - (K * phi.transpose() * self.delta_matrix)) / self.lambda_
 
-        return self.Theta.data
+        return self.Theta
         

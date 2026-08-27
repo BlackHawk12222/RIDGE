@@ -39,36 +39,37 @@ class AutoTune:
         self.Zeta= InitalZeta
         self.Omega = InitalOmega
         self.Theta = InitalTheta
-        if brain.sdcard.exists("PDCconfig.txt"):
+        self.filename="PDCconfig%s.txt"%(self.Name)
+        if brain.sdcard.exists(self.filename):
             print("Loading config for %s"%(self.Name))
-            Configfile = brain.sdcard.loadfile("PDCconfig.txt")
+            Configfile = brain.sdcard.loadfile(self.filename)
 
             if Configfile is not None:
                 ConfigData = Configfile.decode("utf-8").split("\n")
             else:
                 return
 
-            if self.Name not in ConfigData:
-                self.configdata="%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta))
-                brain.sdcard.appendfile("PDCconfig.txt", bytearray(self.configdata, "utf-8"))
-            else:
-                ConfigDataList=[]
-                for line in ConfigData:
-                    ConfigDataList.append(line)
+            ConfigDataList:list[str]=[]
+            for line in ConfigData:
+                ConfigDataList.append(line)
 
-                for i in range(len(ConfigDataList)):
-                    if self.Name in ConfigDataList[i]:
-                        self.kp=ConfigDataList[i+1]
-                        self.kd=ConfigDataList[i+2]
-                        self.Zeta=ConfigDataList[i+3]
-                        self.Omega=ConfigDataList[i+4]
-                        self.Theta=Matrix([[float(x) for x in ConfigDataList[i+5].split(": ")[1].split(", ")]])
-                        self.configdata="%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta))
-                        break
+            for i in range(len(ConfigDataList)):
+                if self.Name in ConfigDataList[i]:
+                    print(ConfigDataList[i+1].split(":")[1].strip())
+                    self.kp=float(ConfigDataList[i+1].split(":")[1].strip())
+                    self.kd=float(ConfigDataList[i+2].split(":")[1].strip())
+                    self.Zeta=float(ConfigDataList[i+3].split(":")[1].strip())
+                    self.Omega=float(ConfigDataList[i+4].split(":")[1].strip())
+                    Thetalist=list(ConfigDataList[i+5].strip(":")[1])
+                    data=[]
+                    for numberpair in Thetalist:
+                        data.append(list(numberpair))
+
+                    self.Theta=Matrix(data)
+                    break
         else:
             print("No config found for %s, creating new config"%(self.Name))
-            print(brain.sdcard.savefile("PDCconfig.txt", bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta)))))
-            self.configdata="%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta))
+            print(brain.sdcard.savefile(self.filename, bytearray(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f \n Theta: %s"%(self.Name, self.Kp, self.Kd, self.Zeta, self.Omega, str(self.Theta)))))
     
     def update_gains(self, new_Kp, new_Kd):
         if self.tuning:
@@ -82,17 +83,20 @@ class AutoTune:
     def start_tuning(self,y, u, a1=0, a0=0, B0=0, B1=0):
 
         self.tuning = True
+        LastWrite=0
         self.RLS_filter = RLS(self.Name + "_RLS", 0.98, Matrix([[1000, 0, 0, 0], [0, 1000, 0, 0], [0, 0, 1000, 0], [0, 0, 0, 1000]]), Matrix([[0], [0], [0], [0]]))
         print("Starting AutoTune for %s" % self.Name)
         while self.tuning:
             StartTime=timer.time()
 
+            start1=timer.time()
             self.Theta = self.RLS_filter.update(y, u)
+            end1=timer.time()
 
-            a0=self.Theta[0][0]
-            a1=self.Theta[1][0]
-            B0=self.Theta[2][0]
-            B1=self.Theta[3][0]
+            a0=self.Theta.data[0][0]
+            a1=self.Theta.data[1][0]
+            B0=self.Theta.data[2][0]
+            B1=self.Theta.data[3][0]
 
             desired_s1_coff = 2 * self.Zeta * self.Omega
             desired_s0_coff = self.Omega ** 2
@@ -107,16 +111,14 @@ class AutoTune:
 
             self.update_gains(self.Kp, self.Kd)
 
-            with open("PDCconfig.txt", "r") as file:
-                data= file.read()
+            start= timer.time()
+            if timer.time()-LastWrite >= 3000:
+                with open(self.filename, "wb") as file:
+                    file.write(b"%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f \n Theta: %s"%(self.Name, self.Kp, self.Kd, self.Zeta, self.Omega, str(self.Theta)))
+                    LastWrite=timer.time()
+            end= timer.time()
 
-                data.replace(self.configdata, "%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta)))
-                self.configdata="%s: \n KP: %1.5f \n KD: %1.5f \n Zeta: %1.5f \n Omega: %1.5f, Theta: %s"%(self.Name, self.Kd, self.Kp, self.Zeta, self.Omega, str(self.Theta))
-
-            with open("PDCconfig.txt", "w") as file:
-                file.write(data)
-
-            print(timer.time()-StartTime)
+            print("Total time: %d, writeing: %d, updateing RLS: %d"%(timer.time()-StartTime, start-end, start1-end1))
 
             wait(20 - (timer.time()-StartTime), MSEC)
 

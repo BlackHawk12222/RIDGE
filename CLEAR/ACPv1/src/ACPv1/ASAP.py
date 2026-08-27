@@ -31,6 +31,7 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
     heading=0
     headingTolrance=2
     HeadingCorrectionGain=5
+    headingCorrection=0
 
     
         
@@ -66,7 +67,7 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             if RightMotorList[0].velocity(RPM) != 0 and RightMotorList[1].velocity(RPM) != 0:
                 RightWheelSpeed=((RightMotorList[0].velocity(RPM)*((2*3.14159)/60))/GearRatio)*(WheelSize_MM/1000)
             else:
-                LeftWheelSpeed=0
+                RightWheelSpeed=0
 
             
             TrueSpeedFilter.predict(Matrix([[Inertial.acceleration(XAXIS)*9.81]]))
