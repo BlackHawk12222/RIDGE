@@ -26,7 +26,7 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
     print("AutoTune config done")
     TrueSpeedFilter=LinearKalmanFilter(A=Matrix([[1.0]]), B=Matrix([[0.02]]), H=Matrix([[1/(WheelSize_MM/1000)]]), Q=Matrix([[0.1]]), R=Matrix([[0.8]]), x0=Matrix([[0.0]]), P0=Matrix([[9.0]]))
 
-    AntiFightGain=1200/MotorRpmMax
+    AntiFightGain=(1200/MotorRpmMax) * 0.02
     Controllertolrance=5
     CheckedIfStraight=False
     heading=0
@@ -93,8 +93,8 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             else:
                 if Inertial.heading() > heading + headingTolrance:
                     headingCorrection=(Inertial.heading() - heading) * HeadingCorrectionGain
-                elif Inertial.heading() < heading-headingTolrance:
-                    headingCorrection=(Inertial.heading() - heading) * HeadingCorrectionGain
+                elif Inertial.heading() < heading - headingTolrance:
+                    headingCorrection=(Inertial.heading() + heading) * HeadingCorrectionGain
 
                 TargetRightRPM=max(min(RequestedRightRPM-SlipRateRight + headingCorrection, -MotorRpmMax), MotorRpmMax)
                 TargetLeftRPM=max(min(RequestedLeftRPM-SlipRateLeft - headingCorrection, -MotorRpmMax), MotorRpmMax)
@@ -102,8 +102,8 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             LeftOutput=LeftPID.compute(TargetLeftRPM, AcutalLeftRPM, 0.02, 12, -12)
             RightOutput=RightPID.compute(TargetRightRPM, AcutalRightRPM, 0.02, 12, -12)
 
-            AntiFightOutputRight=[RightOutput, RightOutput]
-            AntiFightOutputLeft=[LeftOutput, LeftOutput]
+            AntiFightOutputRight=[RightOutput-((VelocityDiffrenceRight/2)*AntiFightGain), RightOutput+((VelocityDiffrenceRight/2)*AntiFightGain)]
+            AntiFightOutputLeft=[LeftOutput-((VelocityDiffrenceLeft/2)*AntiFightGain), LeftOutput+((VelocityDiffrenceLeft/2)*AntiFightGain)]
 
             #print(AntiFightOutputRight, AntiFightOutputLeft)
             
@@ -125,7 +125,7 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             RightPos = Controller.axis3.position() - Controller.axis4.position()
             LeftPos = Controller.axis3.position() + Controller.axis4.position()
 
-            StaySraight=bool(not RightPos >= LeftPos- Controllertolrance and RightPos <= LeftPos+ Controllertolrance)
+            StaySraight=bool(not RightPos >= LeftPos- Controllertolrance and not RightPos <= LeftPos+ Controllertolrance)
 
             if StaySraight and not CheckedIfStraight:
                 heading=Inertial.heading()
@@ -156,8 +156,8 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             else:
                 if Inertial.heading() > heading + headingTolrance:
                     headingCorrection=(Inertial.heading() - heading) * HeadingCorrectionGain
-                elif Inertial.heading() < heading-headingTolrance:
-                    headingCorrection=(Inertial.heading() - heading) * HeadingCorrectionGain
+                elif Inertial.heading() < heading - headingTolrance:
+                    headingCorrection=(Inertial.heading() + heading) * HeadingCorrectionGain
 
                 TargetRightRPM=max(min(RequestedRightRPM-SlipRateRight + headingCorrection, -MotorRpmMax), MotorRpmMax)
                 TargetLeftRPM=max(min(RequestedLeftRPM-SlipRateLeft - headingCorrection, -MotorRpmMax), MotorRpmMax)
