@@ -2,7 +2,7 @@
 from vex import *
 
 from .LKF import LinearKalmanFilter, Matrix
-from .PDC import PD, AutoTune
+from .PIDC import PID, AutoTune
 
 def Start(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: float, WheelSize_MM: float, MotorRpmMax: int, Controller: Controller, XOdom: Rotation, OdomWheelSize_MM, StickType: str, Inertial: Inertial):
     RunLoop=Thread(_run, (LeftMotorList, RightMotorList, GearRatio, WheelSize_MM, MotorRpmMax, Controller, XOdom, OdomWheelSize_MM, StickType, Inertial))
@@ -11,30 +11,28 @@ def Start(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: fl
 
 def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: float, WheelSize_MM: float, MotorRpmMax: int, Controller: Controller, XOdom: Rotation, OdomWheelSize_MM, StickType: str, Inertial: Inertial):
     timer=Timer()
-    KP=0.5
-    KD=0.1
-    print("PD config start")
-    LeftPD=PD("LeftSide", KP, KD)
-    RightPD=PD("RightSide", KP, KD)
-    print("PD config done")
+    KP=0.02
+    KI=0.0
+    KD=0.0
+    print("PID config start")
+    LeftPID=PID("LeftSide", KP, KI, KD)
+    RightPID=PID("RightSide", KP, KI, KD)
+    print("PID config done")
     print("AutoTune config start")
-    LeftAutoTune=AutoTune(LeftPD, 0.7, 1.0, Matrix([[0.0], [0.0], [0.0], [0.0]]))
-    RightAutoTune=AutoTune(RightPD, 0.7, 1.0, Matrix([[0.0], [0.0], [0.0], [0.0]]))
-    Thread(LeftAutoTune.start_tuning, (0, 0, 0, 0, 0, 0))
-    Thread(RightAutoTune.start_tuning, (0, 0, 0, 0, 0, 0))
+    LeftAutoTune=AutoTune(LeftPID, 0.7, 1.0, Matrix([[0.0], [0.0], [0.0], [0.0]]))
+    RightAutoTune=AutoTune(RightPID, 0.7, 1.0, Matrix([[0.0], [0.0], [0.0], [0.0]]))
+    Thread(LeftAutoTune.start_tuning, (0, 0, 3, 3, 2, 2))
+    Thread(RightAutoTune.start_tuning, (0, 0, 3, 3, 2, 2))
     print("AutoTune config done")
-    TrueSpeedFilter=LinearKalmanFilter(A=Matrix([[1.0]]), B=Matrix([[0.02]]), H=Matrix([[1/(WheelSize_MM/1000)]]), Q=Matrix([[0.05]]), R=Matrix([[0.25]]), x0=Matrix([[0.0]]), P0=Matrix([[9.0]]))
+    TrueSpeedFilter=LinearKalmanFilter(A=Matrix([[1.0]]), B=Matrix([[0.02]]), H=Matrix([[1/(WheelSize_MM/1000)]]), Q=Matrix([[0.1]]), R=Matrix([[0.8]]), x0=Matrix([[0.0]]), P0=Matrix([[9.0]]))
 
-    AntiFightGain=300/MotorRpmMax
+    AntiFightGain=1200/MotorRpmMax
     Controllertolrance=5
     CheckedIfStraight=False
     heading=0
     headingTolrance=2
-    HeadingCorrectionGain=5
+    HeadingCorrectionGain=0
     headingCorrection=0
-
-    
-        
 
     if "Tank" in StickType or "tank" in StickType:
 
@@ -45,7 +43,7 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             RightPos = Controller.axis2.position()
             LeftPos = Controller.axis3.position()
 
-            StaySraight=bool(not RightPos >= LeftPos- Controllertolrance and RightPos <= LeftPos+ Controllertolrance)
+            StaySraight=bool(not RightPos >= LeftPos - Controllertolrance and not RightPos <= LeftPos+ Controllertolrance)
 
             if StaySraight and not CheckedIfStraight:
                 heading=Inertial.heading()
@@ -75,13 +73,13 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
 
             TrueSpeed= TrueSpeedFilter.x.data[0][0]
 
-            if TrueSpeed != 0:
-                if RightWheelSpeed !=0:
+            if (TrueSpeed > 0.2 or TrueSpeed < -0.2) and RequestedRightRPM != 0 and RequestedLeftRPM != 0:
+                if RightWheelSpeed > 1 or RightWheelSpeed < -1:
                     SlipRateRight=(TrueSpeed-RightWheelSpeed)/TrueSpeed*100
                 else:
                     SlipRateRight=0
 
-                if LeftWheelSpeed !=0:
+                if LeftWheelSpeed > 1 or LeftWheelSpeed < -1:
                     SlipRateLeft=(TrueSpeed-LeftWheelSpeed)/TrueSpeed*100
                 else:
                     SlipRateLeft=0
@@ -101,11 +99,11 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
                 TargetRightRPM=max(min(RequestedRightRPM-SlipRateRight + headingCorrection, -MotorRpmMax), MotorRpmMax)
                 TargetLeftRPM=max(min(RequestedLeftRPM-SlipRateLeft - headingCorrection, -MotorRpmMax), MotorRpmMax)
 
-            LeftOutput=LeftPD.compute(TargetLeftRPM, AcutalLeftRPM, 0.02, 12, -12)
-            RightOutput=RightPD.compute(TargetRightRPM, AcutalRightRPM, 0.02, 12, -12)
+            LeftOutput=LeftPID.compute(TargetLeftRPM, AcutalLeftRPM, 0.02, 12, -12)
+            RightOutput=RightPID.compute(TargetRightRPM, AcutalRightRPM, 0.02, 12, -12)
 
-            AntiFightOutputRight=[RightOutput-((VelocityDiffrenceRight/2)*AntiFightGain), RightOutput+((VelocityDiffrenceRight/2)*AntiFightGain)]
-            AntiFightOutputLeft=[LeftOutput-((VelocityDiffrenceLeft/2)*AntiFightGain), LeftOutput+((VelocityDiffrenceLeft/2)*AntiFightGain)]
+            AntiFightOutputRight=[RightOutput, RightOutput]
+            AntiFightOutputLeft=[LeftOutput, LeftOutput]
 
             #print(AntiFightOutputRight, AntiFightOutputLeft)
             
@@ -115,7 +113,8 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             for i in range(len(RightMotorList)):
                 RightMotorList[i].spin(FORWARD, AntiFightOutputRight[i], VOLT)
 
-            #print(timer.time() -StartTime)
+            print(timer.time() -StartTime)
+            print("output: %s, %s TrueSpeed: %s, targets: %s, %s"%(AntiFightOutputLeft, AntiFightOutputRight, TrueSpeed, TargetLeftRPM, TargetRightRPM))
 
             wait(20 - (timer.time() - StartTime), MSEC)
     elif "Arcade" in StickType or "arcade" in StickType:
@@ -163,8 +162,8 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
                 TargetRightRPM=max(min(RequestedRightRPM-SlipRateRight + headingCorrection, -MotorRpmMax), MotorRpmMax)
                 TargetLeftRPM=max(min(RequestedLeftRPM-SlipRateLeft - headingCorrection, -MotorRpmMax), MotorRpmMax)
 
-            LeftOutput=LeftPD.compute(TargetLeftRPM, AcutalLeftRPM, 0.02, 12, -12)
-            RightOutput=RightPD.compute(TargetRightRPM, AcutalRightRPM, 0.02, 12, -12)
+            LeftOutput=LeftPID.compute(TargetLeftRPM, AcutalLeftRPM, 0.02, 12, -12)
+            RightOutput=RightPID.compute(TargetRightRPM, AcutalRightRPM, 0.02, 12, -12)
 
             AntiFightOutputRight=[RightOutput-((VelocityDiffrenceRight/2)*AntiFightGain), RightOutput+((VelocityDiffrenceRight/2)*AntiFightGain)]
             AntiFightOutputLeft=[LeftOutput-((VelocityDiffrenceLeft/2)*AntiFightGain), LeftOutput+((VelocityDiffrenceLeft/2)*AntiFightGain)]
@@ -174,6 +173,9 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
 
             for i in range(len(RightMotorList)):
                 RightMotorList[i].spin(FORWARD, AntiFightOutputRight[i], VOLT)
+
+            print(timer.time() -StartTime)
+            print("output: %s, %s TrueSpeed: %s, targets: %s, %s"%(AntiFightOutputLeft, AntiFightOutputRight, TrueSpeed, TargetLeftRPM, TargetRightRPM))
 
             wait(20 - StartTime, MSEC)
     else:
