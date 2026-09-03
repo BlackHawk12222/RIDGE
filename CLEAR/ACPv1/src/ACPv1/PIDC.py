@@ -17,7 +17,9 @@ class PID:
     def compute(self, setpoint, measurement, dt, MaxOutput, MinOutput):
         error = setpoint - measurement
 
-        proprtional = self.KP * error
+        Dynamic_KP = self.KP * (1 + abs(error) * 0.1)  # Dynamic proportional gain based on error magnitude 
+
+        proprtional = Dynamic_KP * error
 
         self.Integral += self.KI * (error * dt)
 
@@ -113,6 +115,7 @@ class AutoTune:
             if B1 != 0:
                 self.Kd = max(min(current_s0_coff / B1, 0.0), 0.5)
 
+            print("AutoTune for %s: Kp=%.5f, Kd=%.5f, Zeta=%.5f, Omega=%.5f, Theta=%s" % (self.Name, self.Kp, self.Kd, self.Zeta, self.Omega, str(self.Theta)))
             self.update_gains(self.Kp, self.Kd)
 
             if timer.time()-LastWrite >= 3000:
