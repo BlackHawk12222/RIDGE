@@ -18,14 +18,14 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
     for motor in RightMotorList:
         motor.set_stopping(COAST)
 
-    KP=0.002
-    KI=0.0
-    KD=0.00001
+    KP=1
+    B0=2
+    Omega_o=4
     print("PID config start")
     #LeftController=PID("LeftSide", KP, KI, KD)
     #RightController=PID("RightSide", KP, KI, KD)
-    LeftController=LADRC(KP, 0.5, 1, 50)
-    RightController=LADRC(KP, 0.5, 1, 50)
+    LeftController=LADRC(KP, 0.5, B0, Omega_o, 0.02)
+    RightController=LADRC(KP, 0.5, B0, Omega_o, 0.02)
     RightController.reset(0)
     LeftController.reset(0)
     print("PID config done")
@@ -149,15 +149,13 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
                         LeftMotorList[i].stop(COAST)
                     for i in range(len(RightMotorList)):
                         RightMotorList[i].stop(COAST)
-                Stopped=False
+                    Stopped=False
 
                 for i in range(len(LeftMotorList)):
                     LeftMotorList[i].spin(FORWARD, AntiFightOutputLeft[i], VOLT)
     
                 for i in range(len(RightMotorList)):
                     RightMotorList[i].spin(FORWARD, AntiFightOutputRight[i], VOLT)
-
-            
 
             #print(timer.time() -StartTime)
             print("output: %s, %s TrueSpeed: %s, targets: %s, %s RightRPM: %s LeftRPM: %s"%(AntiFightOutputLeft, AntiFightOutputRight, TrueSpeed, TargetLeftRPM, TargetRightRPM, AcutalRightRPM, AcutalLeftRPM))
