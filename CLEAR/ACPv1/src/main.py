@@ -7,9 +7,9 @@ brain=Brain()
 
 # Robot configuration code
 controller_1 = Controller(PRIMARY)
-Right1 = Motor(Ports.PORT13, GearSetting.RATIO_6_1, True)
+Right1 = Motor(Ports.PORT13, GearSetting.RATIO_6_1, False)
 Right2 = Motor(Ports.PORT14, GearSetting.RATIO_6_1, False)
-left1 = Motor(Ports.PORT11, GearSetting.RATIO_6_1, False)
+left1 = Motor(Ports.PORT11, GearSetting.RATIO_6_1, True)
 left2 = Motor(Ports.PORT12, GearSetting.RATIO_6_1, True)
 OtherMotor=Motor(Ports.PORT2)
 inertial = Inertial(Ports.PORT4)
