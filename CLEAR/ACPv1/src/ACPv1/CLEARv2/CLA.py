@@ -754,6 +754,9 @@ try:
         """Main object for the CLEAR import. \n To start logging use the "logstart()" function in this object to do the main logging if you need help with its inputs use help() over the "logstart()" function."""
                     
         def __init__(self):
+            if not brain.sdcard.exists("ACPv1/Data/loghistory.txt"):
+                brain.sdcard.savefile("ACPv1/Data/loghistory.txt", bytearray(b"0000000000000000000000"))
+
             self.MiscMotors: list[Motor]=[]
             self.MiscMotorsName: list[str]=[]
             self.LeftMotors: list[Motor]=[]
@@ -1188,6 +1191,9 @@ try:
                     except NameError:
                         # print(Module)
                         continue
+                    except AttributeError:
+                        # print(Module)
+                        continue
 
                     if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>") and auto_do_variables and item not in self.VariablesAdded:
                         log.add_logstart("log.capture.variable('%s.%s', %s.%s)"%(Module, item, Module, item.replace("'", "")))
@@ -1314,7 +1320,7 @@ try:
             
             def log(self) -> None:
                 """
-                Archives the Log.txt file.
+                Archives the Log.csv file.
                 
                 Args:
                 None
@@ -1322,30 +1328,44 @@ try:
 
                 speed=log_time.time()
                 log.adding=False
+                loop=True
+                number_of_archived_lines=0
 
                 reversecodes={value: key for key, value in log.codes.items()}
-                
-                with open("Log.csv", "rb") as file:
-                    chunk_buffer=bytearray(20480)
-                    archivelist=bytearray(20480)
-                    archivelist_offset=0
-                    
-                    while True:
-                        chunk=file.readinto(chunk_buffer)
+                while loop:
+                    loop=False
+                    if brain.sdcard.size("Log.csv") < 100000:
+                        logfile=brain.sdcard.loadfile("Log.csv")
+                    else:
+                        logfile=brain.sdcard.loadfile("Log.csv", 100000)
+                        loop=True
 
-                        if not chunk:
-                            break
-                        
-                        loglist=chunk_buffer.decode(log.format).split("\n")
-                        incomplete=bytearray()
-                        for i in range(len(loglist)):
-                            logline= loglist[i].split(",")
 
-                            if archivelist_offset > 20000:
-                                brain.sdcard.appendfile("loghistory.txt", archivelist[0:archivelist_offset])
-                                archivelist_offset=0
+                    number_of_lines=logfile.count(b'\n')
+
+                    if number_of_lines > 20000:
+                        print("Archiving Log.csv...")
+                        loglines=logfile.decode(log.format).split("\n")
+                        archive_data=loglines[20000:len(loglines)-1]
+                        newlog=loglines[0:20000]
+                        brain.sdcard.savefile("Log.csv", bytearray("\n".join(newlog), log.format))
+                        del loglines, newlog
+
+                        archivelist=bytearray(204800)
+                        archivelist_offset=0
+                        number_of_archived_lines+=len(archive_data)
+
+                        while True:
                             
-                            if len(logline)>=3:
+                            loglist=archive_data
+                            incomplete=bytearray()
+                            for i in range(len(loglist)):
+                                logline= loglist[i].split(",")
+
+                                if archivelist_offset > 20000:
+                                    brain.sdcard.appendfile("ACPv1/Data/loghistory.txt", archivelist[0:archivelist_offset])
+                                    archivelist_offset=0
+                                
                                 logstring=logline[1].strip()
                                 numbers=logline[0].split(" ")
                                 try:
@@ -1358,35 +1378,22 @@ try:
                                 bufferSize=len(entry)
                                 pack_into("=%ds"%(bufferSize), archivelist, archivelist_offset, entry)
                                 archivelist_offset+=bufferSize
-                            else:
-                                incomplete.extend(loglist[i].encode(log.format))
-                                if incomplete.decode(log.format).count('>') != 0:
-                                    logline=incomplete.decode(log.format).split(",")
-                                    if len(logline)>=3:
-                                        logstring=logline[1].strip()
-                                        numbers=logline[0].split(" ")
-                                        try:
-                                            hexindex="{:#x}".format(int(numbers[0]))
-                                            hextime="{:#x}".format(int(numbers[1].replace(" ms]", "").replace("[]", "")))
-                                        except ValueError:
-                                            incomplete.extend(loglist[i].encode(log.format))
-                                            continue
-                                        entry=b"%s %s %s%s\n"%(hexindex, hextime, reversecodes.get(logstring, logstring), str(logline[2:len(logline)-1]).replace("'", "").replace("[", "").replace("]", ""))
-                                        bufferSize=len(entry)
-                                        pack_into("=%ds"%(bufferSize), archivelist, archivelist_offset, entry)
-                                        archivelist_offset+=bufferSize
-                                        incomplete=bytearray()
-                                
-                            del logline
-                        brain.sdcard.appendfile("loghistory.txt", archivelist[0:archivelist_offset])
-                        archivelist_offset=0
-                        print("done loop")
-                log.clear()
-                log.adding=True
+                                    
+                                del logline
+                            brain.sdcard.appendfile("ACPv1/Data/loghistory.txt", archivelist[0:archivelist_offset])
+                            archivelist_offset=0
+                            print("done loop")
 
-                collect()
-                log.add("DS1", str(log_time.time() - speed) + " MSEC")
-                del speed
+                    log.adding=True
+
+                    collect()
+                    log.add("DS1", str(log_time.time() - speed) + " MSEC")
+                    del speed
+
+                with open("ACPv1/Data/loghistory.txt", 'r+') as file:
+                    file.seek(0)
+                    file.write(str(number_of_archived_lines))
+
 
             def index_history(self) -> None:
                 """

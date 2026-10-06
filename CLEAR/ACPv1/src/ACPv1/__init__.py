@@ -1,7 +1,7 @@
 """Auto Configuration Package. Call start() and fill inputs."""
 
 from .ASAP import *
-from .CLEARv2.CLA import CLAStart
+from .CLEARv2 import *
 from vex import *
 
 # Filler function.
@@ -95,6 +95,7 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
     comp=Competition(ACP_driver, AtonFunc)
 
     # Start the CLA thread for the CLEARv2 package.
-    cla=CLAStart()
+    print(dir(CLEARv2.CLA))
+    cla=CLEARv2.CLA.CLAStart()
 
     return comp
