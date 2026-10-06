@@ -20,8 +20,6 @@ wait(200, MSEC)
 # clear the console to make sure we don't have the REPL in the console
 print("\033[2J")
 
-inertial.calibrate()
-
 #Future aton test
 def aton():
     pass

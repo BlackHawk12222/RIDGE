@@ -1,8 +1,8 @@
 #Anti Slip Asyncronis Protocol
 from vex import *
 
-from .LKF import LinearKalmanFilter, Matrix
-from .LADRCC import NLADRC
+from .General.LKF import LinearKalmanFilter, Matrix
+from .NLADRCC import NLADRC
 
 def Start(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: float, WheelSize_MM: float, MotorRpmMax: int, Controller: Controller, XOdom: Rotation, OdomWheelSize_MM, StickType: str, Inertial: Inertial):
     RunLoop=Thread(_run, (LeftMotorList, RightMotorList, GearRatio, WheelSize_MM, MotorRpmMax, Controller, XOdom, OdomWheelSize_MM, StickType, Inertial))

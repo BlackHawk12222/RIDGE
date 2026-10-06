@@ -1,27 +1,30 @@
 """Auto Configuration Package. Call start() and fill inputs."""
 
 from .ASAP import *
-from .CLA import CLAStart
+from .CLEARv2.CLA import CLAStart
 from vex import *
 
+# Filler function.
 def _none():
     pass
 
 brain=Brain()
-
-comp= Competition(_none, _none)
 cla: Thread
 
+# Function for the driver control.
 def ACP_driver():
 
     print("Driver function called")
 
+    # Load the config file and set the variables for the driver control.
     variabledata= brain.sdcard.loadfile("ACPv1config.txt").decode("utf-8")
     variabledata=variabledata.split("\n")
 
+    # Initializeing motor lists.
     LeftMotors: list[Motor]=[]
     RightMotors: list[Motor]=[]
 
+    # Loop through the config file and set the variables for the driver control.
     for line in variabledata:
         if "LeftMotors" in line:
             LeftMotorsStr: list[str]=eval(line.split(": ")[1])
@@ -48,18 +51,24 @@ def ACP_driver():
         elif "inertial" in line:
             inertial: Inertial=eval(line.split(": ")[1])
 
+    # Start the ASAP function with the variables from the config file.
+    inertial.calibrate()
+
     print("Variable selection suscessful, starting ASAP with vars %s, %s, %s, %s, %s, %s, %s, %s, %s, %s"%(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial))
 
     Start(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial)
 
-
+# Primary start method for the ACPv1 package. Call this in main.py to start the package.
 def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Tank", AtonFunc=_none) -> Competition:
     global comp, cla
 
-    ObjList=dir()
+    ObjList=dir()  # Get a list of all objects in the current scope.
+
+    # Initialize motor lists as strings.
     RightMotors: list[str]=[]
     LeftMotors: list[str]=[]
 
+    # Auto finds the motors, controller, Inertial, and odometry sensor in the code and saves them to a config file for later use.
     for item in ObjList:
         try:
             item_type=str(type(eval(item)))
@@ -80,14 +89,12 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
     
     del ObjList
 
-    brain.sdcard.savefile("ACPv1config.txt", bytearray(b"LeftMotors: %s\n RightMotors: %s\n GearRatio: %1.5f \n Wheelsize_MM: %1.5f \n MotorMax_RPM: %d \n controller: %s \n Xodom: %s \nOdomWheelSize_MM: %1.5f \n StickType: %s \n inertial: %s"%(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial)))
+    brain.sdcard.savefile("ACPv1/Config/ACPv1config.txt", bytearray(b"LeftMotors: %s\n RightMotors: %s\n GearRatio: %1.5f \n Wheelsize_MM: %1.5f \n MotorMax_RPM: %d \n controller: %s \n Xodom: %s \nOdomWheelSize_MM: %1.5f \n StickType: %s \n inertial: %s"%(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial)))
 
+    # Start the driver control and the autonomous function.
     comp=Competition(ACP_driver, AtonFunc)
 
-    ACP_driver()
-
+    # Start the CLA thread for the CLEARv2 package.
     cla=CLAStart()
 
     return comp
-
-__all__=["CLA", "ASAP"]

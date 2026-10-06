@@ -754,8 +754,6 @@ try:
         """Main object for the CLEAR import. \n To start logging use the "logstart()" function in this object to do the main logging if you need help with its inputs use help() over the "logstart()" function."""
                     
         def __init__(self):
-            if not brain.sdcard.exists("loghistory.txt"):
-                brain.sdcard.savefile("loghistory.txt")
             self.MiscMotors: list[Motor]=[]
             self.MiscMotorsName: list[str]=[]
             self.LeftMotors: list[Motor]=[]
@@ -783,7 +781,7 @@ try:
             self.variable=const("DV0")
             self.VariablesAdded=[]
 
-            brain.sdcard.savefile("Logstart.txt")  # Clears Logstart file for refresh of instructions in it.
+            brain.sdcard.savefile("ACPv1/Config/Logstart.txt")  # Clears Logstart file for refresh of instructions in it.
 
             # Predefined Log Codes dictionary
             self.codes:dict={
@@ -1021,7 +1019,7 @@ try:
             funtion= Funtion for object Log
             """
 
-            brain.sdcard.appendfile("Logstart.txt" , bytearray(funtion + "\n", self.format))
+            brain.sdcard.appendfile("ACPv1/Config/Logstart.txt" , bytearray(funtion + "\n", self.format))
             
         def auto_start(self):
             """
@@ -1232,7 +1230,7 @@ try:
             del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port
 
             # print("Logstart: ")
-            # print(brain.sdcard.loadfile("Logstart.txt").decode(self.format))
+            # print(brain.sdcard.loadfile("ACPv1/Config/Logstart.txt").decode(self.format))
 
             _exec=exec
             lwait=wait
@@ -1249,7 +1247,7 @@ try:
 
             # Loads extra funtions from file.
             try:
-                addedfuntion=brain.sdcard.loadfile("Logstart.txt").decode(self.format)
+                addedfuntion=brain.sdcard.loadfile("ACPv1/Config/Logstart.txt").decode(self.format)
                 added_bytes=compile(addedfuntion, '<string>' ,'exec', 0,  False, 2)
                 added_bytes_used=const(True)
             except AttributeError:
@@ -1464,12 +1462,12 @@ try:
                 "inertial_axis_tolrance_Gs": 0.5,
             }
             
-            if brain.sdcard.is_inserted() and not brain.sdcard.exists("settings.txt"):
+            if brain.sdcard.is_inserted() and not brain.sdcard.exists("ACPv1/Config/settings.txt"):
                 setting=""
                 for value, key in self.default_settings_dictonary.items():
                     setting+="%s : %s \n"%(value, key)
-                brain.sdcard.savefile("settings.txt", bytearray(setting, "utf-8"))
-                self.settings_text=brain.sdcard.loadfile("settings.txt").decode("utf-8").split("\n")
+                brain.sdcard.savefile("ACPv1/Config/settings.txt", bytearray(setting, "utf-8"))
+                self.settings_text=brain.sdcard.loadfile("ACPv1/Config/settings.txt").decode("utf-8").split("\n")
                 for line in self.settings_text:
                     dict_stuff=line.split(":")
 
@@ -1477,7 +1475,7 @@ try:
                         self.settings[dict_stuff[0]]=dict_stuff[1]
                 
             else:
-                self.settings_text=brain.sdcard.loadfile("settings.txt").decode("utf-8").split("\n")
+                self.settings_text=brain.sdcard.loadfile("ACPv1/Config/settings.txt").decode("utf-8").split("\n")
                 for line in self.settings_text:
                     dict_stuff=line.split(":")
 
@@ -1505,7 +1503,7 @@ try:
 
             # Loads extra funtions from file.
             try:
-                AddedFuntion=brain.sdcard.loadfile("Logstart.txt").decode(log.format)
+                AddedFuntion=brain.sdcard.loadfile("ACPv1/Config/Logstart.txt").decode(log.format)
                 AddedBytes=compile(AddedFuntion, '<string>' ,'exec', 0,  False, 2)
                 AddedBytesUsed=const(True)
             except AttributeError:
