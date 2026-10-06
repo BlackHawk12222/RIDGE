@@ -33,17 +33,17 @@ brain.screen.clear_screen()
 
 # Robot configuration code
 ColorSensor = Optical(Ports.PORT2)
-DistanceSensor = Distance(Ports.PORT1)
-Horizontal_rotation = Rotation(Ports.PORT4, False)
-Vertical_Rotation = Rotation(Ports.PORT5, False)
-Inertial_ = Inertial(Ports.PORT6)
+DistanceSensor = Distance(Ports.PORT1)      
+Horizontal_rotation = Rotation(Ports.PORT6, False)
+Vertical_Rotation = Rotation(Ports.PORT1, False)
+Inertial_ = Inertial(Ports.PORT4)
 Bar_Switcher = Motor(Ports.PORT3, GearSetting.RATIO_18_1, False)
 controller_1 = Controller(PRIMARY)
-left_motor_a = Motor(Ports.PORT19, GearSetting.RATIO_6_1, True)
-left_motor_b = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)
+left_motor_a = Motor(Ports.PORT11, GearSetting.RATIO_6_1, True)
+left_motor_b = Motor(Ports.PORT12, GearSetting.RATIO_6_1, True)
 left_drive_smart = MotorGroup(left_motor_a, left_motor_b)
-right_motor_a = Motor(Ports.PORT17, GearSetting.RATIO_6_1, False)
-right_motor_b = Motor(Ports.PORT18, GearSetting.RATIO_6_1, False)
+right_motor_a = Motor(Ports.PORT13, GearSetting.RATIO_6_1, False)
+right_motor_b = Motor(Ports.PORT14, GearSetting.RATIO_6_1, False)
 right_drive_smart = MotorGroup(right_motor_a, right_motor_b)
 drivetrain = DriveTrain(left_drive_smart, right_drive_smart, 319.19, 330.2, 254, MM, 0.75)
 Horizontal_AID = Rotation(Ports.PORT7, False)
@@ -77,11 +77,6 @@ def convert_color_to_string(col):
         return "transparent"
     return ""
 
-def play_vexcode_sound(sound_name):
-    # Helper to make playing sounds from the V5 in VEXcode easier and
-    # keeps the code cleaner by making it clear what is happening.
-    print("VEXPlaySound:" + sound_name)
-    wait(5, MSEC)
 
 # add a small delay to make sure we don't print in the middle of the REPL header
 wait(200, MSEC)
@@ -200,23 +195,16 @@ P1_P2_DIVISOR = 0
 P2_X_scaled = 0
 
 def scan_points():
-    global points_in_POINTS, temp
-    points_in_POINTS = 0
-    temp = 1
-    for repeat_count in range(int(len(POINTS))):
-        if not POINTS[temp - 1] == 0:
-            points_in_POINTS = points_in_POINTS + 1
-        temp = temp + 1
-        wait(5, MSEC)
+    pass
 
-def print_to_screen_commaSeparator(print_to_screen_text_separate_new_lines_with__22__22__text):
+def printCS(text):
     global temp
     temp = 1
-    for repeat_count2 in range(int(len(print_to_screen_text_separate_new_lines_with__22__22__text))):
-        if (print_to_screen_text_separate_new_lines_with__22__22__text[temp - 1]) == ",":
+    for repeat_count2 in range(int(len(text))):
+        if (text[temp - 1]) == ",":
             brain.screen.next_row()
         else:
-            brain.screen.print(print_to_screen_text_separate_new_lines_with__22__22__text[temp - 1])
+            brain.screen.print(text[temp - 1])
         temp = temp + 1
         wait(5, MSEC)
 
@@ -227,7 +215,7 @@ def Check_for_bar():
     spin_motor()
 
 def check_dist():
-    global Dist
+    global Dist, Color_Flips
     Color_Flips = 0
     Dist = DistanceSensor.object_distance(MM)
 
@@ -251,15 +239,13 @@ def Do_APF():
         drivetrain.turn(RIGHT)
 
 def spin_motor():
-    if Color_Flips == 1:
+    while Color_Flips == 1:
         Bar_Switcher.spin_for(FORWARD, 180, DEGREES)
         wait(0.1, SECONDS)
         check_dist()
         if Dist < 50:
             check_color_redundancy()
-        spin_motor()
-    else:
-        Bar_Switcher.stop()
+    Bar_Switcher.stop()
 
 def Find_Closest_Point():
     global Closest_ID, Closest_Distance, temp
@@ -270,8 +256,9 @@ def Find_Closest_Point():
     for repeat_count3 in range(int(len(Obstacle_Points))):
         if Obstacle_Points[temp - 1] == 0:
             break
-        Parse_A___closest_point()
-        Parse_B___closest_point()
+        #Parse_A___closest_point()
+        #Parse_B___closest_point()
+        Parse_all()
         Get_distance_to_x___y(Coords1, Coords2)
         if distance_to_point < Closest_Distance:
             Closest_Distance = distance_to_point
@@ -283,6 +270,7 @@ def Find_Closest_Point():
         Parse_B___closest_point()
 
 def Parse_A___closest_point():
+    #if parse_all is used, this function is not needed
     global Temp2, i, Coords1
     # Parse the first half of the coordinates (X axis)
     Temp2 = ""
@@ -301,8 +289,11 @@ def Parse_all():
     global Temp2, i, Coords1, Coords2
     # Parse the both halves of the coordinates (X axis and Y axis)
     Coords1, Coords2 = Obstacle_Points[temp - 1].split(",")
+    Coords1 = int(Coords1)
+    Coords2 = int(Coords2)
 
 def Parse_B___closest_point():
+    #if parse_all is used, this function is not needed
     global Temp2, i, Coords2
     # Parse the Y axis from entry
     Temp2 = ""
@@ -311,40 +302,6 @@ def Parse_B___closest_point():
         i = i + 1
         wait(5, MSEC)
     Coords2 = Temp2
-
-def auto_calibrate_odom():
-    P1_P2_DIVISOR = 0.1
-    drivetrain.set_turn_velocity(20, PERCENT)
-    drivetrain.turn(RIGHT)
-    while True:
-        global Heading, Vertical_current, Horizontal_current, X_assist_Current, Delta_forward, Delta_sideways, Last_forward, Last_sideways, Forward_movement, Sideways_movement, Change_x, Change_y, PosX, PosY
-        # Find Heading & set variable to it
-        Heading = Inertial_.heading(DEGREES)
-        # Get current values for the odom pod
-        Vertical_current = Vertical_Rotation.position(DEGREES)
-        Horizontal_current = Horizontal_rotation.position(DEGREES)
-        X_assist_Current = Horizontal_AID.position(DEGREES)
-        # Accommodate for in - place rotation by multiplying delta heading by 2.12 (where 2.12*90=90 rot from horizontal wheel)
-        offset_accommodation()
-        # Get Delta values for the odom pod
-        Delta_forward = Vertical_current - Last_forward
-        Delta_sideways = (Horizontal_current - Last_sideways) - X_Rot_Accomodate
-        # Set previous value
-        Last_forward = Vertical_current
-        Last_sideways = Horizontal_current
-        # Find out how far we've traveled in each direction
-        Forward_movement = Delta_forward * 0.66463333333
-        Sideways_movement = Delta_sideways * 0.66463333333
-        # Set real X and Y changes
-        Change_x = Forward_movement * math.sin(Heading / 180.0 * math.pi) + Sideways_movement * math.cos(Heading / 180.0 * math.pi)
-        Change_y = Forward_movement * math.cos(Heading / 180.0 * math.pi) - Sideways_movement * math.sin(Heading / 180.0 * math.pi)
-        # Update field position
-        PosX = PosX + Change_x
-        PosY = PosY + Change_y
-        if math.fabs(Delta_sideways) > 5:
-            P1_P2_DIVISOR = P1_P2_DIVISOR + 0.1
-        else:
-            break
 
 
 def ODOM_loop():
@@ -372,14 +329,15 @@ def ODOM_loop():
     Change_y = Forward_movement * math.cos(Heading / 180.0 * math.pi) - Sideways_movement * math.sin(Heading / 180.0 * math.pi)
     # Update field position
     PosX = PosX + Change_x
-    PosY = PosY + Change_y
+    PosY = PosY + -1 *Change_y
+    wait(5, MSEC)
 
 def offset_accommodation():
 
     global P1_P2_DIVISOR, p1_p2_diff__X__, P2_X_scaled, X_Rot_Accomodate
-    P1_P2_DIVISOR = 10000
+    P1_P2_DIVISOR = 1.222222
     p1_p2_diff__X__ = X_assist_Current - Horizontal_current
-    P2_X_scaled = p1_p2_diff__X__ / P1_P2_DIVISOR
+    P2_X_scaled = p1_p2_diff__X__ * P1_P2_DIVISOR
     X_Rot_Accomodate = P2_X_scaled
 
 def Get_heading_relative_to_robot(Get_heading_relative_to_robot__heading):
@@ -396,17 +354,10 @@ def Get_heading_relative_to_robot(Get_heading_relative_to_robot__heading):
         direction_to_turn = "right"
 
 def Get_Direction_To_X_Y_x_y(Get_Direction_To_X_Y_x_y__x, Get_Direction_To_X_Y_x_y__y):
-    global dx, dy, DX_Correction, Direction_To_Point
+    global dx, dy, Direction_To_Point
     dx = Get_Direction_To_X_Y_x_y__x - PosX
     dy = Get_Direction_To_X_Y_x_y__y - PosY
-    if dx == 0:
-        DX_Correction = 1
-    else:
-        DX_Correction = 0
-    if dx < DX_Correction:
-        Direction_To_Point = 180 + math.atan(dy / dx) / math.pi * 180
-    else:
-        Direction_To_Point = math.atan(dy / dx) / math.pi * 180
+    Direction_To_Point = math.atan2(dy,dx) / math.pi * 180
     Direction_To_Point = (Direction_To_Point + 360) % 360
     Get_heading_relative_to_robot(Direction_To_Point)
 
@@ -421,15 +372,16 @@ def AIM_drive(mm):
 
 
 def set_velocity(side, velocity):
-    if side == "left":
+    if side.lower() == "left":
         left_drive_smart.set_velocity(velocity, PERCENT)
-    elif side == "right":
+    elif side.lower() == "right":
         right_drive_smart.set_velocity(velocity, PERCENT)
     else:
         left_drive_smart.set_velocity(velocity, PERCENT)
         right_drive_smart.set_velocity(velocity, PERCENT)
 
 def when_started1():
+    #setup code to run when the program starts
     global MyColor, drivetrain, Bar_Switcher, ColorSensor
     drivetrain.set_stopping(COAST)
     Bar_Switcher.set_velocity(100, PERCENT)
@@ -441,8 +393,8 @@ def when_started1():
         wait(5, MSEC)
 
 def when_started2():
+    #show setup progression on the brain screen
     global SETUP_progression
-    SETUP_progression = 0
     while not SETUP_progression > 0:
         brain.screen.clear_screen()
         brain.screen.set_cursor(1, 1)
@@ -453,34 +405,43 @@ def when_started2():
     while not SETUP_progression > 1:
         brain.screen.clear_screen()
         brain.screen.set_cursor(1, 1)
-        brain.screen.print("Setup: Scanning Autonomous POINTS...")
+        brain.screen.print("Setup: Scanning Autonomous POINTS...",SETUP_progression)
         brain.screen.next_row()
         brain.screen.render()
         wait(5, MSEC)
     while not SETUP_progression > 2:
         brain.screen.clear_screen()
         brain.screen.set_cursor(1, 1)
-        brain.screen.print("Setup: Finishing...")
+        brain.screen.print("Setup: Finishing...",SETUP_progression)
         brain.screen.next_row()
         brain.screen.render()
         wait(5, MSEC)
 
 def when_started3():
+    #calibration, scanning, and setup code to run when the program starts
     global SETUP_progression, Avoidance_Distance, Obstacle_Points, POINTS, PosX, PosY, Last_forward, Last_sideways
     my_event.broadcast()
+    SETUP_progression = 1
     Inertial_.calibrate()
-    #while Inertial_.is_calibrating():
-        #sleep(50)
+    while Inertial_.is_calibrating():
+        sleep(50)
     SETUP_progression = SETUP_progression + 1
     # Add points to the list; leave all "empty" ones at zero
+    brain.screen.print("before")
     Avoidance_Distance = 100
     scan_points()
+    brain.screen.print("after")
     SETUP_progression = SETUP_progression + 1
     PosX = 0
     PosY = 0
     Last_forward = Vertical_Rotation.position(DEGREES)
     Last_sideways = Horizontal_rotation.position(DEGREES)
     SETUP_progression = SETUP_progression + 1
+    brain.screen.clear_screen()
+    brain.screen.set_cursor(1, 1)
+    brain.screen.print("Setup complete")
+    bootAnim()
+    brain.screen.set_fill_color(Color.TRANSPARENT)
     while True:
         ODOM_loop()
         brain.screen.clear_screen()
@@ -489,9 +450,10 @@ def when_started3():
         brain.screen.next_row()
         brain.screen.print(str("current vertical: ") + str(Vertical_current))
         brain.screen.next_row()
-        brain.screen.print(str("X position: ") + str(PosX))
         brain.screen.next_row()
         brain.screen.print(str("Y position: ") + str(PosY))
+        brain.screen.next_row()
+        brain.screen.print(str("X position: ") + str(PosX))
         brain.screen.next_row()
         brain.screen.print(str("Heading: ") + str(Heading))
         brain.screen.next_row()
@@ -504,6 +466,7 @@ def when_started3():
         wait(5, MSEC)
 
 def my_event_callback_0():
+    #connectivity code to show on controller throughout the program
     while True:
         controller_1.screen.clear_row(3)
         controller_1.screen.set_cursor(controller_1.screen.row(), 1)
@@ -528,6 +491,7 @@ def my_event_callback_0():
         wait(5, MSEC)
 
 def draw_button_at_x_y_width_width_height_height(draw_button_at_x_y_width_width_height_height__x, draw_button_at_x_y_width_width_height_height__y, draw_button_at_x_y_width_width_height_height__width, draw_button_at_x_y_width_width_height_height__height):
+    # Draws a button on the brain screen and checks if it is pressed
     global button_pressed, Auto_Side, MyColor, v, sizeDrawRound, AnimProgress
     brain.screen.draw_rectangle(draw_button_at_x_y_width_width_height_height__x, draw_button_at_x_y_width_width_height_height__y, draw_button_at_x_y_width_width_height_height__width, draw_button_at_x_y_width_width_height_height__height)
     button_pressed = 0
@@ -536,6 +500,7 @@ def draw_button_at_x_y_width_width_height_height(draw_button_at_x_y_width_width_
             button_pressed = 1
 
 def bootAnim():
+    #User interface and setup complete animation code
     global button_pressed, Auto_Side, MyColor, v, sizeDrawRound, AnimProgress, screen_precision, console_precision
     button_pressed = 0
     while True:
@@ -582,7 +547,8 @@ def bootAnim():
     brain.screen.render()
     sizeDrawRound = 25
     AnimProgress = 0
-    for repeat_count in range(90):
+    v = 0
+    for i in range(45):
         brain.screen.clear_screen()
         v = v + (100 - sizeDrawRound) * 0.5
         v = v * 0.7
@@ -617,6 +583,7 @@ my_event(my_event_callback_0)
 # add 15ms delay to make sure events are registered correctly.
 wait(15, MSEC)
 
-ws2 = Thread( when_started2 )
+
 ws3 = Thread( when_started3 )
+ws2 = Thread( when_started2 )
 when_started1()
