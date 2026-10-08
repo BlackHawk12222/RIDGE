@@ -17,7 +17,7 @@ def ACP_driver():
     print("Driver function called")
 
     # Load the config file and set the variables for the driver control.
-    variabledata= brain.sdcard.loadfile("ACPv1config.txt").decode("utf-8")
+    variabledata= brain.sdcard.loadfile("ACPv1/Config/ACPv1config.txt").decode("utf-8")
     variabledata=variabledata.split("\n")
 
     # Initializeing motor lists.

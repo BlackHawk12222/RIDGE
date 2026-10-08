@@ -755,7 +755,7 @@ try:
                     
         def __init__(self):
             if not brain.sdcard.exists("ACPv1/Data/loghistory.txt"):
-                brain.sdcard.savefile("ACPv1/Data/loghistory.txt", bytearray(b"0000000000000000000000"))
+                brain.sdcard.savefile("ACPv1/Data/loghistory.txt", bytearray(b"0                   \n"))
 
             self.MiscMotors: list[Motor]=[]
             self.MiscMotorsName: list[str]=[]
@@ -1033,10 +1033,6 @@ try:
             None
             """
 
-            self.archive.index_history()
-            if brain.sdcard.filesize("Log.csv") > 100000:
-                self.archive.log()
-
             start:int=log_time.time()
 
             self.format:str=const(str(settings.settings.get('format_used ')))
@@ -1110,6 +1106,10 @@ try:
                 auto_do_controller:bool=const(True)
             else:
                 auto_do_controller:bool=const(False)
+
+            self.archive.index_history()
+            if brain.sdcard.filesize("Log.csv") > 100000:
+                self.archive.log()
 
             controllers: List[Controller]=[]
 
@@ -1329,71 +1329,90 @@ try:
                 speed=log_time.time()
                 log.adding=False
                 loop=True
+                number_of_lines=0
                 number_of_archived_lines=0
+                buffer=bytearray(100000)
+                fileoffset=0
+                archived=False
+                loglines=[]
 
                 reversecodes={value: key for key, value in log.codes.items()}
+
                 while loop:
-                    loop=False
-                    if brain.sdcard.size("Log.csv") < 100000:
-                        logfile=brain.sdcard.loadfile("Log.csv")
-                    else:
-                        logfile=brain.sdcard.loadfile("Log.csv", 100000)
-                        loop=True
+                    with open("Log.csv", 'rb') as file:
+                        file.seek(fileoffset)
+                        chunk=file.readinto(buffer)
+                        if not chunk:
+                            break
+                        number_of_lines+=bytes(buffer[0:chunk]).count(b'\n')
+                        fileoffset+=chunk
 
+                    if number_of_lines > 2000:
+                        archived=True
+                        with open("Log.csv", 'r+') as file:
+                            bytecount=0
+                            LinesRead=0
+                            TotalBytes=0
+                            while True:
+                                file.seek(bytecount)
+                                loglines=file.read(500).split("\n")
+                                LinesRead+=len(loglines)
+                                if LinesRead >= number_of_lines - 2000 or not loglines:
+                                    break
 
-                    number_of_lines=logfile.count(b'\n')
+                                TotalBytes=sum(len(s.encode('utf-8')) for s in loglines)
+                                bytecount+=TotalBytes
 
-                    if number_of_lines > 20000:
-                        print("Archiving Log.csv...")
-                        loglines=logfile.decode(log.format).split("\n")
-                        archive_data=loglines[20000:len(loglines)-1]
-                        newlog=loglines[0:20000]
-                        brain.sdcard.savefile("Log.csv", bytearray("\n".join(newlog), log.format))
-                        del loglines, newlog
+                            file.seek(bytecount)
+                            lines_to_archive=number_of_lines - 2000
+                            while True:
+                                loglines=file.read(500).split("\n")
 
-                        archivelist=bytearray(204800)
-                        archivelist_offset=0
-                        number_of_archived_lines+=len(archive_data)
+                                if not loglines:
+                                    break
 
-                        while True:
-                            
-                            loglist=archive_data
-                            incomplete=bytearray()
-                            for i in range(len(loglist)):
-                                logline= loglist[i].split(",")
+                                # 2317 [123533 ms], <Cont DATA: Button Changed>, controller(30), L1, Released
+                                for line in loglines:
 
-                                if archivelist_offset > 20000:
-                                    brain.sdcard.appendfile("ACPv1/Data/loghistory.txt", archivelist[0:archivelist_offset])
-                                    archivelist_offset=0
-                                
-                                logstring=logline[1].strip()
-                                numbers=logline[0].split(" ")
-                                try:
-                                    hexindex="{:#x}".format(int(numbers[0]))
-                                    hextime="{:#x}".format(int(numbers[1].replace("[", "")))
-                                except ValueError:
-                                    incomplete.extend(loglist[i].encode(log.format))
-                                    continue
-                                entry=b"%s %s %s%s\n"%(hexindex, hextime, reversecodes.get(logstring, logstring), str(logline[2:len(logline)]).replace("'", "").replace("[", "").replace("]", ""))
-                                bufferSize=len(entry)
-                                pack_into("=%ds"%(bufferSize), archivelist, archivelist_offset, entry)
-                                archivelist_offset+=bufferSize
-                                    
-                                del logline
-                            brain.sdcard.appendfile("ACPv1/Data/loghistory.txt", archivelist[0:archivelist_offset])
-                            archivelist_offset=0
-                            print("done loop")
+                                    # [2317 [123533 ms], <Cont DATA: Button Changed>, controller(30), L1, Released]
+                                    prelist=line.split(',')
 
-                    log.adding=True
+                                    # ["2317", "123533"]
+                                    numbers=prelist[0].replace(" [", "").replace(" ms]", "").split(' ')
 
-                    collect()
-                    log.add("DS1", str(log_time.time() - speed) + " MSEC")
-                    del speed
+                                    # "controller(30) L1 Released"
+                                    if len(prelist) > 3:
+                                        detailslist=[item + " " for item in prelist[3 : len(prelist)-1]]
+                                    details="".join(detailslist)
 
-                with open("ACPv1/Data/loghistory.txt", 'r+') as file:
+                                    print(numbers[1])
+
+                                    # [1E28D, DC0, controller(30) L1 Released]
+                                    entry="{:x}, {}, {}\n".format(int(numbers[1].strip()), reversecodes.get(prelist[2], prelist[2]), details)
+
+                                    brain.sdcard.appendfile("ACPv1/Data/loghistory.txt", bytearray(entry, log.format))
+
+                        with open("ACPv1/Data/loghistory.txt", 'r+') as file:
+                            file.seek(0)
+                            OldNumberStr=file.read(20)
+                            OldNumber=int(OldNumberStr)
+                            file.seek(0)
+                            file.write(str(lines_to_archive + OldNumber))
+                        number_of_archived_lines=number_of_lines - 2000
+                        loop=False
+
+                log.adding=True
+                
+                if archived:
+                    newlog=loglines[0:2000]
+                    brain.sdcard.savefile("Log.csv", bytearray("\n".join(newlog), log.format))
+
+                with open("ACPv1/Data/loghistory.txt", 'rw+') as file:
                     file.seek(0)
                     file.write(str(number_of_archived_lines))
 
+                collect()
+                log.add("DS1", str(log_time.time() - speed) + " MSEC")
 
             def index_history(self) -> None:
                 """
@@ -1407,7 +1426,7 @@ try:
                 index=0
                 chunk=0
                 
-                with open("loghistory.txt", 'rb') as file:
+                with open("ACPv1/Data/loghistory.txt", 'rb') as file:
                     chunk_buffer=bytearray(10240)
                     while True:
                         chunk = file.readinto(chunk_buffer)
@@ -1416,7 +1435,6 @@ try:
                         index += bytes(chunk_buffer[0: chunk]).count(b'\n')
                 log._index+=index
                 log.add("DS2", str(log_time.time() - speed) + " MSEC")
-                del speed, index
 
             def recall_log(self) -> None:
                 """
@@ -1428,10 +1446,10 @@ try:
 
                 filename=("logrecalled.csv")
                 print("recalling...")
-                with open("loghistory.txt", 'r') as file:
+                with open("ACPv1/Data/loghistory.txt", 'r') as file:
                     for line in file:
                         prelist=line.split(' ')
-                        if len(prelist) >= 4:
+                        if len(prelist) > 3:
                             detailslist=[item + " " for item in prelist[3 : len(prelist)-1]]
                         details="".join(detailslist)
                         brain.sdcard.appendfile(filename, bytearray("%d [%s ms], %s, %s\n"%(int(prelist[0], 16),int(prelist[1], 16) , log.codes.get(prelist[2], prelist[2]), details), log.format))
