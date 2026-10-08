@@ -1113,11 +1113,11 @@ try:
 
             controllers: List[Controller]=[]
 
-            globallogging=const(dir())
+            scope=dir()
 
             #print(globallogging)
 
-            for item in globallogging:
+            for item in scope:
                 
                 try:
                     item_type=str(type(eval(item)))
@@ -1339,9 +1339,9 @@ try:
                 reversecodes={value: key for key, value in log.codes.items()}
 
                 while loop:
-                    with open("Log.csv", 'rb') as file:
-                        file.seek(fileoffset)
-                        chunk=file.readinto(buffer)
+                    with open("Log.csv", 'rb') as infile:
+                        infile.seek(fileoffset)
+                        chunk=infile.readinto(buffer)
                         if not chunk:
                             break
                         number_of_lines+=bytes(buffer[0:chunk]).count(b'\n')
@@ -1349,13 +1349,13 @@ try:
 
                     if number_of_lines > 2000:
                         archived=True
-                        with open("Log.csv", 'r+') as file:
+                        with open("Log.csv", 'r+') as infile:
                             bytecount=0
                             LinesRead=0
                             TotalBytes=0
                             while True:
-                                file.seek(bytecount)
-                                loglines=file.read(500).split("\n")
+                                infile.seek(bytecount)
+                                loglines=infile.read(500).split("\n")
                                 LinesRead+=len(loglines)
                                 if LinesRead >= number_of_lines - 2000 or not loglines:
                                     break
@@ -1363,53 +1363,86 @@ try:
                                 TotalBytes=sum(len(s.encode('utf-8')) for s in loglines)
                                 bytecount+=TotalBytes
 
-                            file.seek(bytecount)
+                            infile.seek(0)
                             lines_to_archive=number_of_lines - 2000
+                            linecount=-1
                             while True:
-                                loglines=file.read(500).split("\n")
 
-                                if not loglines:
+                                if linecount >= lines_to_archive:
                                     break
 
-                                # 2317 [123533 ms], <Cont DATA: Button Changed>, controller(30), L1, Released
-                                for line in loglines:
+                                line=infile.readline()
 
-                                    # [2317 [123533 ms], <Cont DATA: Button Changed>, controller(30), L1, Released]
-                                    prelist=line.split(',')
+                                if linecount == -1:
+                                    linecount+=1
+                                    continue
 
-                                    # ["2317", "123533"]
-                                    numbers=prelist[0].replace(" [", "").replace(" ms]", "").split(' ')
+                                linecount+=1
 
-                                    # "controller(30) L1 Released"
-                                    if len(prelist) > 3:
-                                        detailslist=[item + " " for item in prelist[3 : len(prelist)-1]]
+                                # [2317 [123533 ms], <Cont DATA: Button Changed>, controller(30), L1, Released]
+                                prelist=line.split(',')
+
+                                # ["2317", "123533"]
+                                numbers=prelist[0].replace("[", "").replace(" ms]", "").split(' ')
+
+                                details=""
+
+                                # "controller(30) L1 Released"
+                                if len(prelist) > 3:
+                                    detailslist=[item + " " for item in prelist[2 : len(prelist)-1]]
                                     details="".join(detailslist)
 
-                                    print(numbers[1])
+                                print(numbers)
 
-                                    # [1E28D, DC0, controller(30) L1 Released]
-                                    entry="{:x}, {}, {}\n".format(int(numbers[1].strip()), reversecodes.get(prelist[2], prelist[2]), details)
+                                # [1E28D, DC0, controller(30) L1 Released]
+                                entry="{:x}, {}, {}\n".format(int(numbers[1].strip()), reversecodes.get(bytes(prelist[1].strip(), 'utf-8'), prelist[1].strip()), details)
 
-                                    brain.sdcard.appendfile("ACPv1/Data/loghistory.txt", bytearray(entry, log.format))
+                                brain.sdcard.appendfile("ACPv1/Data/loghistory.txt", bytearray(entry, log.format))
+                        
+                        with open("ACPv1/Data/loghistory.txt", "r") as infile:
+                            with open("ACPv1/Data/temp.tmp", "w") as outfile:
 
-                        with open("ACPv1/Data/loghistory.txt", 'r+') as file:
-                            file.seek(0)
-                            OldNumberStr=file.read(20)
-                            OldNumber=int(OldNumberStr)
-                            file.seek(0)
-                            file.write(str(lines_to_archive + OldNumber))
-                        number_of_archived_lines=number_of_lines - 2000
+                                infile.seek(0)
+                                OldNumberStr=infile.readline()
+                                OldNumber=int(OldNumberStr)
+
+                                # Flag to ensure we only replace the very first line
+                                is_first_line = True
+                                
+                                for line in infile:
+                                    if is_first_line:
+                                        line = line.replace(line, str(OldNumber + number_of_lines - 2000) + "\n") 
+                                        is_first_line = False # Turn off flag so the rest of the file is untouched
+                                    
+                                    outfile.write(line)
+
+                        with open("ACPv1/Data/temp.tmp", "r") as infile:
+                            with open("ACPv1/Data/loghistory.txt", "w") as outfile:
+                                for line in infile:
+                                    outfile.write(line)
+
+                        with open("Log.csv", 'r') as infile:
+                            with open("ACPv1/Data/temp.tmp", "w") as outfile:
+                                infile.seek(bytecount)
+                                while True:
+                                    chunk=infile.read(500)
+                                    if not chunk:
+                                        break
+                                    outfile.write(chunk)
+
+                        with open("ACPv1/Data/temp.tmp", "r") as infile:
+                            with open("Log.csv", "w") as outfile:
+                                for line in infile:
+                                    outfile.write(line)
+
+
                         loop=False
 
                 log.adding=True
                 
-                if archived:
-                    newlog=loglines[0:2000]
-                    brain.sdcard.savefile("Log.csv", bytearray("\n".join(newlog), log.format))
-
-                with open("ACPv1/Data/loghistory.txt", 'rw+') as file:
-                    file.seek(0)
-                    file.write(str(number_of_archived_lines))
+                # if archived:
+                #     newlog=loglines[0:2000]
+                #     brain.sdcard.savefile("Log.csv", bytearray("\n".join(newlog), log.format))
 
                 collect()
                 log.add("DS1", str(log_time.time() - speed) + " MSEC")
@@ -1424,16 +1457,12 @@ try:
 
                 speed=log_time.time()
                 index=0
-                chunk=0
                 
                 with open("ACPv1/Data/loghistory.txt", 'rb') as file:
-                    chunk_buffer=bytearray(10240)
-                    while True:
-                        chunk = file.readinto(chunk_buffer)
-                        if not chunk:
-                            break
-                        index += bytes(chunk_buffer[0: chunk]).count(b'\n')
-                log._index+=index
+                    file.seek(0)
+                    index=int(file.readline())
+
+                log._index=index
                 log.add("DS2", str(log_time.time() - speed) + " MSEC")
 
             def recall_log(self) -> None:
@@ -1450,7 +1479,7 @@ try:
                     for line in file:
                         prelist=line.split(' ')
                         if len(prelist) > 3:
-                            detailslist=[item + " " for item in prelist[3 : len(prelist)-1]]
+                            detailslist=[item + " " for item in prelist[2 : len(prelist)-1]]
                         details="".join(detailslist)
                         brain.sdcard.appendfile(filename, bytearray("%d [%s ms], %s, %s\n"%(int(prelist[0], 16),int(prelist[1], 16) , log.codes.get(prelist[2], prelist[2]), details), log.format))
                 print("Recall done.")
