@@ -918,20 +918,9 @@ try:
             brain.screen.print(self.entry.decode(log.format))
             brain.screen.new_line()
 
-        def controller_interface_add(self):
-            EntryList= bytes(self.entry).split(b",")
-
-            numbers=EntryList[0].replace(b"[", b"").replace(b" ms]", b"").split(b' ')
-
-            details=b""
-
-            # "controller(30) L1 Released"
-            if len(EntryList) > 3:
-                detailslist=[item[0:2] + b" " for item in EntryList[2 : len(EntryList)-1]]
-                details=b"".join(detailslist)
-
-            CInterface.add_to_buffer("%d %s %s"%(numbers[0], self.reversecodes.get(EntryList[1], "ERR"), details))
-
+        def controller_interface_add(self, add_code: str, add_details: Any) -> None:
+            reverse_code = self.reversecodes.get(self.codes.get(add_code), "ERR")
+            CInterface.add_to_buffer("%s %s" % ( reverse_code, add_details))
         
         def add(self, add_code: str, add_details: Any) -> None:
             """
@@ -961,7 +950,8 @@ try:
                     self._cache=bytearray()
                     return
                 
-            self.entry=const(b"%d [%d ms], %s, %s\n" %(self._index, log_time.time(), self.codes.get(add_code), add_details))
+            timestamp = log_time.time()
+            self.entry=const(b"%d [%d ms], %s, %s\n" %(self._index, timestamp, self.codes.get(add_code), add_details))
             self._bufferSize=len(self.entry)
 
             pack_into("=%ds"%(self._bufferSize), self.buffer, self._buffer_offset, self.entry)
@@ -979,8 +969,8 @@ try:
             if log_link.is_linked():
                 log_link.send(self.entry.decode(log.format))
 
-            if self.controller_interface and ("E" in add_code or "W" in add_code):
-                self.controller_interface_add()
+            if self.controller_interface and (b"ERR" in self.entry or b"WARN" in self.entry):
+                self.controller_interface_add(add_code, add_details)
 
             self._index += 1
             
@@ -1166,7 +1156,12 @@ try:
                         self.MiscMotors+=[eval(item)]
                         self.MiscMotorsName+=[item]
                 elif item_type == "<class 'controller'>" and auto_do_controller:
-                    controllers+=[eval(item)]
+                    controller_temp=eval(item)
+                    controllers+=[controller_temp]
+
+                    if "Interface" in item or "interface" in item:
+                        Thread(CInterface.start, [controller_temp])  # type: ignore
+
                 elif item_type == "<class 'inertial'>" and auto_do_smart_port:
                     log.add_logstart("log.capture.smartport.inertial(%s)"%(item.replace("'", "")))
                 elif item_type == "<class 'optical'>" and auto_do_smart_port:
@@ -1217,48 +1212,13 @@ try:
                         item_type=str(type(eval("%s.%s"%(Module, item))))
                         # print(item, item_type)
                     except NameError:
-                        # print(Module)
                         continue
                     except AttributeError:
-                        # print(Module)
                         continue
 
                     if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>") and auto_do_variables and item not in self.VariablesAdded:
                         log.add_logstart("log.capture.variable('%s.%s', %s.%s)"%(Module, item, Module, item.replace("'", "")))
                         self.VariablesAdded.append(item)
-                    elif item_type == "<class 'motor'>" and auto_do_motors:
-
-                        if "Left" in item or "left" in item:
-                            self.LeftMotors+=[eval(item)]
-                        elif "Right" in item or "right" in item:
-                            self.RightMotors+=[eval(item)]
-                        else:
-                            self.MiscMotors+=[eval(item)]
-                            self.MiscMotorsName+=[item]
-                    elif item_type == "<class 'controller'>" and auto_do_controller:
-                        controllers+=[eval(item)]
-                    elif item_type == "<class 'inertial'>" and auto_do_smart_port:
-                        log.add_logstart("log.capture.smartport.inertial(%s)"%(item.replace("'", "")))
-                    elif item_type == "<class 'optical'>" and auto_do_smart_port:
-                        log.add_logstart("log.capture.smartport.optical(%s)"%(item.replace("'", "")))
-                    elif item_type == "<class 'rotation'>" and auto_do_smart_port:
-                        log.add_logstart("log.capture.smartport.rotation(%s, '%s')"%(item.replace("'", ""), item))
-                    elif item_type == "<class 'distance'>" and auto_do_smart_port:
-                        log.add_logstart("log.capture.smartport.distance(%s)"%(item.replace("'", "")))
-                    elif item_type == "<class 'triport_bumper'>" and auto_do_three_wire:
-                        log.add_logstart("log.capture.threewire.bumper(%s)"%(item.replace("'", "")))
-                    elif item_type == "<class 'triport_limit'>" and auto_do_three_wire:
-                        log.add_logstart("log.capture.threewire.limit(%s)"%(item.replace("'", "")))
-                    elif item_type == "<class 'triport_digitalin'>" and auto_do_three_wire:
-                        log.add_logstart("log.capture.threewire.digitalinput(%s)"%(item.replace("'", "")))
-                    elif item_type == "<class 'triport_potv2'>" and auto_do_three_wire:
-                        log.add_logstart("log.capture.threewire.potentiometer(%s)"%(item.replace("'", "")))
-                    elif item_type == "<class 'triport_analog'>" and auto_do_three_wire:
-                        log.add_logstart("log.capture.threewire.analog(%s)"%(item.replace("'", "")))
-                    elif item_type == "<class 'comp'>" and auto_do_control:
-                        log.add_logstart("log.capture.system.control(%s)"%(item.replace("'", "")))
-
-                    # exec("del %s"%(Module))
 
                     
             del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port
@@ -1462,7 +1422,6 @@ try:
                                 for line in infile:
                                     outfile.write(line)
 
-
                         loop=False
 
                 log.adding=True
@@ -1485,7 +1444,7 @@ try:
                 speed=log_time.time()
                 index=0
                 
-                with open("ACPv1/Data/loghistory.txt", 'rb') as file:
+                with open("ACPv1/Data/loghistory.txt", 'r') as file:
                     file.seek(0)
                     index=int(file.readline())
 

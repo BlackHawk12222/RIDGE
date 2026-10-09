@@ -182,7 +182,7 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
                     RightMotorList[i].spin(FORWARD, AntiFightOutputRight[i], VOLT)
 
             #print(timer.time() -StartTime)
-            print("output: %s, %s TrueSpeed: %s, targets: %s, %s RightRPM: %s LeftRPM: %s"%(AntiFightOutputLeft, AntiFightOutputRight, TrueSpeed, TargetLeftRPM, TargetRightRPM, AcutalRightRPM, AcutalLeftRPM))
+            #print("output: %s, %s TrueSpeed: %s, targets: %s, %s RightRPM: %s LeftRPM: %s"%(AntiFightOutputLeft, AntiFightOutputRight, TrueSpeed, TargetLeftRPM, TargetRightRPM, AcutalRightRPM, AcutalLeftRPM))
 
             wait(20 - (timer.time() - StartTime), MSEC)
     elif "Arcade" in StickType or "arcade" in StickType:
@@ -296,7 +296,7 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
                     RightMotorList[i].spin(FORWARD, AntiFightOutputRight[i], VOLT)
 
             #print(timer.time() -StartTime)
-            print("output: %s, %s TrueSpeed: %s, targets: %s, %s RightRPM: %s LeftRPM: %s"%(AntiFightOutputLeft, AntiFightOutputRight, TrueSpeed, TargetLeftRPM, TargetRightRPM, AcutalRightRPM, AcutalLeftRPM))
+            #print("output: %s, %s TrueSpeed: %s, targets: %s, %s RightRPM: %s LeftRPM: %s"%(AntiFightOutputLeft, AntiFightOutputRight, TrueSpeed, TargetLeftRPM, TargetRightRPM, AcutalRightRPM, AcutalLeftRPM))
 
             wait(20 - (timer.time() - StartTime), MSEC)
     else:

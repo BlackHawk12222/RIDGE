@@ -7,6 +7,7 @@ brain=Brain()
 
 # Robot configuration code
 controller_1 = Controller(PRIMARY)
+controller_interface = Controller(PARTNER)
 Right1 = Motor(Ports.PORT13, GearSetting.RATIO_6_1, False)
 Right2 = Motor(Ports.PORT14, GearSetting.RATIO_6_1, False)
 left1 = Motor(Ports.PORT11, GearSetting.RATIO_6_1, True)
@@ -26,3 +27,5 @@ def aton():
 
 # Aton Functions
 comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
+
+ACPv1.CLEARv2.ControllerInterface.start(controller_interface)
