@@ -17,6 +17,7 @@ try:
     from gc import collect, mem_alloc# type: ignore 
     from ustruct import pack_into
     from micropython import const, mem_info  # type: ignore
+    import ACPv1.CLEARv2.ControllerInterface as CInterface
     
     log_time= Timer() # Main timer used.
     log_link=MessageLink(Ports.PORT21, "CLEAR32449", VexlinkType.MANAGER)
@@ -768,7 +769,8 @@ try:
             self.format:str="utf-8"  # General format for all files in the code.
             self._cache:bytearray=bytearray()
             self.brainscreen:bool=False  # Used to see if need to print to brain screen.
-            self.tolrance:int=3  # tolerance for controller stick diffrence when not recording and for general tolrance for sensors.
+            self.controller_interface=False  # Bool for ControllerInterface.py use.
+            self.tolrance:int=3  # Tolerance for controller stick diffrence when not recording and for general tolrance for sensors.
             self.printing:bool=True
             self.logging:bool=True
             self.buffer=bytearray(20480)
@@ -866,6 +868,8 @@ try:
                     "DSC4": b"<Comp DATA: Field Disconnected>",
                     "DSC5": b"<Comp DATA: Disconnected>"
                     }
+
+            self.reversecodes: dict= {value: key for key, value in self.codes.items()}
             
             # Setting up Log Files if they dont exist and setting index.
             log_number=0
@@ -913,6 +917,21 @@ try:
 
             brain.screen.print(self.entry.decode(log.format))
             brain.screen.new_line()
+
+        def controller_interface_add(self):
+            EntryList= bytes(self.entry).split(b",")
+
+            numbers=EntryList[0].replace(b"[", b"").replace(b" ms]", b"").split(b' ')
+
+            details=b""
+
+            # "controller(30) L1 Released"
+            if len(EntryList) > 3:
+                detailslist=[item[0:2] + b" " for item in EntryList[2 : len(EntryList)-1]]
+                details=b"".join(detailslist)
+
+            CInterface.add_to_buffer("%d %s %s"%(numbers[0], self.reversecodes.get(EntryList[1], "ERR"), details))
+
         
         def add(self, add_code: str, add_details: Any) -> None:
             """
@@ -960,6 +979,9 @@ try:
             if log_link.is_linked():
                 log_link.send(self.entry.decode(log.format))
 
+            if self.controller_interface and ("E" in add_code or "W" in add_code):
+                self.controller_interface_add()
+
             self._index += 1
             
         def add_codes(self, code_add: str, Decoded_text: str) -> None:
@@ -972,7 +994,8 @@ try:
             Decoded_text= String
             """
 
-            self.codes.update({code_add : "%s"%(Decoded_text)})
+            self.codes.update({code_add : b"%s"%(Decoded_text)})
+            self.reversecodes.update({b"%s"%(Decoded_text) : code_add})
 
         def remove_codes(self, code_remove: str) -> None:
             """
@@ -1074,6 +1097,11 @@ try:
             else:
                 self.brainscreen:bool=const(False)
 
+            if "True" in str(settings.settings.get('controller_interface ')):
+                self.controller_interface=const(True)
+            else:
+                self.controller_interface=const(False)
+            
             if self.brainscreen:
                 brain.screen.set_font(FontType.MONO12)
             
@@ -1330,13 +1358,12 @@ try:
                 log.adding=False
                 loop=True
                 number_of_lines=0
-                number_of_archived_lines=0
                 buffer=bytearray(100000)
                 fileoffset=0
                 archived=False
                 loglines=[]
 
-                reversecodes={value: key for key, value in log.codes.items()}
+                reversecodes=log.reversecodes
 
                 while loop:
                     with open("Log.csv", 'rb') as infile:
@@ -1494,6 +1521,7 @@ try:
                 "brain_read": False,
                 "print_read": True,
                 "sdcard_read": True,
+                "controller_interface": True,
                 "gc_use": True,
                 "archive_log": True,
                 "archive_recordings": True,
