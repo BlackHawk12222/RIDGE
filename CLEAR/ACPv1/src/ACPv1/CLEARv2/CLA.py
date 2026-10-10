@@ -1448,7 +1448,7 @@ try:
                     file.seek(0)
                     index=int(file.readline())
 
-                log._index=index
+                log._index+=index
                 log.add("DS2", str(log_time.time() - speed) + " MSEC")
 
             def recall_log(self) -> None:
