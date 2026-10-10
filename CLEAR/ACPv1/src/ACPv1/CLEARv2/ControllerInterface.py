@@ -49,6 +49,7 @@ def start(controller: Controller):
                 YPos=len(ScreenBuffer)-1
                 OldYPos=-1
                 selected=0
+                wait(50, MSEC)
 
             if len(ScreenBuffer) > len(last_known_buffer):
                 # Calculate the maximum scroll position to bring the newest item to the bottom row
@@ -105,6 +106,7 @@ def start(controller: Controller):
                 controller.screen.set_cursor(1, 1)
                 controller.screen.print(LeftTeamPoints)
                 selected= 1
+                wait(50, MSEC)
 
             if controller.buttonR1.pressing():
                 RightTeamPoints+=5
@@ -134,6 +136,7 @@ def start(controller: Controller):
                 controller.screen.set_cursor(3,1)
                 controller.screen.print(str(RightTeamPoints) + "          ")
                 OldRightTeamPoints = RightTeamPoints
+                wait(50, MSEC)
 
             if LeftTeamPoints != OldLeftTeamPoints:
                 controller.screen.set_cursor(1,1)
@@ -146,6 +149,7 @@ def start(controller: Controller):
                 OldCurrent=0
                 OldCapacity=0
                 selected=2
+                wait(50, MSEC)
 
             Capacity=brain.battery.capacity()
             Current=brain.battery.current(CurrentUnits.AMP)
@@ -155,11 +159,13 @@ def start(controller: Controller):
                 controller.screen.set_cursor(1, 1)
                 controller.screen.print("%d%%"%(Capacity))
                 OldCapacity=Capacity
+                wait(50, MSEC)
 
             if Current != OldCurrent:
                 controller.screen.set_cursor(2, 1)
                 controller.screen.print("%02.1f/20A"%(Current))
                 OldCurrent=Current
+                wait(50, MSEC)
 
             if Voltage != OldVoltage:
                 controller.screen.set_cursor(3, 1)
