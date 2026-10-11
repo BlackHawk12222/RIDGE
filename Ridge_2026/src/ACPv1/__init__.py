@@ -95,7 +95,7 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
     comp=Competition(ACP_driver, AtonFunc)
 
     # Start the CLA thread for the CLEARv2 package.
-    print(dir(ACPv1.CLEARv2.CLA))
-    cla=ACPv1.CLEARv2.CLA.CLAStart()
+    print(dir(CLEARv2.CLA))
+    cla=CLEARv2.CLA.CLAStart()
 
     return comp

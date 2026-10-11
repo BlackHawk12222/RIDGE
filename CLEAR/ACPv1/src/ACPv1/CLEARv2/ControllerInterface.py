@@ -21,6 +21,10 @@ def start(controller: Controller):
     RightTeamPoints=0
     OldLeftTeamPoints=0
     OldRightTeamPoints=0
+    RightAtonBonus=False
+    LeftAtonBonus=False
+    OldRightAtonBonus=False
+    OldLeftAtonBonus=False
 
     OldCurrent=0
     OldCapacity=0
@@ -44,6 +48,8 @@ def start(controller: Controller):
             ScreenBuffer.pop(0)
 
         if selection == 0:
+            # CLEAR Interface
+
             if selected != 0:
                 controller.screen.clear_screen()
                 YPos=len(ScreenBuffer)-1
@@ -99,6 +105,8 @@ def start(controller: Controller):
                 last_known_buffer = ScreenBuffer.copy()
                 OldYPos = YPos
         elif selection == 1:
+            # Point calculator
+
             if selected != 1:
                 controller.screen.clear_screen()
                 controller.screen.set_cursor(3, 1)
@@ -107,6 +115,24 @@ def start(controller: Controller):
                 controller.screen.print(LeftTeamPoints)
                 selected= 1
                 wait(50, MSEC)
+
+            if controller.buttonRight.pressing():
+                if not RightAtonBonus:
+                    RightAtonBonus=True
+                else:
+                    RightAtonBonus=False
+
+                while controller.buttonRight.pressing():
+                    wait(20, MSEC)
+
+            if controller.buttonLeft.pressing():
+                if not LeftAtonBonus:
+                    LeftAtonBonus=True
+                else:
+                    LeftAtonBonus=False
+
+                while controller.buttonLeft.pressing():
+                    wait(20, MSEC)
 
             if controller.buttonR1.pressing():
                 RightTeamPoints+=5
@@ -132,17 +158,34 @@ def start(controller: Controller):
                 while controller.buttonL2.pressing():
                     wait(20, MSEC)
 
-            if RightTeamPoints != OldRightTeamPoints:
+            if RightTeamPoints != OldRightTeamPoints or OldRightAtonBonus != RightAtonBonus:
                 controller.screen.set_cursor(3,1)
-                controller.screen.print(str(RightTeamPoints) + "          ")
+
+                if RightAtonBonus:
+                    Points=RightAtonBonus + 12
+                else:
+                    Points=RightAtonBonus
+
+                controller.screen.print("P: %d AB? %s"%(Points, RightAtonBonus))
                 OldRightTeamPoints = RightTeamPoints
+                OldRightAtonBonus = RightAtonBonus
                 wait(50, MSEC)
 
-            if LeftTeamPoints != OldLeftTeamPoints:
+            if LeftTeamPoints != OldLeftTeamPoints or OldLeftAtonBonus != LeftAtonBonus:
                 controller.screen.set_cursor(1,1)
-                controller.screen.print(str(LeftTeamPoints) + "          ")
+
+                if LeftAtonBonus:
+                    Points=LeftTeamPoints +12
+                else:
+                    Points=LeftTeamPoints
+
+                controller.screen.print("P: %d AB? %s"%(Points, LeftAtonBonus))
                 OldRightTeamPoints = LeftTeamPoints
+                OldLeftAtonBonus=LeftAtonBonus
+
         elif selection == 2:
+            # Battery Menu
+            
             if selected != 2:
                 controller.screen.clear_screen()
                 OldVoltage=0
