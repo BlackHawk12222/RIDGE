@@ -916,8 +916,8 @@ try:
 
             entry: list[bytearray]=[self.entry]
 
-            if len(self.entry) >= 26:
-                chunk_size=26
+            if len(self.entry) >= 81:
+                chunk_size=81
                 entry=[self.entry[i : i + chunk_size] for i in range(0, len(self.entry), chunk_size)]
 
             for i in range(len(entry)):

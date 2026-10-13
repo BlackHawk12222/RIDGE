@@ -110,9 +110,19 @@ def start(controller: Controller):
             if selected != 1:
                 controller.screen.clear_screen()
                 controller.screen.set_cursor(3, 1)
-                controller.screen.print(RightTeamPoints)
+
+                if RightAtonBonus:
+                    controller.screen.print("P: %d AB? %s"%(RightTeamPoints + 12, RightAtonBonus))
+                else:
+                    controller.screen.print("P: %d AB? %s"%(RightTeamPoints, RightAtonBonus))
+
                 controller.screen.set_cursor(1, 1)
-                controller.screen.print(LeftTeamPoints)
+
+                if LeftAtonBonus:
+                    controller.screen.print("P: %d AB? %s"%(LeftTeamPoints + 12, LeftAtonBonus))
+                else:
+                    controller.screen.print("P: %d AB? %s"%(LeftTeamPoints, LeftAtonBonus))
+
                 selected= 1
                 wait(50, MSEC)
 
@@ -162,11 +172,11 @@ def start(controller: Controller):
                 controller.screen.set_cursor(3,1)
 
                 if RightAtonBonus:
-                    Points=RightAtonBonus + 12
+                    Points=RightTeamPoints + 12
                 else:
-                    Points=RightAtonBonus
+                    Points=RightTeamPoints
 
-                controller.screen.print("P: %d AB? %s"%(Points, RightAtonBonus))
+                controller.screen.print("P: %d AB? %s          "%(Points, RightAtonBonus))
                 OldRightTeamPoints = RightTeamPoints
                 OldRightAtonBonus = RightAtonBonus
                 wait(50, MSEC)
@@ -175,12 +185,12 @@ def start(controller: Controller):
                 controller.screen.set_cursor(1,1)
 
                 if LeftAtonBonus:
-                    Points=LeftTeamPoints +12
+                    Points=LeftTeamPoints + 12
                 else:
                     Points=LeftTeamPoints
 
-                controller.screen.print("P: %d AB? %s"%(Points, LeftAtonBonus))
-                OldRightTeamPoints = LeftTeamPoints
+                controller.screen.print("P: %d AB? %s          "%(Points, LeftAtonBonus))
+                OldLeftTeamPoints = LeftTeamPoints
                 OldLeftAtonBonus=LeftAtonBonus
 
         elif selection == 2:
