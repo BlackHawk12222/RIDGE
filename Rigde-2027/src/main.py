@@ -10,7 +10,7 @@
 # Library imports
 from vex import *
 
-import apfCode
+import apfCode, ACPv1
 
 brain = Brain()
 
@@ -797,7 +797,11 @@ apf = Thread(apfCode.apfTracking())
 brain.screen.print("Debug for APF finished.")
 brain.screen.next_row()
 
+def aton():
+    pass
+
 #PROGRAM RUN VVVVVVVVVVVVVVVVVVV
+comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
 PROG = Thread( prog_setup )
 VS = Thread( vs_setup )
 color_switching()
