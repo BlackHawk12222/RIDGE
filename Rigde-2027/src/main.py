@@ -10,9 +10,11 @@
 # Library imports
 from vex import *
 
-import apfCode, ACPv1
 
 brain = Brain()
+
+if brain.sdcard.is_inserted():
+    import apfCode, ACPv1
 
 def autonomous():
     brain.screen.clear_screen()
@@ -36,7 +38,7 @@ brain.screen.clear_screen()
 
 #controllers
 controller_1 = Controller(PRIMARY)
-
+interface =  Controller(PARTNER)
 #motors, in order of port, lowest first
 DistanceSensor = Distance(Ports.PORT1)#----------------------------ONE
 ColorSensor = Optical(Ports.PORT2)#--------------------------------TWO
@@ -236,6 +238,13 @@ def AIM_drive(mm):
     #adding AIM (accurate inertial movement) code here
     pass
 
+
+def draw_progBar(x,y,width, height, percent, border,barColor):
+    brain.screen.set_pen_width(0)
+    brain.screen.set_fill_color(Color.WHITE)
+    brain.screen.draw_rectangle(x,y,width+border,height+border)
+    brain.screen.set_fill_color(barColor)
+    brain.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width,height*(percent/100))
 
 
 #BAR SWITCHING LOGIC SCRIPTS VVVVVVVVVVVVVVVVVVV
@@ -792,16 +801,19 @@ brain.screen.next_row()
 
 apfCode.init(Inertial_, Vertical_Rotation, Horizontal_rotation, Horizontal_AID, PosX, PosY, Avoidance_Distance, drivetrain, brain)
 
-apf = Thread(apfCode.apfTracking())
-
+#apf = Thread(apfCode.apfTracking())
+brain.screen.next_row()
 brain.screen.print("Debug for APF finished.")
 brain.screen.next_row()
 
 def aton():
     pass
 
+brain.screen.clear_screen()
+draw_progBar(0,0, 25, 100, brain.battery.capacity(), 5, Color.GREEN)
+
 #PROGRAM RUN VVVVVVVVVVVVVVVVVVV
 comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
-PROG = Thread( prog_setup )
-VS = Thread( vs_setup )
-color_switching()
+#PROG = Thread( prog_setup )
+#VS = Thread( vs_setup )
+#color_switching()
