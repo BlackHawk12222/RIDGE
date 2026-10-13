@@ -179,7 +179,7 @@ def doFileCheck():
 def apfTracking():
     brain.screen.print("doFileCheck running. Debug #2")
     brain.screen.next_row()
-    doFileCheck()
+    #doFileCheck()
     brain.screen.print("doFileCheck done. Debug #3.")
     brain.screen.next_row()
     while True:
