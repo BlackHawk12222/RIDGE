@@ -67,6 +67,9 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
     # Initialize motor lists as strings.
     RightMotors: list[str]=[]
     LeftMotors: list[str]=[]
+    inertial: str=""
+    XOdom: str=""
+    controller: str=""
 
     # Auto finds the motors, controller, Inertial, and odometry sensor in the code and saves them to a config file for later use.
     for item in ObjList:

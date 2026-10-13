@@ -920,6 +920,15 @@ try:
                 chunk_size=81
                 entry=[self.entry[i : i + chunk_size] for i in range(0, len(self.entry), chunk_size)]
 
+            if b"DATA" in self.entry:
+                brain.screen.set_pen_color(Color.GREEN)
+            elif b"WARN" in self.entry:
+                brain.screen.set_pen_color(Color.YELLOW)
+            elif b"ERR" in self.entry:
+                brain.screen.set_pen_color(Color.RED)
+            else:
+                brain.screen.set_pen_color(Color.WHITE)
+
             for i in range(len(entry)):
                 brain.screen.print(entry[i].decode(log.format))
                 brain.screen.new_line()
