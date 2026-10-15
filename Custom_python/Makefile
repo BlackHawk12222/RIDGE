@@ -47,6 +47,12 @@ EXCLUDE_SRC_FROM_LIB += src/micropython/shared/runtime/pyexec.c
 # Add this line right below your other MicroPython QSTR source definitions
 SRC_QSTR += src/modpros.c
 
+# Add your custom MicroPython module code to the PROS compiler track
+SRC_C += $(wildcard modules/*.c)
+
+# Ensure the compiler can see MicroPython's header files and your module headers
+EXTRA_INCDIRS += modules/umatrix.c
+
 # Ensure the bottom of your root Makefile matches this block:
 EXTRA_SRCDIRS += src/micropython \
                  src/micropython/py \
@@ -60,7 +66,16 @@ EXTRA_CFLAGS += -I$(ROOT)/src/micropython \
 # Exclude help, arrays, and native modules we don't need from the C compilation list
 TO_REMOVE := src/micropython/py/builtinhelp.c \
              src/micropython/py/modarray.c
+
 SRC_C := $(filter-out $(TO_REMOVE),$(SRC_C))
+
+# USERMOD_DIR := $(USER_C_MODULES)/custom_math
+
+# # Add source files
+# SRC_USERMOD += $(USERMOD_DIR)/custom_math.c
+
+# Include the directory in the compiler path
+CFLAGS_USERMOD += -I$(USERMOD_DIR)
 
 ################################################################################
 ################################################################################
