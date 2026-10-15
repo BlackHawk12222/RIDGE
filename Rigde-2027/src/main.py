@@ -239,12 +239,17 @@ def AIM_drive(mm):
     pass
 
 
-def draw_progBar(x,y,width, height, percent, border,barColor):
+def draw_progBar(x,y,width, height, percent, border,barColor,drawImage=None,image_width=0,image_height=0):
     brain.screen.set_pen_width(0)
     brain.screen.set_fill_color(Color.WHITE)
     brain.screen.draw_rectangle(x,y,width+border,height+border)
     brain.screen.set_fill_color(barColor)
     brain.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width,height*(percent/100))
+    if drawImage is not None:
+        if image_width != 0 and image_height != 0:
+            brain.screen.draw_image_from_file(drawImage, x+(width/2)-(image_width/2)+border/2, y+(height/2)-(image_height/2)+border/2)
+        else:
+            brain.screen.draw_image_from_file(drawImage,x+border/2,y)
 
 
 #BAR SWITCHING LOGIC SCRIPTS VVVVVVVVVVVVVVVVVVV
@@ -799,9 +804,10 @@ brain.screen.next_row()
 brain.screen.print("debug started. If nothing appears after this, APF has encountered an error.")
 brain.screen.next_row()
 
-apfCode.init(Inertial_, Vertical_Rotation, Horizontal_rotation, Horizontal_AID, PosX, PosY, Avoidance_Distance, drivetrain, brain)
+if brain.sdcard.is_inserted():
+    apfCode.init(Inertial_, Vertical_Rotation, Horizontal_rotation, Horizontal_AID, PosX, PosY, Avoidance_Distance, drivetrain, brain)
+    #apf = Thread(apfCode.apfTracking())
 
-#apf = Thread(apfCode.apfTracking())
 brain.screen.next_row()
 brain.screen.print("Debug for APF finished.")
 brain.screen.next_row()
@@ -810,7 +816,7 @@ def aton():
     pass
 
 brain.screen.clear_screen()
-draw_progBar(0,0, 25, 100, brain.battery.capacity(), 5, Color.GREEN)
+draw_progBar(50, 25, 25, 100, brain.battery.capacity(), 5, Color.GREEN)
 
 #PROGRAM RUN VVVVVVVVVVVVVVVVVVV
 comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
