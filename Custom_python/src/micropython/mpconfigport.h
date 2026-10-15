@@ -34,14 +34,7 @@ typedef long mp_off_t;
 #define MICROPY_HELPER_REPL             (0) // Strip out terminal interactive components
 #define MICROPY_HELPER_LEXER_UNIX       (0) 
 #define MICROPY_ENABLE_EXTERNAL_IMPORT  (1) // Required to load custom motor/sensor user modules
-
-// Disable heavy standard Python sub-modules
-#define MICROPY_PY_ARRAY                (0)
-#define MICROPY_PY_COLLECTIONS          (0)
-#define MICROPY_PY_CMATH                (0)
-#define MICROPY_PY_IO                   (0)
-#define MICROPY_PY_STRUCT               (0)
-#define MICROPY_PY_SYS                  (1) // Keep only for baseline sys.path settings
+#define MICROPY_ENABLE_COMPILER (1)
 
 /* Allow baseline system tables to align tracking structs */
 #define MICROPY_PY_SYS_ARGV                        (0)

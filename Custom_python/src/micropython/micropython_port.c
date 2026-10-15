@@ -1,21 +1,34 @@
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <stddef.h>
 #include "py/builtin.h"
 #include "py/compile.h"
 #include "py/runtime.h"
 #include "py/gc.h"
+#include "py/nlr.h"
+#include "py/stackctrl.h"
 #include "mpconfigport.h"
 
-// Reserve 128KB of static RAM specifically for our isolated VM heap
-#define VM_HEAP_SIZE (128 * 1024)
-static uint8_t vm_heap[VM_HEAP_SIZE];
+#include "shared/runtime/gchelper.h"
 
-void init_micropython(void) {
-    // Direct MicroPython to use our isolated memory layout block
-    gc_init(vm_heap, vm_heap + VM_HEAP_SIZE);
+void init_micropython(void *heap, size_t heap_size) {
+    gc_init(heap, (char *)heap + heap_size);
+    mp_stack_ctrl_init();
     mp_init();
+}
+
+void gc_collect(void) {
+    gc_collect_start();
+    gc_helper_collect_regs_and_stack();
+    gc_collect_end();
+}
+
+MP_NORETURN void nlr_jump_fail(void *val) {
+    (void)val;
+    fputs("MicroPython fatal error: uncaught non-local return\n", stderr);
+    abort();
 }
 
 void execute_python_string(const char *src) {
