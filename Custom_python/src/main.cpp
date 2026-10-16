@@ -5,48 +5,86 @@
 // Enforce uniform standard C naming layouts for ALL shared parameters
 extern "C" {
     void init_micropython(void* heap, size_t heap_size);
-    void mp_do_str(const char* src, int input_kind);
+    int mp_do_str(const char* src, int input_kind);
 }
 
-#define MP_HEAP_SIZE (1024 * 1024) // 1024 KB Heap
+#define MP_HEAP_SIZE (1024 * 1024) // 1 MiB Heap
 static char mp_heap[MP_HEAP_SIZE];
+static constexpr int STATUS_SCREEN_LINES = 8;
+static int status_screen_line = 1;
+
+static void report_status(const char* message) {
+    printf("%s\n", message);
+    if (status_screen_line > STATUS_SCREEN_LINES) {
+        pros::screen::scroll(1, 1);
+        status_screen_line = STATUS_SCREEN_LINES;
+    }
+    pros::screen::print(TEXT_SMALL, status_screen_line++, "%s                                                ", message);
+}
+
+extern "C" void mp_port_status(const char* message) {
+    report_status(message);
+}
 
 void initialize() {
-    printf("Initializing Custom MicroPython Interpreter...\n");
+    pros::screen::erase();
+    status_screen_line = 1;
+    report_status("MP: initializing");
     init_micropython(mp_heap, sizeof(mp_heap));
+    report_status("MP: ready");
 }
 
 void autonomous() {
-    // You can call specific python subroutines here if mapped
+    report_status("Autonomous: no script configured");
 }
 
 void opcontrol() {
-    // 1. Open the raw text script directly from the V5 MicroSD card slot
+    report_status("Driver Control: opening /usd/main.py");
     FILE* py_file = fopen("/usd/main.py", "r");
-    
+
     if (py_file == NULL) {
-        printf("Error: Could not find main.py on the MicroSD card (/usd/main.py)!\n");
+        report_status("ERROR: /usd/main.py not found");
         return;
     }
 
-    // 2. Read the entire python text file into memory dynamically
-    fseek(py_file, 0, SEEK_END);
-    long file_size = ftell(py_file);
-    fseek(py_file, 0, SEEK_SET);
+    if (fseek(py_file, 0, SEEK_END) != 0) {
+        fclose(py_file);
+        report_status("ERROR: cannot seek /usd/main.py");
+        return;
+    }
 
-    char* python_buffer = (char*)malloc(file_size + 1);
-    fread(python_buffer, 1, file_size, py_file);
-    python_buffer[file_size] = '\0'; // Null-terminate the string buffer
+    long file_size = ftell(py_file);
+    if (file_size < 0 || fseek(py_file, 0, SEEK_SET) != 0) {
+        fclose(py_file);
+        report_status("ERROR: cannot size /usd/main.py");
+        return;
+    }
+
+    char* python_buffer = (char*)malloc((size_t)file_size + 1);
+    if (python_buffer == NULL) {
+        fclose(py_file);
+        report_status("ERROR: not enough memory for script");
+        return;
+    }
+
+    size_t bytes_read = fread(python_buffer, 1, (size_t)file_size, py_file);
+    int read_error = ferror(py_file);
     fclose(py_file);
 
-    // 3. Hand the raw string buffer over to MicroPython to execute live code
-    printf("Executing /usd/main.py...\n");
-    mp_do_str(python_buffer, 1);
+    if (read_error || bytes_read != (size_t)file_size) {
+        free(python_buffer);
+        report_status("ERROR: failed reading /usd/main.py");
+        return;
+    }
+    python_buffer[bytes_read] = '\0';
 
-    // 4. Free up memory allocations
+    report_status("MicroPython: running script");
+    int script_succeeded = mp_do_str(python_buffer, 1);
     free(python_buffer);
 
-    // Fallback loop to prevent the task from instantly terminating
+    report_status(script_succeeded
+        ? "MicroPython: script finished"
+        : "MicroPython: script error; check console");
     while (true) {
         pros::delay(20);
     }

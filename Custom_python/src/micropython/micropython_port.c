@@ -13,10 +13,17 @@
 
 #include "shared/runtime/gchelper.h"
 
+extern void mp_port_status(const char *message);
+
 void init_micropython(void *heap, size_t heap_size) {
+    mp_port_status("MP: GC init");
     gc_init(heap, (char *)heap + heap_size);
+    mp_port_status("MP: GC ready");
+    mp_port_status("MP: stack init");
     mp_stack_ctrl_init();
+    mp_port_status("MP: core init");
     mp_init();
+    mp_port_status("MP: core ready");
 }
 
 void gc_collect(void) {

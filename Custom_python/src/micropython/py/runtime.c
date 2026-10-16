@@ -50,6 +50,8 @@
 #include "extmod/vfs.h"
 #endif
 
+extern void mp_port_status(const char *message);
+
 #if MICROPY_DEBUG_VERBOSE // print debugging info
 #define DEBUG_PRINT (1)
 #define DEBUG_printf DEBUG_printf
@@ -69,7 +71,9 @@ MP_REGISTER_MODULE(MP_QSTR___main__, mp_module___main__);
 #define TYPE_HAS_ITERNEXT(type) (type->flags & (MP_TYPE_FLAG_ITER_IS_ITERNEXT | MP_TYPE_FLAG_ITER_IS_CUSTOM | MP_TYPE_FLAG_ITER_IS_STREAM))
 
 void mp_init(void) {
+    mp_port_status("MP init: qstr");
     qstr_init();
+    mp_port_status("MP init: qstr ready");
 
     // no pending exceptions to start with
     MP_STATE_THREAD(mp_pending_exception) = MP_OBJ_NULL;
@@ -111,15 +115,21 @@ void mp_init(void) {
     #endif
 
     // init global module dict
+    mp_port_status("MP init: modules");
     mp_obj_dict_init(&MP_STATE_VM(mp_loaded_modules_dict), MICROPY_LOADED_MODULES_DICT_SIZE);
 
     // initialise the __main__ module
+    mp_port_status("MP init: main dict");
     mp_obj_dict_init(&MP_STATE_VM(dict_main), 1);
+    mp_port_status("MP init: main dict ready");
+    mp_port_status("MP init: set __name__");
     mp_obj_dict_store(MP_OBJ_FROM_PTR(&MP_STATE_VM(dict_main)), MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR___main__));
+    mp_port_status("MP init: __name__ stored");
 
     // locals = globals for outer module (see Objects/frameobject.c/PyFrame_New())
     mp_locals_set(&MP_STATE_VM(dict_main));
     mp_globals_set(&MP_STATE_VM(dict_main));
+    mp_port_status("MP init: globals ready");
 
     #if MICROPY_CAN_OVERRIDE_BUILTINS
     // start with no extensions to builtins
@@ -192,15 +202,18 @@ void mp_init(void) {
 
     // call port specific initialization if any
     #ifdef MICROPY_PORT_INIT_FUNC
+    mp_port_status("MP init: port hook");
     MICROPY_PORT_INIT_FUNC;
     #endif
 
+    mp_port_status("MP init: GIL");
     MP_THREAD_GIL_ENTER();
 
     #if MICROPY_VFS_ROM && MICROPY_VFS_ROM_IOCTL
     // Mount ROMFS if it exists.
     mp_vfs_mount_romfs_protected();
     #endif
+    mp_port_status("MP init: done");
 }
 
 void mp_deinit(void) {

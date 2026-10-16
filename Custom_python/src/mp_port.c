@@ -7,6 +7,7 @@
 #include "py/runtime.h"
 #include "py/misc.h"  // Added to fix the mp_import_stat_t undefined error!
 #include "py/obj.h"
+#include "py/mpprint.h"
 
 // Reference core module structures compiled inside py/modmath.c, py/modarray.c, etc.
 #if MICROPY_PY_MATH
@@ -53,22 +54,16 @@ const mp_obj_module_t mp_module_errno = { .base = { &mp_type_module } };
 #endif
 
 
-void mp_do_str(const char *src, int input_kind) {
-    // 1. Create a lexer from the incoming string buffer code
-    // Instead of a pre-compiled macro token, we look up or create the string identifier dynamically
-    qstr source_name = qstr_from_str("<stdin>");
-    mp_lexer_t *lex = mp_lexer_new_from_str_len(source_name, src, strlen(src), 0);
-
-    if (lex == NULL) {
-        printf("Error: MicroPython failed to allocate lexer for the script string!\n");
-        return;
-    }
-
-    // 2. Wrap the parser, compiler, and engine execution inside a Non-Local Return (NLR) protection block
-    // This stops runtime Python script crashes (like syntax errors) from bricking your VEX V5 system
+int mp_do_str(const char *src, int input_kind) {
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
-        qstr source_name = lex->source_name;
+        qstr source_name = qstr_from_str("<stdin>");
+        mp_lexer_t *lex = mp_lexer_new_from_str_len(source_name, src, strlen(src), 0);
+        if (lex == NULL) {
+            printf("Error: MicroPython failed to allocate lexer for the script string!\n");
+            nlr_pop();
+            return 0;
+        }
         
         // Parse the code tokens into a structural tree
         mp_parse_tree_t parse_tree = mp_parse(lex, (mp_parse_input_kind_t)input_kind);
@@ -80,12 +75,11 @@ void mp_do_str(const char *src, int input_kind) {
         mp_call_function_0(module_fun);
         
         nlr_pop(); // Code executed successfully! Pop the safety buffer.
+        return 1;
     } else {
-        // This executes if the script throws an uncaught exception (e.g. NameError, ZeroDivisionError)
-        printf("MicroPython Script Error: An unhandled exception escaped runtime execution.\n");
-        
-        // Optional: If you want to print the specific error message to the terminal, 
-        // you can call: mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
+        printf("MicroPython script error:\n");
+        mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
+        return 0;
     }
 }
 
