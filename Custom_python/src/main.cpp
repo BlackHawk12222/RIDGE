@@ -1,11 +1,32 @@
-#include "main.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <iostream>
+#include "main.h"
 
-// Enforce uniform standard C naming layouts for ALL shared parameters
+// MicroPython specific headers (must be inside extern "C")
 extern "C" {
+    bool capture_traceback_mode = false;
+    char traceback_buffer[1024];
+    size_t traceback_buf_idx = 0;
+
+    // Core shared runtime execution wrappers
     void init_micropython(void* heap, size_t heap_size);
     int mp_do_str(const char* src, int input_kind);
+    
+    // Custom stdout injection function
+    void mp_port_stdout_capture(const char *str, size_t len) {
+        if (capture_traceback_mode) {
+            for (size_t i = 0; i < len; i++) {
+                if (traceback_buf_idx < sizeof(traceback_buffer) - 1) {
+                    traceback_buffer[traceback_buf_idx++] = str[i];
+                }
+            }
+            traceback_buffer[traceback_buf_idx] = '\0';
+        }
+    }
+
+    // Keep ONLY this declaration line here. REMOVE the full function body definition.
+    void mp_port_print_last_exception(void);
 }
 
 #define MP_HEAP_SIZE (1024 * 1024) // 1 MiB Heap
@@ -30,16 +51,10 @@ void initialize() {
     pros::screen::erase();
     status_screen_line = 1;
     report_status("MP: initializing");
+
     init_micropython(mp_heap, sizeof(mp_heap));
     report_status("MP: ready");
-}
-
-void autonomous() {
-    report_status("Autonomous: no script configured");
-}
-
-void opcontrol() {
-    report_status("Driver Control: opening /usd/main.py");
+    report_status("initalize: opening /usd/main.py");
     FILE* py_file = fopen("/usd/main.py", "r");
 
     if (py_file == NULL) {
@@ -79,12 +94,75 @@ void opcontrol() {
     python_buffer[bytes_read] = '\0';
 
     report_status("MicroPython: running script");
+    
+    // Clear buffer before running
+    capture_traceback_mode = false;
+    traceback_buf_idx = 0;
+    traceback_buffer[0] = '\0';
+
+    // NOTE: Depending on your port's `mp_do_str` implementation, it might print the 
+    // traceback *during* this function call. If it does, change `capture_traceback_mode = false;` 
+    // above to `true` so it catches it live.
     int script_succeeded = mp_do_str(python_buffer, 1);
     free(python_buffer);
 
-    report_status(script_succeeded
-        ? "MicroPython: script finished"
-        : "MicroPython: script error; check console");
+    if (!script_succeeded) {
+        // 1. Enable capture mode so our print handler records the string chunks
+        capture_traceback_mode = true;
+
+        // 2. Call our native C function helper to pull the traceback data
+        mp_port_print_last_exception();
+
+        // Disable capture mode now that we have the text
+        capture_traceback_mode = false;
+
+        if (traceback_buf_idx == 0) {
+            snprintf(traceback_buffer, sizeof(traceback_buffer), "Python Runtime Error occurred.\nCheck terminal.");
+        }
+
+        // --- 3. DRAW THE RED BOX UI ---
+        pros::screen::set_eraser(0x000000);
+        pros::screen::erase();
+
+        pros::screen::set_pen(0xD32F2F);
+        pros::screen::draw_rect(10, 10, 470, 55);
+
+        pros::screen::set_pen(0xFFFFFF);
+        pros::screen::print(TEXT_MEDIUM_CENTER, 2, "PYTHON RUNTIME ERROR");
+
+        pros::screen::set_pen(0xFF9999);
+        char current_line[128];
+        int buf_idx = 0;
+        int screen_line_row = 4;
+
+        for (int i = 0; traceback_buffer[i] != '\0'; i++) {
+            if (traceback_buffer[i] == '\n' || buf_idx >= 127) {
+                current_line[buf_idx] = '\0';
+                pros::screen::print(TEXT_SMALL, screen_line_row++, " %s", current_line);
+                buf_idx = 0;
+                if (screen_line_row > 11) break;
+            } else {
+                current_line[buf_idx++] = traceback_buffer[i];
+            }
+        }
+        if (buf_idx > 0 && screen_line_row <= 11) {
+            current_line[buf_idx] = '\0';
+            pros::screen::print(TEXT_SMALL, screen_line_row, " %s", current_line);
+        }
+
+        while (true) {
+            pros::delay(20);
+        }
+    }
+    
+    report_status("MicroPython: script finished");
+}
+
+void autonomous() {
+    report_status("Autonomous: no script configured");
+}
+
+void opcontrol() {
     while (true) {
         pros::delay(20);
     }

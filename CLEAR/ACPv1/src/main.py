@@ -25,5 +25,7 @@ print("\033[2J")
 def aton():
     pass
 
+OtherMotor.set_max_torque(2.5, CurrentUnits.AMP)
+
 # Aton Functions
 comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)

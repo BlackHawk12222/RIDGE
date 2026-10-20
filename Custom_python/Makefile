@@ -37,18 +37,20 @@ TEMPLATE_FILES=$(INCDIR)/$(LIBNAME)/*.h $(INCDIR)/$(LIBNAME)/*.hpp
 # Custom MicroPython Port Parameter Mapping (Fully Manual)
 ################################################################################
 
-# 1. Provide absolute search contexts for both the parent directory AND sub-paths
-EXTRA_INCDIRS += src/micropython \
-                 src/micropython/py \
-                 src/micropython/genhdr \
-                 src/micropython/extmod
+# 1. Revert INCDIR back to standard defaults to avoid common.mk layout conflicts
+INCDIR=$(ROOT)/include
 
-# 2. Hard-inject standard compiler include flags into the build engine
-# This explicitly tells GCC that 'src/micropython' is a valid search route for "py/..."
+# 2. Append the base micropython folder directly into the compiler flag queues.
+# This forces the inclusion of 'mpconfigport.h' via global GCC flags.
 EXTRA_CFLAGS += -I$(BINDIR)/micropython \
                 -Isrc/micropython \
                 -Isrc/micropython/py \
                 -Isrc/micropython/extmod
+
+EXTRA_CXXFLAGS += -I$(BINDIR)/micropython \
+                  -Isrc/micropython \
+                  -Isrc/micropython/py \
+                  -Isrc/micropython/extmod
 
 # 3. Explicitly scan and track deep source paths inside common.mk loops
 EXTRA_SRCDIRS += src/micropython \
@@ -58,11 +60,10 @@ EXTRA_SRCDIRS += src/micropython \
 
 # 4. Handle files you want to manually omit from compiling
 EXCLUDE_SRC_FROM_LIB += src/micropython/shared/runtime/pyexec.c \
-                        src/micropython/py/builtinhelp.c \
-                        src/micropython/py/modarray.c
+                        src/micropython/py/builtinhelp.c
 
 # 5. Global tracker symbols
-SRC_QSTR += src/modpros.c
+SRC_QSTR += src/mp_port.c src/modpros.c src/micropython/modules/vex_module.c
 
 ################################################################################
 ########## Nothing below this line should be edited by typical users ###########
@@ -75,7 +76,7 @@ PYTHON ?= python
 ################################################################################
 
 MPY_ROOT := src/micropython
-MP_QSTR_SOURCES := $(sort $(call rwildcard,$(MPY_ROOT)/,*.c,) src/modpros.c)
+MP_QSTR_SOURCES := $(sort $(call rwildcard,$(MPY_ROOT)/,*.c,) src/mp_port.c src/modpros.c src/micropython/modules/vex_module.c)
 MP_QSTR_GLOBAL_DEPS := $(MPY_ROOT)/mpconfigport.h \
                        $(MPY_ROOT)/py/mpconfig.h \
                        $(MPY_ROOT)/py/qstrdefs.h
@@ -95,6 +96,7 @@ MP_ROOT_POINTER_SPLIT := $(MP_QSTR_BUILD)/root_pointers.split
 MP_ROOT_POINTER_COLLECTED := $(MP_QSTR_BUILD)/root_pointers.collected
 MP_ROOT_POINTER_HEADER := $(BINDIR)/micropython/genhdr/root_pointers.h
 MP_QSTR_OBJECTS := $(filter $(BINDIR)/micropython/%,$(COBJ)) \
+                   $(BINDIR)/mp_port.c.o \
                    $(BINDIR)/modpros.c.o
 
 quick: $(MP_QSTR_HEADER) $(MP_MODULE_HEADER) $(MP_ROOT_POINTER_HEADER)

@@ -36,38 +36,36 @@ typedef long mp_off_t;
 #define MICROPY_STACK_CHECK             (0) // Turn off runtime overhead stack boundary checking
 #define MICROPY_HELPER_REPL             (0) // Strip out terminal interactive components
 #define MICROPY_HELPER_LEXER_UNIX       (0) 
-#define MICROPY_ENABLE_EXTERNAL_IMPORT  (1) // Required to load custom motor/sensor user modules
+#define MICROPY_ENABLE_EXTERNAL_IMPORT  (1)
+#define MICROPY_READER_POSIX            (1)
+#define MICROPY_PY_SYS_PATH             (1)
+#define MICROPY_PY_SYS_PATH_ARGV_DEFAULTS (1)
 #define MICROPY_ENABLE_COMPILER (1)
 #define MICROPY_FLOAT_IMPL              (MICROPY_FLOAT_IMPL_FLOAT)
 
-// These features require port implementations that are not present yet.
+// No stdin implementation is provided by this port.
 #define MICROPY_PY_BUILTINS_INPUT       (0)
-#define MICROPY_PY_IO                   (0)
 #define MICROPY_PY_SYS_STDFILES         (0)
 #define MICROPY_PY_SYS_STDIO_BUFFER     (0)
+// This MicroPython source snapshot does not include extmod/moductypes.c.
 #define MICROPY_PY_UCTYPES              (0)
 
 // If you don't need a REPL, you can safely strip standard stream histories
 #define MICROPY_REPL_EMACS_KEYS          (0)
 #define MICROPY_REPL_AUTO_INDENT         (0)
 
+// Force standard Python floats to compile as 32-bit single precision
+#define MICROPY_FLOAT_IMPL (MICROPY_FLOAT_IMPL_FLOAT)
 
 /* Allow baseline system tables to align tracking structs */
-#define MICROPY_PY_SYS_ARGV                        (0)
 #define MICROPY_PY_SYS_MUTABLE                     (1) // SG matching wrapper tracking
 
-// Force using simple string configurations to remove hex brace error routes
-#define MICROPY_PY_BUILTINS_STR_OP_MODULO         (1)
-#define MICROPY_PY_BUILTINS_STR_FORMAT            (0)
-
-// Disable weak references to fix mp_weakref_map compilation mismatch
-#define MICROPY_PY_WEAKREF               (0)
-#define MICROPY_PY_COLLECTIONS_DEQUE     (0) // Safe to turn off if you don't need double-ended queues
-
+#define MICROPY_HW_HAS_LCD (0)
+#define MICROPY_HW_ENABLE_LCD (0)
 #define MICROPY_HW_BOARD_NAME "VEX V5 Brain"
 #define MICROPY_HW_MCU_NAME   "Cortex-A9"
 
 // PROS System Traps & Standard Output Redirects
-unsigned int mp_hal_stdout_tx_strn(const char *str, size_t len);
+void mp_hal_stdout_tx_strn(const char *str, size_t len);
 
 #endif // INCLUDED_MPCONFIGPORT_H

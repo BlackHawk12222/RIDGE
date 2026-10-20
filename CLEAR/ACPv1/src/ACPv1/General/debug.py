@@ -1,4 +1,7 @@
-import utime  # type: ignore
+from vex import *
+import sys
+
+utime = Timer()
 
 """Used for debugging functions in code."""
 
@@ -7,11 +10,11 @@ def start(func):
 
     def wrapper(*args, **kwargs):
         try:
-            speed:float=utime.ticks_ms()
+            speed:float=utime.time()
             print("Startingdebug for %s"%(func))
             func(*args, **kwargs)
             print(func)
-            print("Time of function: %f Msec"%((utime.ticks_diff(utime.ticks_ms(), speed))))
+            print("Time of function: %f Msec"%(utime.time() -speed))
             print(locals())
         except Exception as e:
             sys.print_exception(e) # type: ignore
@@ -41,7 +44,7 @@ def time(func):
     """Prints time to exec the function."""
 
     def wrapper(*args, **kwargs):
-        speed:float=utime.ticks_ms()
+        speed:float=utime.time()
         func(*args, **kwargs)
-        print("Time of function: %f Msec"%((utime.ticks_diff(utime.ticks_ms(), speed))))
+        print("Time of function: %f Msec"%(utime.time() - speed))
     return wrapper

@@ -6,9 +6,11 @@
 #include "py/builtin.h"
 #include "py/compile.h"
 #include "py/runtime.h"
+#include "py/objlist.h"
 #include "py/gc.h"
 #include "py/nlr.h"
 #include "py/stackctrl.h"
+#include "py/mpstate.h"
 #include "mpconfigport.h"
 
 #include "shared/runtime/gchelper.h"
@@ -23,6 +25,9 @@ void init_micropython(void *heap, size_t heap_size) {
     mp_stack_ctrl_init();
     mp_port_status("MP: core init");
     mp_init();
+#if MICROPY_PY_SYS_PATH
+    mp_obj_list_append(mp_sys_path, mp_obj_new_str("/usd", 4));
+#endif
     mp_port_status("MP: core ready");
 }
 
@@ -64,10 +69,37 @@ void execute_python_string(const char *src) {
 // =============================================================================
 
 // Standard core output stream implementation
-unsigned int mp_hal_stdout_tx_strn(const char *str, size_t len) {
-    printf("%.*s", (int)len, str);
-    return len;
+// Reference the tracking objects hosted in main.cpp
+extern bool capture_traceback_mode;
+extern char traceback_buffer[1024];
+extern size_t traceback_buf_idx;
+extern void mp_port_stdout_capture(const char *str, size_t len);
+
+// Global helper function to handle exceptions safely inside a native C translation unit
+void mp_port_print_last_exception(void) {
+    mp_obj_t exc = MP_STATE_THREAD(mp_pending_exception);
+    if (exc != MP_OBJ_NULL) {
+        // mp_plat_print automatically pipes the stream into your mp_hal_stdout_tx_strn
+        mp_obj_print_exception(&mp_plat_print, exc);
+    }
 }
+
+void mp_hal_stdout_tx_strn(const char *str, size_t len) {
+    if (capture_traceback_mode) {
+        // Route character chunks straight into our C++ array string capture function
+        mp_port_stdout_capture(str, len);
+        
+        // OPTIONAL: Keep this line if you want to see the error out of your PC terminal
+        // but hide it from the brain's physical screen screen.
+        // pros_terminal_write(str, len); 
+
+        return; // CRITICAL: Stop here! Do not print this to the physical screen!
+    }
+
+    // Pass output to the standard terminal / console
+    printf("%.*s", (int)len, str);
+    return;
+} 
 
 // Concrete implementation mapping to the underlying PROS API delay clock
 void mp_hal_delay_ms(unsigned int ms) {
