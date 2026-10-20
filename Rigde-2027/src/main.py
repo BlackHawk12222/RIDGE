@@ -234,9 +234,29 @@ def set_velocity(side, velocity):
 
 
 
-def AIM_drive(mm):
+def resetDrivetrain():
+    right_drive_smart.set_velocity(100,PERCENT)
+    left_drive_smart.set_velocity(100,PERCENT)
+    left_drive_smart.stop()
+    right_drive_smart.stop()
+
+
+def AIM_drive(mm,driveVelocity,err=0):
+    mmToDeg = (mm/((69.85*3.14159)/360))/0.75
+    err = 0
     #adding AIM (accurate inertial movement) code here
-    pass
+    left_drive_smart.set_position(0, DEGREES)
+    right_drive_smart.set_position(0,DEGREES)
+    Inertial_.set_rotation(0,DEGREES)
+    left_drive_smart.spin_for(mm,DEGREES)
+    right_drive_smart.spin_for(mm,DEGREES)
+    while True:
+        err = Inertial_.rotation()*0.5
+        left_drive_smart.set_velocity(driveVelocity-err,PERCENT)
+        right_drive_smart.set_velocity(driveVelocity+err,PERCENT)
+        if math.fabs(mm-right_drive_smart.position(DEGREES))<5:
+            resetDrivetrain()
+            break
 
 
 def draw_progBar(x,y,width, height, percent, border,barColor,drawImage=None,image_width=0,image_height=0):
@@ -805,7 +825,7 @@ brain.screen.print("debug started. If nothing appears after this, APF has encoun
 brain.screen.next_row()
 
 if brain.sdcard.is_inserted():
-    apfCode.init(Inertial_, Vertical_Rotation, Horizontal_rotation, Horizontal_AID, PosX, PosY, Avoidance_Distance, drivetrain, brain)
+    apfCode.init(Inertial_, Vertical_Rotation, Horizontal_rotation, Horizontal_AID, PosX, PosY, Avoidance_Distance, drivetrain, brain, 7764)
     #apf = Thread(apfCode.apfTracking())
 
 brain.screen.next_row()

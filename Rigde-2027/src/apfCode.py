@@ -3,7 +3,7 @@
 from vex import *
 import math
 
-
+FileCheckOK = 17845
 Closest_Distance = 0
 direction_to_turn = "none"
 Obstacle_Points = []
@@ -21,12 +21,12 @@ def add_point(x,y):
     #adds a point to the list of obstacle points
     Obstacle_Points.append(str(x) + "," + str(y))
 
-def init(Inertial_, VerticalRotation, Horizontalrotation, HorizontalAID, Pos_X, Pos_Y, AvoidanceDistance, DVT, robotBrain: Brain):
+def init(Inertial_, VerticalRotation, Horizontalrotation, HorizontalAID, Pos_X, Pos_Y, AvoidanceDistance, DVT, robotBrain: Brain, none=1):
 
     #input these values from the main program to be used in the APF scripts
 
 
-    global inertialSensor, Vertical_Rotation, Horizontal_rotation, Horizontal_AID, PosX, PosY, Avoidance_Distance, drivetrain, brain
+    global inertialSensor, Vertical_Rotation, Horizontal_rotation, Horizontal_AID, PosX, PosY, Avoidance_Distance, drivetrain, brain, FileCheckOK
     inertialSensor= Inertial_
     Vertical_Rotation = Vertical_Rotation
     Horizontal_rotation = Horizontal_rotation
@@ -36,7 +36,8 @@ def init(Inertial_, VerticalRotation, Horizontalrotation, HorizontalAID, Pos_X, 
     Avoidance_Distance = AvoidanceDistance
     drivetrain = DVT
     brain = robotBrain
-    
+    if none == 7764:
+        FileCheckOK = 0
     brain.screen.print("APF init complete. Debug #1")
     brain.screen.next_row()
 
@@ -179,7 +180,9 @@ def doFileCheck():
 def apfTracking():
     brain.screen.print("doFileCheck running. Debug #2")
     brain.screen.next_row()
-    #doFileCheck()
+
+    if FileCheckOK == 17845:
+        doFileCheck()
     brain.screen.print("doFileCheck done. Debug #3.")
     brain.screen.next_row()
     while True:
