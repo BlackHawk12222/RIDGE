@@ -5,25 +5,15 @@
 
 // MicroPython specific headers (must be inside extern "C")
 extern "C" {
+    #include "py/obj.h"
     bool capture_traceback_mode = false;
     char traceback_buffer[1024];
-    size_t traceback_buf_idx = 0;
+    extern const mp_print_t *PrintExeption; 
+    extern size_t ValueExeptionList;
 
     // Core shared runtime execution wrappers
     void init_micropython(void* heap, size_t heap_size);
     int mp_do_str(const char* src, int input_kind);
-    
-    // Custom stdout injection function
-    void mp_port_stdout_capture(const char *str, size_t len) {
-        if (capture_traceback_mode) {
-            for (size_t i = 0; i < len; i++) {
-                if (traceback_buf_idx < sizeof(traceback_buffer) - 1) {
-                    traceback_buffer[traceback_buf_idx++] = str[i];
-                }
-            }
-            traceback_buffer[traceback_buf_idx] = '\0';
-        }
-    }
 
     // Keep ONLY this declaration line here. REMOVE the full function body definition.
     void mp_port_print_last_exception(void);
@@ -97,8 +87,6 @@ void initialize() {
     
     // Clear buffer before running
     capture_traceback_mode = false;
-    traceback_buf_idx = 0;
-    traceback_buffer[0] = '\0';
 
     // NOTE: Depending on your port's `mp_do_str` implementation, it might print the 
     // traceback *during* this function call. If it does, change `capture_traceback_mode = false;` 
@@ -116,10 +104,6 @@ void initialize() {
         // Disable capture mode now that we have the text
         capture_traceback_mode = false;
 
-        if (traceback_buf_idx == 0) {
-            snprintf(traceback_buffer, sizeof(traceback_buffer), "Python Runtime Error occurred.\nCheck terminal.");
-        }
-
         // --- 3. DRAW THE RED BOX UI ---
         pros::screen::set_eraser(0x000000);
         pros::screen::erase();
@@ -132,23 +116,9 @@ void initialize() {
 
         pros::screen::set_pen(0xFF9999);
         char current_line[128];
-        int buf_idx = 0;
         int screen_line_row = 4;
 
-        for (int i = 0; traceback_buffer[i] != '\0'; i++) {
-            if (traceback_buffer[i] == '\n' || buf_idx >= 127) {
-                current_line[buf_idx] = '\0';
-                pros::screen::print(TEXT_SMALL, screen_line_row++, " %s", current_line);
-                buf_idx = 0;
-                if (screen_line_row > 11) break;
-            } else {
-                current_line[buf_idx++] = traceback_buffer[i];
-            }
-        }
-        if (buf_idx > 0 && screen_line_row <= 11) {
-            current_line[buf_idx] = '\0';
-            pros::screen::print(TEXT_SMALL, screen_line_row, " %s", current_line);
-        }
+        pros::screen::print(TEXT_SMALL, screen_line_row++, " %s", ValueExeptionList);
 
         while (true) {
             pros::delay(20);
