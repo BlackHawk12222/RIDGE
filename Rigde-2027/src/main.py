@@ -259,12 +259,21 @@ def AIM_drive(mm,driveVelocity,err=0):
             break
 
 
-def draw_progBar(x,y,width, height, percent, border,barColor,drawImage=None,image_width=0,image_height=0):
-    brain.screen.set_pen_width(0)
-    brain.screen.set_fill_color(Color.WHITE)
-    brain.screen.draw_rectangle(x,y,width+border,height+border)
-    brain.screen.set_fill_color(barColor)
-    brain.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width,height*(percent/100))
+def draw_progBar(x,y,width, height, percent, border,barColor,drawImage=None,image_width=0,image_height=0,horizontalBar=False):
+    
+    if horizontalBar:
+        brain.screen.set_pen_width(0)
+        brain.screen.set_fill_color(Color.WHITE)
+        brain.screen.draw_rectangle(x,y,width+border,height+border)
+        brain.screen.set_fill_color(barColor)
+        brain.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width,height*(percent/100))
+    else:
+        brain.screen.set_pen_width(0)
+        brain.screen.set_fill_color(Color.WHITE)
+        brain.screen.draw_rectangle(x,y,width+border,height+border)
+        brain.screen.set_fill_color(barColor)
+        brain.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width*(percent/100),height)
+
     if drawImage is not None:
         if image_width != 0 and image_height != 0:
             brain.screen.draw_image_from_file(drawImage, x+(width/2)-(image_width/2)+border/2, y+(height/2)-(image_height/2)+border/2)
@@ -814,12 +823,14 @@ def bootAnim():
 
 
 
-# system event handlers
+# Event activation
 CC_display(CC_display_callback)
 
 
 # add 15ms delay to make sure events are registered correctly.
 wait(15, MSEC)
+
+#Start APF
 brain.screen.next_row()
 brain.screen.print("debug started. If nothing appears after this, APF has encountered an error.")
 brain.screen.next_row()
@@ -832,6 +843,7 @@ brain.screen.next_row()
 brain.screen.print("Debug for APF finished.")
 brain.screen.next_row()
 
+#Activate auto program; currently, this actually runs in ACPv1
 def aton():
     pass
 
