@@ -84,21 +84,10 @@ void mp_port_print_last_exception(void) {
     }
 }
 
-void mp_hal_stdout_tx_strn(const char *str, size_t len) {
-    if (capture_traceback_mode) {
-        // Route character chunks straight into our C++ array string capture function
-        mp_port_stdout_capture(str, len);
-        
-        // OPTIONAL: Keep this line if you want to see the error out of your PC terminal
-        // but hide it from the brain's physical screen screen.
-        // pros_terminal_write(str, len); 
-
-        return; // CRITICAL: Stop here! Do not print this to the physical screen!
-    }
-
+size_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
     // Pass output to the standard terminal / console
     printf("%.*s", (int)len, str);
-    return;
+    return len;
 } 
 
 // Concrete implementation mapping to the underlying PROS API delay clock

@@ -98,10 +98,11 @@ class Motor {
         GearSetting Ratio;
         bool IsReversed;
         pros::Motor* motor=nullptr;
-        float Velocity=50.0f;
+        float Velocity = 50.0f;
+        VelocityUnits DefaultVelocityUnits=RPM;
         BrakeMode DefaultBrakeMode=BRAKE;
-        float TimeoutTime=-1.0f;
-        TimeUnits TimeoutType= MSEC;
+        float TimeoutTime = -1.0f;
+        TimeUnits TimeoutType = MSEC;
 
         void timeout();
 
@@ -113,7 +114,7 @@ class Motor {
 
         void spin(Direction direction, float velocity=601.0, VelocityUnits units=RPM);
 
-        void spin_for(Direction direction, int angle, AngleUnits units=DEGREES, float velocity=601.0, VelocityUnits units_v=RPM, bool wait=true);
+        void spin_for(Direction direction, int angle, AngleUnits units=DEGREES, float velocity=601.0f, VelocityUnits units_v=RPM, bool wait=true);
 
         void spin_to_position(int rotation, AngleUnits units=DEGREES, float velocity=601.0f, VelocityUnits units_v=RPM, bool wait=true);
 
@@ -121,7 +122,7 @@ class Motor {
         
         void set_position(float position, AngleUnits units);
 
-        void set_velocity(float velocity);
+        void set_velocity(float velocity, VelocityUnits units);
 
         void set_stopping(BrakeMode mode);
 
@@ -161,6 +162,7 @@ class MotorGroup{
         bool IsReversed;
         pros::MotorGroup* motor=nullptr;
         float Velocity=50.0f;
+        VelocityUnits DefaultVelocityUnits=RPM;
         BrakeMode DefaultBrakeMode=BRAKE;
         float TimeoutTime=-1.0f;
         TimeUnits TimeoutType=MSEC;
@@ -175,8 +177,19 @@ class MotorGroup{
             }
             return PortList;
         }
+
+        static std::vector<std::int8_t> extract_ports(Motor** motors, int count){
+            std::vector<std::int8_t> PortList;
+            for (int i=1; i<=count; i++){
+                PortList.push_back(motors[i]->BASE->get_port());
+            }
+            return PortList;
+        }
+
     public:
         MotorGroup(std::initializer_list<Motor> motors);
+
+        MotorGroup(Motor** motor_array, int count);
             
         void spin(Direction direction, float velocity=601.0, VelocityUnits units=RPM);
 
@@ -188,7 +201,7 @@ class MotorGroup{
         
         void set_position(float position, AngleUnits units);
 
-        void set_velocity(float velocity);
+        void set_velocity(float velocity, VelocityUnits units);
 
         void set_stopping(BrakeMode mode);
 

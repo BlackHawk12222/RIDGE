@@ -254,8 +254,9 @@ void Motor::set_position(float position, AngleUnits units){
     }
 }
 
-void Motor::set_velocity(float velocity){
+void Motor::set_velocity(float velocity, VelocityUnits units){
     Velocity=velocity;
+    DefaultVelocityUnits=units;
 }
 
 void Motor::set_stopping(BrakeMode mode){
@@ -524,6 +525,21 @@ MotorGroup::MotorGroup(std::initializer_list<Motor> motors){
     
     Count=motors.size();
 }
+
+MotorGroup::MotorGroup(Motor** motor_array, int count){
+    pros::MotorGroup motor(extract_ports(motor_array, count)); 
+    
+    if (count > 0) {
+        // Get the first motor in the list to use as a configuration template
+        const pros::Motor& TemplateMotor = *motor_array[0]->BASE;
+
+        // Set the configuration of the group using the template motor's data
+        motor.set_gearing(TemplateMotor.get_gearing());
+        motor.set_encoder_units(TemplateMotor.get_encoder_units());
+    }
+    
+    Count=count;
+}
     
 void MotorGroup::timeout(){
     int TimeTo_MSEC=0;
@@ -760,8 +776,9 @@ void MotorGroup::set_position(float position, AngleUnits units){
     }
 }
 
-void MotorGroup::set_velocity(float velocity){
+void MotorGroup::set_velocity(float velocity, VelocityUnits units){
     Velocity=velocity;
+    DefaultVelocityUnits=units;
 }
 
 void MotorGroup::set_stopping(BrakeMode mode){

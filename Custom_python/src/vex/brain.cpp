@@ -3,33 +3,14 @@
 #include <sstream>
 #include <charconv>
 #include "main.h"
+#include "vex/brain.hpp"
 
 extern "C" {
 #include "py/runtime.h"
 #include "py/obj.h"
 }
 
-struct Color{
-    std::uint32_t ColorValue;
-    Color(std::uint32_t value){
-        ColorValue=value;
-    }
-};
-
-extern "C" void call_robot_print(const char* text) {
-    pros::screen::print(TEXT_SMALL, 1, "%s", text);
-}
-
-// 1. Separate Screen layout
-class Screen {
-private:
-    mp_obj_base_t base; // Tied to MicroPython Screen type identity
-    pros::text_format_e_t TextSize = pros::E_TEXT_MEDIUM;
-    int ScreenX = 0;
-    int ScreenY = 0;
-    pros::Color PenColor = pros::Color::black;
-
-    bool is_number(const std::string& str) {
+    bool Screen::is_number(const std::string& str) {
         double value;
         
         // &str[0] gets the pointer to the start, + str.size() gets the end
@@ -39,8 +20,7 @@ private:
         return ec == std::errc() && ptr == str.data() + str.size();
     }
 
-public:
-    void print(std::string text, std::string sep = "", int precision = 2) {
+    void Screen::print(std::string text, std::string sep = "", int precision = 2) {
         if (sep == "") {
             if (is_number(text)){
                 double number=std::stod(text);
@@ -68,17 +48,17 @@ public:
         }
     }
 
-    void set_cursor(int row, int col){
+    void Screen::set_cursor(int row, int col){
         ScreenY=row;
         ScreenX=col;
         
     }
 
-    void next_row(){
+    void Screen::next_row(){
         ScreenY+=1;
     }
 
-    void clear_row(int row=-1, Color color= Color(0x00000000)){
+    void Screen::clear_row(int row=-1, Color color= Color(0x00000000)){
         if (row == -1){
             row=ScreenY;
         }
@@ -95,15 +75,15 @@ public:
         pros::screen::set_pen(PenColor);
     }
 
-    int row(){
+    int Screen::row(){
         return ScreenY;
     }
 
-    int column(){
+    int Screen::column(){
         return ScreenX;
     }
 
-    void print_at(std::string text, int x, int y, std::string sep="", int precision=2, bool opaque=true){
+    void Screen::print_at(std::string text, int x, int y, std::string sep="", int precision=2, bool opaque=true){
         if (sep == "") {
             if (is_number(text)){
                 double number=std::stod(text);
@@ -130,11 +110,3 @@ public:
             pros::screen::print(TextSize, x, y, "%s", output.c_str());
         }
     }
-};
-
-// 2. Main Brain layout containing a reference to a Screen object
-class Brain {
-public:
-    mp_obj_base_t base; // Tied to MicroPython Brain type identity
-    mp_obj_t screen_subobj; // References the Screen instance inside Python
-};
