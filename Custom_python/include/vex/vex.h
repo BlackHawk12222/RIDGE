@@ -20,7 +20,7 @@ void motor_set_position(void* motor_ptr, float position, int units);
 void motor_set_velocity(void* motor_ptr, float velocity, int units);
 void motor_set_stopping(void* motor_ptr, int mode);
 void motor_set_max_torque(void* motor_ptr, float value, int units);
-void motor_set_timeout(void* motor_ptr, double value, int units);
+void motor_set_timeout(void* motor_ptr, float value, int units);
 void motor_set_reversed(void* motor_ptr, bool value);
 void motor_reset_position(void* motor_ptr);
 bool motor_is_done(void* motor_ptr);

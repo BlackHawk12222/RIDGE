@@ -127,7 +127,7 @@ class Motor {
 
         void set_max_torque(float value, TorqueUnits units);
 
-        void set_timeout(double value, TimeUnits units);
+        void set_timeout(float value, TimeUnits units);
 
         void set_reversed(bool value);
 
@@ -206,7 +206,7 @@ class MotorGroup{
 
         void set_max_torque(float value, TorqueUnits units);
 
-        void set_timeout(double value, TimeUnits units);
+        void set_timeout(float value, TimeUnits units);
 
         void set_reversed(bool value);
 
