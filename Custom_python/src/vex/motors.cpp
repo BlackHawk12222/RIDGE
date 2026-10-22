@@ -342,7 +342,7 @@ void Motor::set_max_torque(float value, TorqueUnits units){
     }
 }
 
-void Motor::set_timeout(double value, TimeUnits units){
+void Motor::set_timeout(float value, TimeUnits units){
     TimeoutTime=value;
     TimeoutType=units;
 }
@@ -864,7 +864,7 @@ void MotorGroup::set_max_torque(float value, TorqueUnits units){
     }
 }
 
-void MotorGroup::set_timeout(double value, TimeUnits units){
+void MotorGroup::set_timeout(float value, TimeUnits units){
     // Techinical difficulties plese stand by...
 }
 

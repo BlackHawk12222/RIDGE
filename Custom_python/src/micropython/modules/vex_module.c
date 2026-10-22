@@ -89,13 +89,56 @@ static mp_obj_t mp_motor_set_position(mp_obj_t self_ptr, mp_obj_t position_t, mp
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_set_position_obj, mp_motor_set_position);
 
+static mp_obj_t mp_motor_set_velosity(mp_obj_t self_ptr, mp_obj_t velosity_t, mp_obj_t units_t){
+    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    float velosity = mp_obj_get_float(velosity_t);
+    int units = mp_obj_get_int(units_t);
+
+    motor_set_velocity(self -> cpp_handle, velosity, units);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_set_velosity_obj, mp_motor_set_velosity);
+
+static mp_obj_t mp_motor_set_stopping(mp_obj_t self_ptr, mp_obj_t mode_t){
+    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    int mode = mp_obj_get_int(mode_t);
+
+    motor_set_stopping(self -> cpp_handle, mode);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_set_stopping_obj, mp_motor_set_stopping);
+
+static mp_obj_t mp_motor_set_max_torque(mp_obj_t self_ptr, mp_obj_t torque_t, mp_obj_t units_t){
+    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    float torque = mp_obj_get_float(torque_t);
+    int units = mp_obj_get_int(units_t);
+
+    motor_set_max_torque(self -> cpp_handle, torque, units);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_set_max_torque_obj, mp_motor_set_max_torque);
+
+static mp_obj_t mp_motor_set_timeout(mp_obj_t self_ptr, mp_obj_t value_t, mp_obj_t units_t){
+    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    float value = mp_obj_get_float(value_t);
+    int units = mp_obj_get_int(units_t);
+
+    motor_set_timeout(self -> cpp_handle, value, units);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_set_timeout_obj, mp_motor_set_timeout);
+
 static const mp_rom_map_elem_t mp_motor_locals_dict_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
     { MP_ROM_QSTR(MP_QSTR_spin), MP_ROM_PTR(&mp_motor_spin_obj) },
     { MP_ROM_QSTR(MP_QSTR_spin_for), MP_ROM_PTR(&mp_motor_spin_for_obj) },
     { MP_ROM_QSTR(MP_QSTR_spin_to_position), MP_ROM_PTR(&mp_motor_spin_to_position_obj) },
     { MP_ROM_QSTR(MP_QSTR_stop), MP_ROM_PTR(&mp_motor_stop_obj) },
-    { MP_ROM_QSTR(MP_QSTR_set_position), MP_ROM_PTR(&mp_motor_set_position_obj) }
+    { MP_ROM_QSTR(MP_QSTR_set_position), MP_ROM_PTR(&mp_motor_set_position_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_velocity), MP_ROM_PTR(&mp_motor_set_velosity_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_max_stopping), MP_ROM_PTR(&mp_motor_set_stopping_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_max_torque), MP_ROM_PTR(&mp_motor_set_max_torque_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_timeout), MP_ROM_PTR(&mp_motor_set_timeout_obj) }
 };
 static MP_DEFINE_CONST_DICT(mp_motor_locals_dict, mp_motor_locals_dict_table);
 

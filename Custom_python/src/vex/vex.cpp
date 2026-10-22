@@ -53,7 +53,7 @@ void motor_set_max_torque(void* motor_ptr, float value, int units){
     static_cast<Motor*>(motor_ptr)->set_max_torque(value, static_cast<TorqueUnits>(units));
 }
 
-void motor_set_timeout(void* motor_ptr, double value, int units){
+void motor_set_timeout(void* motor_ptr, float value, int units){
     static_cast<Motor*>(motor_ptr)->set_timeout(value, static_cast<TimeUnits>(units));
 }
 
