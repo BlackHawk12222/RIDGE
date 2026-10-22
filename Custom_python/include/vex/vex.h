@@ -61,11 +61,11 @@ int motor_group_temperature(void* motor_ptr, int units);
 int motor_group_get_timeout(void* motor_ptr);
 
 /*DEFINE class Timer for C*/
-void* timer_create();
-void timer_destroy(void* timer_ptr);
-void timer_clear(void* timer_ptr);
-int timer_time(void* timer_ptr, int units);
-void timer_event(void* timer_ptr, mp_obj_t callback_func, int delay_ms);
+void* vex_timer_create();
+void vex_timer_destroy(void* timer_ptr);
+void vex_timer_clear(void* timer_ptr);
+int vex_timer_time(void* timer_ptr, int units);
+void vex_timer_event(void* timer_ptr, mp_obj_t callback_func, int delay_ms);
 
 #ifdef __cplusplus
 }

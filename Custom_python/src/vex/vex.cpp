@@ -106,7 +106,7 @@ int motor_get_timeout(void* motor_ptr){
 }
 
 /*DEFINE class MotorGroup for C*/
-void* motorgroup_create(void** motor_ptrs, int count) {
+void* motor_group_create(void** motor_ptrs, int count) {
     Motor** target_motors = reinterpret_cast<Motor**>(motor_ptrs);
     
     return static_cast<void*>(new MotorGroup(target_motors, count));
@@ -205,20 +205,20 @@ int motor_group_count(void* motor_ptr){
 }
 
 /*DEFINE class Timer for C*/
-void* timer_create(){
+void* vex_timer_create(){
     return static_cast<void*>(new Timer());
 }
 
-void timer_destroy(void* timer_ptr){
+void vex_timer_destroy(void* timer_ptr){
     delete static_cast<Timer*>(timer_ptr);
 }
 
-void timer_clear(void* timer_ptr){
+void vex_timer_clear(void* timer_ptr){
     static_cast<Timer*>(timer_ptr)->clear();
 }
 
-int timer_time(void* timer_ptr, int units){
-    static_cast<Timer*>(timer_ptr)->time(static_cast<TimeUnits>(units));
+int vex_timer_time(void* timer_ptr, int units){
+    return static_cast<Timer*>(timer_ptr)->time(static_cast<TimeUnits>(units));
 }
 #include <map>
 
@@ -247,7 +247,7 @@ void timer_rtos_task(void* params) {
     delete p;
 }
 
-void timer_event(void* timer_ptr, mp_obj_t callback_func, int delay_ms) {
+void vex_timer_event(void* timer_ptr, mp_obj_t callback_func, int delay_ms) {
     mp_obj_list_append(mp_sys_path, callback_func); // Simple workaround to pin memory
 
     // Package parameters for our tracking thread

@@ -1,6 +1,10 @@
+#ifndef MOTOR_HPP
+#define MOTOR_HPP
+
 #include <stdexcept>
 #include <initializer_list>
 #include "main.h"
+#include "vex/timer.hpp"
 
 extern "C"{
     #include "py/runtime.h"
@@ -67,11 +71,6 @@ enum TorqueUnits{
     NM=2,
     INLB=3,
     TORQUE_AMPS=4
-};
-
-enum TimeUnits{
-    SECONDS=1,
-    MSEC=2
 };
 
 enum CurrentUnits{
@@ -235,3 +234,5 @@ class MotorGroup{
 
         int count();
 };
+
+#endif //MOTOR_HPP

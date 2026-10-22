@@ -73,7 +73,6 @@ void execute_python_string(const char *src) {
 extern bool capture_traceback_mode;
 extern char traceback_buffer[1024];
 extern size_t traceback_buf_idx;
-extern void mp_port_stdout_capture(const char *str, size_t len);
 
 // Global helper function to handle exceptions safely inside a native C translation unit
 void mp_port_print_last_exception(void) {
@@ -85,6 +84,7 @@ void mp_port_print_last_exception(void) {
 }
 
 size_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
+
     // Pass output to the standard terminal / console
     printf("%.*s", (int)len, str);
     return len;

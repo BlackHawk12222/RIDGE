@@ -35,11 +35,67 @@ static mp_obj_t mp_motor_spin(size_t n_args, const mp_obj_t *args) {
     motor_spin(self->cpp_handle, direction, velocity, units);
     return mp_const_none;
 }
+// obj, requred args, total args, function.
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_obj, 4, 4, mp_motor_spin);
+
+static mp_obj_t mp_motor_spin_for(size_t n_args, const mp_obj_t *args) {
+    mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    int direction = mp_obj_get_int(args[1]);
+    int angle = mp_obj_get_int(args[2]);
+
+    // Defining default values.
+    int units = (n_args > 3) ? mp_obj_get_int(args[3])   : 3;      // DEGREES macro value
+    float velocity = (n_args > 4) ? mp_obj_get_float(args[4]) : 601.0f;
+    int units_v = (n_args > 5) ? mp_obj_get_int(args[5])   : 2;      // RPM macro value
+    bool wait = (n_args > 6) ? mp_obj_is_true(args[6])   : true;
+
+    motor_spin_for(self -> cpp_handle, direction, angle, units, velocity, units_v, wait);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_for_obj, 3, 7, mp_motor_spin_for);
+
+static mp_obj_t mp_motor_spin_to_position(size_t n_args, const mp_obj_t *args){
+    mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int rotation = mp_obj_get_int(args[2]);
+
+    int units = (n_args > 3) ? mp_obj_get_int(args[3])   : 3;      // DEGREES macro value
+    float velocity = (n_args > 4) ? mp_obj_get_float(args[4]) : 601.0f;
+    int units_v = (n_args > 5) ? mp_obj_get_int(args[5])   : 2;      // RPM macro value
+    bool wait = (n_args > 6) ? mp_obj_is_true(args[6])   : true;
+
+    motor_spin_to_position(self -> cpp_handle, rotation, units, velocity, units_v, wait);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_to_position_obj, 2, 7, mp_motor_spin_to_position);
+
+static mp_obj_t mp_motor_stop(size_t n_args, const mp_obj_t *args){
+    mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    int mode = (n_args > 1) ? mp_obj_get_int(args[1])   : -1;
+
+    motor_stop(self -> cpp_handle, mode);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_stop_obj, 1, 2, mp_motor_stop);
+
+static mp_obj_t mp_motor_set_position(mp_obj_t self_ptr, mp_obj_t position_t, mp_obj_t units_t){
+    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    float position = mp_obj_get_float(position_t);
+    int units = mp_obj_get_int(units_t);
+
+    motor_set_position(self -> cpp_handle, position, units);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_set_position_obj, mp_motor_set_position);
 
 static const mp_rom_map_elem_t mp_motor_locals_dict_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
     { MP_ROM_QSTR(MP_QSTR_spin), MP_ROM_PTR(&mp_motor_spin_obj) },
+    { MP_ROM_QSTR(MP_QSTR_spin_for), MP_ROM_PTR(&mp_motor_spin_for_obj) },
+    { MP_ROM_QSTR(MP_QSTR_spin_to_position), MP_ROM_PTR(&mp_motor_spin_to_position_obj) },
+    { MP_ROM_QSTR(MP_QSTR_stop), MP_ROM_PTR(&mp_motor_stop_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_position), MP_ROM_PTR(&mp_motor_set_position_obj) }
 };
 static MP_DEFINE_CONST_DICT(mp_motor_locals_dict, mp_motor_locals_dict_table);
 

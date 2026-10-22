@@ -1,3 +1,6 @@
+#ifndef BRAIN_HPP
+#define BRAIN_HPP
+
 #include <string>
 #include <vector>
 #include <sstream>
@@ -62,3 +65,5 @@ class Brain{
         Screen screen;
         
 };
+
+#endif //BRAIN_HPP

@@ -20,7 +20,7 @@ extern "C" {
         return ec == std::errc() && ptr == str.data() + str.size();
     }
 
-    void Screen::print(std::string text, std::string sep = "", int precision = 2) {
+    void Screen::print(std::string text, std::string sep, int precision) {
         if (sep == "") {
             if (is_number(text)){
                 double number=std::stod(text);
@@ -58,7 +58,7 @@ extern "C" {
         ScreenY+=1;
     }
 
-    void Screen::clear_row(int row=-1, Color color= Color(0x00000000)){
+    void Screen::clear_row(int row, Color color){
         if (row == -1){
             row=ScreenY;
         }
@@ -83,7 +83,7 @@ extern "C" {
         return ScreenX;
     }
 
-    void Screen::print_at(std::string text, int x, int y, std::string sep="", int precision=2, bool opaque=true){
+    void Screen::print_at(std::string text, int x, int y, std::string sep, int precision, bool opaque){
         if (sep == "") {
             if (is_number(text)){
                 double number=std::stod(text);
