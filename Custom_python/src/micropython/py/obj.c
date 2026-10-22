@@ -136,6 +136,9 @@ void mp_obj_print(mp_obj_t o_in, mp_print_kind_t kind) {
     mp_obj_print_helper(MP_PYTHON_PRINTER, o_in, kind);
 }
 
+const mp_print_t *PrintExeption;
+size_t ValueExeptionList;
+
 // helper function to print an exception with traceback
 void mp_obj_print_exception(const mp_print_t *print, mp_obj_t exc) {
     if (mp_obj_is_exception_instance(exc)) {
@@ -144,9 +147,12 @@ void mp_obj_print_exception(const mp_print_t *print, mp_obj_t exc) {
         if (n > 0) {
             assert(n % 3 == 0);
             mp_print_str(print, "Traceback (most recent call last):\n");
+            PrintExeption=print;
+            ValueExeptionList=(size_t)(*values);
             for (int i = n - 3; i >= 0; i -= 3) {
                 #if MICROPY_ENABLE_SOURCE_LINE
                 mp_printf(print, "  File \"%q\", line %d", values[i], (int)values[i + 1]);
+                
                 #else
                 mp_printf(print, "  File \"%q\"", values[i]);
                 #endif

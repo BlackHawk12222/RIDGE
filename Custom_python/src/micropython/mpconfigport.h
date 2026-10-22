@@ -66,6 +66,6 @@ typedef long mp_off_t;
 #define MICROPY_HW_MCU_NAME   "Cortex-A9"
 
 // PROS System Traps & Standard Output Redirects
-void mp_hal_stdout_tx_strn(const char *str, size_t len);
+size_t mp_hal_stdout_tx_strn(const char *str, size_t len);
 
 #endif // INCLUDED_MPCONFIGPORT_H
