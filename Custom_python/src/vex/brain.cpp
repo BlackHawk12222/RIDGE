@@ -2,7 +2,7 @@
 #include <vector>
 #include <sstream>
 #include <charconv>
-#include <unordered_map>
+#include <map>
 #include "main.h"
 #include "vex/brain.hpp"
 
@@ -227,10 +227,26 @@ void Screen::released(Func callback, Args... args){
 }
 
 SdCard::SdCard(){
-    
+
 }
 
 int SdCard::cache_file(std::string filename){
+
+    if (MemoryOffset + sizeof(RobotStateData) > CACHE_MAX_BYTES) {
+        return false; // Cache full!
+    }
+
+    // 1. Copy the data into the raw block at the current offset
+    std::memcpy(raw_memory_block + current_byte_offset, &data, sizeof(RobotStateData));
+
+    // 2. Save the location offset in our map index
+    cache_index[key] = current_byte_offset;
+
+    // 3. Move the offset forward for the next data entry
+    current_byte_offset += sizeof(RobotStateData);
+    return true;
+
+    
     std::string path = "/usd/";
     path += filename;
     FILE* file = fopen(path.c_str(), "r");
