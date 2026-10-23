@@ -39,14 +39,19 @@ brain.screen.clear_screen()
 #controllers
 controller_1 = Controller(PRIMARY)
 interface =  Controller(PARTNER)
-#motors, in order of port, lowest first
+
+#3-wire ports
+pnu = DigitalOut(brain.three_wire_port.a)
+
+#other bojects, in order of port, lowest first
 DistanceSensor = Distance(Ports.PORT1)#----------------------------ONE
 ColorSensor = Optical(Ports.PORT2)#--------------------------------TWO
 Bar_Switcher = Motor(Ports.PORT3, GearSetting.RATIO_18_1, False)#--THREE
 Horizontal_rotation = Rotation(Ports.PORT4, False)#----------------FOUR
 Vertical_Rotation = Rotation(Ports.PORT5, False)#------------------FIVE
-Inertial_ = Inertial(Ports.PORT6)#---------------------------------SIX
-Horizontal_AID = Rotation(Ports.PORT7, False)#---------------------SEVEN
+Horizontal_AID = Rotation(Ports.PORT6, False)#---------------------SIX
+
+Inertial_ = Inertial(Ports.PORT7)#---------------------------------SEVEN
 
 liftOne = Motor(Ports.PORT15, GearSetting.RATIO_6_1, False)#-------FIFTEEN
 liftTwo = Motor(Ports.PORT16,GearSetting.RATIO_6_1,False)#---------SIXTEEN
