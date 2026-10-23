@@ -5,6 +5,7 @@
 #include <initializer_list>
 #include "main.h"
 #include "vex/timer.hpp"
+#include "vex/brain.hpp"
 
 extern "C"{
     #include "py/runtime.h"
@@ -43,20 +44,20 @@ enum GearSetting {
 };
 
 enum VelocityUnits{
-    VELOCITY_PERCENT=1,
-    RPM=2,
-    VOLT=3,
-    DPS=4
+    VELOCITY_PERCENT=23,
+    RPM=24,
+    VOLT=25,
+    DPS=26
 };
 
 enum Direction{
-    FORWARD=0,
-    REVERSE=1 
+    FORWARD=27,
+    REVERSE=28 
 };
 
 enum AngleUnits{
-    DEGREES=1,
-    TURNS=2
+    DEGREES=29,
+    TURNS=30
 };
 
 enum BrakeMode{
@@ -67,28 +68,18 @@ enum BrakeMode{
 };
 
 enum TorqueUnits{
-    TORQUE_PERCENT=1,
-    NM=2,
-    INLB=3,
-    TORQUE_AMPS=4
-};
-
-enum CurrentUnits{
-    CURRENT_AMPS=5,
+    TORQUE_PERCENT=23,
+    NM=31,
+    INLB=32,
+    TORQUE_AMPS=33
 };
 
 enum PowerUnits{
-    WATT=1
+    WATT=34
 };
 
 enum EfficiencyUnits{
-    EFFICIENCY_PERCENT=6
-};
-
-enum TemperatureUnits{
-    CELSIUS=1,
-    FAHRENHEIT=2,
-    TEMPERATURE_PERCENT=7
+    EFFICIENCY_PERCENT=23
 };
 
 class Motor {

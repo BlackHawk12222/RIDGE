@@ -45,12 +45,16 @@ INCDIR=$(ROOT)/include
 EXTRA_CFLAGS += -I$(BINDIR)/micropython \
                 -Isrc/micropython \
                 -Isrc/micropython/py \
-                -Isrc/micropython/extmod
+                -Isrc/micropython/extmod \
+				-Isrc/micropython/modules
 
 EXTRA_CXXFLAGS += -I$(BINDIR)/micropython \
                   -Isrc/micropython \
                   -Isrc/micropython/py \
-                  -Isrc/micropython/extmod
+                  -Isrc/micropython/extmod \
+				  -Isrc/vex
+
+EXTRA_CXXFLAGS += -fno-rtti
 
 # 3. Explicitly scan and track deep source paths inside common.mk loops
 EXTRA_SRCDIRS += src/micropython \

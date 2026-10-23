@@ -93,37 +93,6 @@ void initialize() {
     // above to `true` so it catches it live.
     int script_succeeded = mp_do_str(python_buffer, 1);
     free(python_buffer);
-
-    if (!script_succeeded) {
-        // 1. Enable capture mode so our print handler records the string chunks
-        capture_traceback_mode = true;
-
-        // 2. Call our native C function helper to pull the traceback data
-        mp_port_print_last_exception();
-
-        // Disable capture mode now that we have the text
-        capture_traceback_mode = false;
-
-        // --- 3. DRAW THE RED BOX UI ---
-        pros::screen::set_eraser(0x000000);
-        pros::screen::erase();
-
-        pros::screen::set_pen(0xD32F2F);
-        pros::screen::draw_rect(10, 10, 470, 55);
-
-        pros::screen::set_pen(0xFFFFFF);
-        pros::screen::print(TEXT_MEDIUM_CENTER, 2, "PYTHON RUNTIME ERROR");
-
-        pros::screen::set_pen(0xFF9999);
-        char current_line[128];
-        int screen_line_row = 4;
-
-        pros::screen::print(TEXT_SMALL, screen_line_row++, " %s", ValueExeptionList);
-
-        while (true) {
-            pros::delay(20);
-        }
-    }
     
     report_status("MicroPython: script finished");
 }

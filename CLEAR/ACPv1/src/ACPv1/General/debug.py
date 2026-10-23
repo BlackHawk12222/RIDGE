@@ -5,7 +5,7 @@ utime = Timer()
 
 """Used for debugging functions in code."""
 
-def start(func):
+def debug_start(func):
     """Does error handling, prints all variables, and gives time fof funtion."""
 
     def wrapper(*args, **kwargs):
@@ -20,7 +20,7 @@ def start(func):
             sys.print_exception(e) # type: ignore
     return wrapper
 
-def handling(func):
+def debug_handling(func):
     """Puts in error handling."""
 
     def wrapper(*args, **kwargs):
@@ -30,7 +30,7 @@ def handling(func):
             sys.print_exception(e) # type: ignore
     return wrapper
 
-def print(func):
+def debug_print(func):
     """Prints variables."""
 
     def wrapper(*args, **kwargs):
@@ -40,7 +40,7 @@ def print(func):
         print(locals())
     return wrapper
 
-def time(func):
+def debug_time(func):
     """Prints time to exec the function."""
 
     def wrapper(*args, **kwargs):
