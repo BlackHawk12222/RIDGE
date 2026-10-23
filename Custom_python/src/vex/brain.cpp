@@ -2,6 +2,7 @@
 #include <vector>
 #include <sstream>
 #include <charconv>
+#include <unordered_map>
 #include "main.h"
 #include "vex/brain.hpp"
 
@@ -151,23 +152,24 @@ void Screen::clear_line(int line){
 }
 
 void Screen::new_line(){
-    
+    ScreenY+=1;
 }
 
 void Screen::clear_screen(Color color){
-    
+    pros::screen::set_eraser(color.ColorValue);
+    pros::screen::erase();
 }
 
 void Screen::set_font(Font font){
-    
+    //in progress
 }
 
 void Screen::set_pen_width(int value){
-    
+    PenWidth = value;
 }
 
 void Screen::set_pen_color(Color color){
-    
+    pros::screen::set_pen(color.ColorValue);
 }
 
 void Screen::set_fill_color(Color color){
@@ -215,11 +217,105 @@ int Screen::y_position(){
 }
 
 template<typename Func, typename... Args>
-void pressed(Func callback, Args... args){
+void Screen::pressed(Func callback, Args... args){
     
 }
 
 template<typename Func, typename... Args>
-void released(Func callback, Args... args){
+void Screen::released(Func callback, Args... args){
     
+}
+
+SdCard::SdCard(){
+    
+}
+
+int SdCard::cache_file(std::string filename){
+    std::string path = "/usd/";
+    path += filename;
+    FILE* file = fopen(path.c_str(), "r");
+
+    if (file == NULL){
+        return 1;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    
+    file_cache[filename] = (char*)malloc(file_size + 1);
+
+    fread(file_cache[filename], 1 , file_size, file);
+
+    file_cache[filename][file_size] = '\0';
+    file_sizes[filename] = file_size;
+
+    fclose(file);
+}
+
+char* SdCard::read_from_cache(std::string filename){
+    return file_cache[filename];
+}
+
+char* SdCard::loadfile(std::string filename, char* buffer){
+    if (file_cache.count(filename) > 0){
+        return read_from_cache(filename);
+    }else{
+        cache_file(filename);
+        return read_from_cache(filename);
+    }
+}
+
+void SdCard::savefile(std::string filename, char* buffer){
+    long new_size = file_sizes[filename] + strlen(buffer);
+    char* temp = (char*)realloc(file_cache[filename], new_size);
+    if (temp != NULL) {
+        file_cache[filename] = temp;
+    } else {
+        // Handle out-of-memory error
+        free(temp);
+        return;
+    }
+    file_cache[filename] = buffer;
+}
+
+void SdCard::appendfile(std::string filename, char* buffer){
+    long new_size = file_sizes[filename] + strlen(buffer);
+    char* temp = (char*)realloc(file_cache[filename], new_size);
+    if (temp != NULL) {
+        file_cache[filename] = temp;
+    } else {
+        // Handle out-of-memory error
+        free(temp);
+        return;
+    }
+
+    file_cache[filename][file_sizes[filename]] = buffer;
+
+    free(temp);
+}
+
+void SdCard::draw_image_from_file(std::string filename, int x, int y){
+    
+}
+
+bool SdCard::is_inserted(){
+
+}
+
+int SdCard::filesize(std::string filename){
+
+}
+
+int SdCard::size(std::string filename){
+
+}
+
+bool SdCard::exists(std::string filename){
+    
+}
+
+Brain::Brain(){
+    Screen screen;
+    SdCard sdcard;
+    Battery Battery;
 }

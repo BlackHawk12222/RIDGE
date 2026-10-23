@@ -5,6 +5,7 @@
 #include <vector>
 #include <sstream>
 #include <charconv>
+#include <unordered_map>
 #include "main.h"
 #include "timer.hpp"
 
@@ -82,6 +83,7 @@ class Screen{
         pros::text_format_e_t TextSize = pros::E_TEXT_MEDIUM;
         int ScreenX = 0;
         int ScreenY = 0;
+        int PenWidth = 0;
         pros::Color PenColor = pros::Color::black;
 
         bool is_number(const std::string& str);
@@ -147,8 +149,17 @@ class Screen{
 };
 
 class SdCard{
+    private:
+        std::unordered_map<std::string, char*> file_cache;
+        std::unordered_map<std::string, long> file_sizes;
+
+        int cache_file(std::string filename);
+
+        char* read_from_cache(std::string filename);
 
     public:
+        SdCard();
+
         char* loadfile(std::string filename, char* buffer = new char[0]);
 
         void savefile(std::string filename, char* buffer = new char[0]);
@@ -169,7 +180,7 @@ class SdCard{
 
 class Brain{
     private:
-
+        
 
     public:
         Brain();
