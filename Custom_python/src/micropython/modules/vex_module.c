@@ -315,7 +315,7 @@ static mp_obj_t mp_motor_group_spin(size_t n_args, const mp_obj_t *args) {
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_obj, 4, 4, mp_motor_group_spin);
 
 static mp_obj_t mp_motor_group_spin_for(size_t n_args, const mp_obj_t *args) {
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
     int direction = mp_obj_get_int(args[1]);
     int angle = mp_obj_get_int(args[2]);
@@ -332,7 +332,7 @@ static mp_obj_t mp_motor_group_spin_for(size_t n_args, const mp_obj_t *args) {
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_for_obj, 3, 7, mp_motor_group_spin_for);
 
 static mp_obj_t mp_motor_group_spin_to_position(size_t n_args, const mp_obj_t *args){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int rotation = mp_obj_get_int(args[2]);
 
     int units = (n_args > 3) ? mp_obj_get_int(args[3])   : 29;      // DEGREES macro value
@@ -346,7 +346,7 @@ static mp_obj_t mp_motor_group_spin_to_position(size_t n_args, const mp_obj_t *a
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_to_position_obj, 2, 7, mp_motor_group_spin_to_position);
 
 static mp_obj_t mp_motor_group_stop(size_t n_args, const mp_obj_t *args){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
     int mode = (n_args > 1) ? mp_obj_get_int(args[1])   : -1; // NALL macro value
 
@@ -356,7 +356,7 @@ static mp_obj_t mp_motor_group_stop(size_t n_args, const mp_obj_t *args){
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_stop_obj, 1, 2, mp_motor_group_stop);
 
 static mp_obj_t mp_motor_group_set_position(mp_obj_t self_ptr, mp_obj_t position_t, mp_obj_t units_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     float position = mp_obj_get_float(position_t);
     int units = mp_obj_get_int(units_t);
 
@@ -366,7 +366,7 @@ static mp_obj_t mp_motor_group_set_position(mp_obj_t self_ptr, mp_obj_t position
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_group_set_position_obj, mp_motor_group_set_position);
 
 static mp_obj_t mp_motor_group_set_velosity(mp_obj_t self_ptr, mp_obj_t velosity_t, mp_obj_t units_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     float velosity = mp_obj_get_float(velosity_t);
     int units = mp_obj_get_int(units_t);
 
@@ -376,7 +376,7 @@ static mp_obj_t mp_motor_group_set_velosity(mp_obj_t self_ptr, mp_obj_t velosity
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_group_set_velosity_obj, mp_motor_group_set_velosity);
 
 static mp_obj_t mp_motor_group_set_stopping(mp_obj_t self_ptr, mp_obj_t mode_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int mode = mp_obj_get_int(mode_t);
 
     motor_group_set_stopping(self -> cpp_handle, mode);
@@ -385,7 +385,7 @@ static mp_obj_t mp_motor_group_set_stopping(mp_obj_t self_ptr, mp_obj_t mode_t){
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_set_stopping_obj, mp_motor_group_set_stopping);
 
 static mp_obj_t mp_motor_group_set_max_torque(mp_obj_t self_ptr, mp_obj_t torque_t, mp_obj_t units_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     float torque = mp_obj_get_float(torque_t);
     int units = mp_obj_get_int(units_t);
 
@@ -395,7 +395,7 @@ static mp_obj_t mp_motor_group_set_max_torque(mp_obj_t self_ptr, mp_obj_t torque
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_group_set_max_torque_obj, mp_motor_group_set_max_torque);
 
 static mp_obj_t mp_motor_group_set_timeout(mp_obj_t self_ptr, mp_obj_t value_t, mp_obj_t units_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     float value = mp_obj_get_float(value_t);
     int units = mp_obj_get_int(units_t);
 
@@ -405,7 +405,7 @@ static mp_obj_t mp_motor_group_set_timeout(mp_obj_t self_ptr, mp_obj_t value_t, 
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_group_set_timeout_obj, mp_motor_group_set_timeout);
 
 static mp_obj_t mp_motor_group_set_reversed(mp_obj_t self_ptr, mp_obj_t value_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     bool value = mp_obj_is_true(value_t);
 
     motor_group_set_reversed(self -> cpp_handle, value);
@@ -414,7 +414,7 @@ static mp_obj_t mp_motor_group_set_reversed(mp_obj_t self_ptr, mp_obj_t value_t)
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_set_reversed_obj, mp_motor_group_set_reversed);
 
 static mp_obj_t mp_motor_group_reset_position(mp_obj_t self_ptr){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
     motor_group_reset_position(self -> cpp_handle);
     return mp_const_none;
@@ -422,7 +422,7 @@ static mp_obj_t mp_motor_group_reset_position(mp_obj_t self_ptr){
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_motor_group_reset_position_obj, mp_motor_group_reset_position);
 
 static mp_obj_t mp_motor_group_is_done(mp_obj_t self_ptr){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
     bool output;
     output = motor_group_is_done(self -> cpp_handle);
@@ -431,7 +431,7 @@ static mp_obj_t mp_motor_group_is_done(mp_obj_t self_ptr){
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_motor_group_is_done_obj, mp_motor_group_is_done);
 
 static mp_obj_t mp_motor_group_is_spinning(mp_obj_t self_ptr){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
     bool output;
     output = motor_group_is_spinning(self -> cpp_handle);
@@ -440,7 +440,7 @@ static mp_obj_t mp_motor_group_is_spinning(mp_obj_t self_ptr){
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_motor_group_is_spinning_obj, mp_motor_group_is_spinning);
 
 static mp_obj_t mp_motor_group_position(mp_obj_t self_ptr, mp_obj_t units_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
     float output;
@@ -450,7 +450,7 @@ static mp_obj_t mp_motor_group_position(mp_obj_t self_ptr, mp_obj_t units_t){
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_position_obj, mp_motor_group_position);
 
 static mp_obj_t mp_motor_group_velocity(mp_obj_t self_ptr, mp_obj_t units_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
     float output;
@@ -460,7 +460,7 @@ static mp_obj_t mp_motor_group_velocity(mp_obj_t self_ptr, mp_obj_t units_t){
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_velocity_obj, mp_motor_group_velocity);
 
 static mp_obj_t mp_motor_group_current(mp_obj_t self_ptr, mp_obj_t units_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
     float output;
@@ -470,7 +470,7 @@ static mp_obj_t mp_motor_group_current(mp_obj_t self_ptr, mp_obj_t units_t){
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_current_obj, mp_motor_group_current);
 
 static mp_obj_t mp_motor_group_power(mp_obj_t self_ptr, mp_obj_t units_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
     float output;
@@ -480,7 +480,7 @@ static mp_obj_t mp_motor_group_power(mp_obj_t self_ptr, mp_obj_t units_t){
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_power_obj, mp_motor_group_power);
 
 static mp_obj_t mp_motor_group_torque(mp_obj_t self_ptr, mp_obj_t units_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
     float output;
@@ -490,7 +490,7 @@ static mp_obj_t mp_motor_group_torque(mp_obj_t self_ptr, mp_obj_t units_t){
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_torque_obj, mp_motor_group_torque);
 
 static mp_obj_t mp_motor_group_efficiency(mp_obj_t self_ptr, mp_obj_t units_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
     float output;
@@ -500,7 +500,7 @@ static mp_obj_t mp_motor_group_efficiency(mp_obj_t self_ptr, mp_obj_t units_t){
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_efficiency_obj, mp_motor_group_efficiency);
 
 static mp_obj_t mp_motor_group_temperature(mp_obj_t self_ptr, mp_obj_t units_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
     float output;
@@ -510,19 +510,19 @@ static mp_obj_t mp_motor_group_temperature(mp_obj_t self_ptr, mp_obj_t units_t){
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_temperature_obj, mp_motor_group_temperature);
 
 static mp_obj_t mp_motor_group_get_timeout(mp_obj_t self_ptr){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
     int output;
-    output = motor_get_timeout(self -> cpp_handle);
+    output = motor_group_get_timeout(self -> cpp_handle);
     return mp_obj_new_int(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_motor_group_get_timeout_obj, mp_motor_group_get_timeout);
 
 static mp_obj_t mp_motor_group_count(mp_obj_t self_ptr){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
     int output;
-    output = motor_get_count(self -> cpp_handle);
+    output = motor_group_count(self -> cpp_handle);
     return mp_obj_new_int(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_motor_group_count_obj, mp_motor_group_count);

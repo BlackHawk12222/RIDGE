@@ -54,7 +54,7 @@ void Motor::spin(Direction direction, float velocity, VelocityUnits units){
                 }, "timeout");
             } 
         }
-        case VOLT:
+        case VELOCITY_VOLT:
         {
             velocity*=10;
             motor->move(velocity);

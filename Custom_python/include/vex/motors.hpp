@@ -46,7 +46,7 @@ enum GearSetting {
 enum VelocityUnits{
     VELOCITY_PERCENT=23,
     RPM=24,
-    VOLT=25,
+    VELOCITY_VOLT=39,
     DPS=26
 };
 

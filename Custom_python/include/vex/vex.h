@@ -59,6 +59,7 @@ float motor_group_torque(void* motor_ptr, int units);
 float motor_group_efficiency(void* motor_ptr, int units);
 int motor_group_temperature(void* motor_ptr, int units);
 int motor_group_get_timeout(void* motor_ptr);
+int motor_group_count(void* motor_ptr);
 
 /*DEFINE class Timer for C*/
 void* vex_timer_create();

@@ -6,6 +6,7 @@
 #include <sstream>
 #include <charconv>
 #include "main.h"
+#include "timer.hpp"
 
 extern "C" {
 #include "py/runtime.h"
@@ -27,6 +28,10 @@ struct Color{
     std::uint32_t CYAN=static_cast<int>(pros::Color::cyan);
     std::uint32_t BLACK=static_cast<int>(pros::Color::black);
     std::uint32_t WHITE=static_cast<int>(pros::Color::white);
+};
+
+struct three_wire_port{
+
 };
 
 enum VoltageUnits{
@@ -100,7 +105,7 @@ class Screen{
 
         int get_string_height(std::string string);
 
-        void clear_line();
+        void clear_line(int line);
 
         void new_line();
 
@@ -143,9 +148,22 @@ class Screen{
 
 class SdCard{
 
-};
+    public:
+        char* loadfile(std::string filename, char* buffer = new char[0]);
 
-class timer{
+        void savefile(std::string filename, char* buffer = new char[0]);
+
+        void appendfile(std::string filename, char* buffer = new char[0]);
+
+        void draw_image_from_file(std::string filename, int x, int y);
+
+        bool is_inserted();
+
+        int filesize(std::string filename);
+
+        int size(std::string filename);
+
+        bool exists(std::string filename);
 
 };
 
@@ -154,8 +172,7 @@ class Brain{
 
 
     public:
-        Screen screen;
-        
+        Brain();
 };
 
 #endif //BRAIN_HPP
