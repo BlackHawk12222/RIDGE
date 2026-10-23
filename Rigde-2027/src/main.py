@@ -47,12 +47,16 @@ Horizontal_rotation = Rotation(Ports.PORT4, False)#----------------FOUR
 Vertical_Rotation = Rotation(Ports.PORT5, False)#------------------FIVE
 Inertial_ = Inertial(Ports.PORT6)#---------------------------------SIX
 Horizontal_AID = Rotation(Ports.PORT7, False)#---------------------SEVEN
+
+liftOne = Motor(Ports.PORT15, GearSetting.RATIO_6_1, False)#-------FIFTEEN
+liftTwo = Motor(Ports.PORT16,GearSetting.RATIO_6_1,False)#---------SIXTEEN
 right_motor_a = Motor(Ports.PORT17, GearSetting.RATIO_6_1, False)#-SEVENTEEN
 right_motor_b = Motor(Ports.PORT18, GearSetting.RATIO_6_1, False)#-EIGHTEEN
 left_motor_a = Motor(Ports.PORT19, GearSetting.RATIO_6_1, True)#---NINETEEN
 left_motor_b = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)#---TWENTY   
 
 #creating motor grouping
+liftGroup = MotorGroup(liftOne,liftTwo)
 left_drive_smart = MotorGroup(left_motor_a, left_motor_b)
 right_drive_smart = MotorGroup(right_motor_a, right_motor_b)
 drivetrain = DriveTrain(left_drive_smart, right_drive_smart, 319.19, 330.2, 254, MM, 0.75)
@@ -158,6 +162,7 @@ screen_precision = 0
 console_precision = 0
 controller_1_precision = 0
 CC_display = Event()
+lift_run = Event()
 Obstacle_Points = ["0,600",0]
 Dist = 0
 MyColor = 0
@@ -205,6 +210,17 @@ X_diff_scaled = 0
 #BEGIN CODE HERE ###############################################################
 
 #MISC CODE(custom printing, velocity setting etc.)
+
+
+def lift_tick():
+    if controller_1.buttonR1.pressed:
+        liftGroup.spin(FORWARD)
+    elif controller_1.buttonR2.pressed:
+        liftGroup.spin(REVERSE)
+    else:
+        liftGroup.stop()
+
+
 
 def printCS(text):
     #prints to the brain screen, separating new lines at commas
@@ -570,6 +586,7 @@ def prog_setup():
     
     #start CC(controller connectivity) display
     CC_display.broadcast()
+    lift_run.broadcast()
 
     #initialize setup progression variable
     SETUP_progression = 1
@@ -821,11 +838,16 @@ def bootAnim():
     brain.screen.render()
 
 
+def liftTick_callback():
+    while True:
+        lift_tick()
+
 
 
 # Event activation
 CC_display(CC_display_callback)
 
+lift_run(liftTick_callback)
 
 # add 15ms delay to make sure events are registered correctly.
 wait(15, MSEC)
