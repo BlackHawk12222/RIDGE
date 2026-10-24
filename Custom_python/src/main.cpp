@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <arm_neon.h>
 #include "main.h"
 
 // MicroPython specific headers (must be inside extern "C")

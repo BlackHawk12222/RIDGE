@@ -150,17 +150,6 @@ class Screen{
 
 class SdCard{
     private:
-        const size_t CACHE_SIZE = 15 * 1024 *1024; // 15MB cache for files.
-        uint8_t* MemoryBlock = nullptr;
-        size_t MemoryOffest = 0;
-
-        std::map<std::string, size_t> cache_index;
-
-        uint8_t* MemoryBlock = (uint8_t*)malloc(CACHE_SIZE);
-
-        int cache_file(std::string filename);
-
-        char* read_from_cache(std::string filename);
 
     public:
         SdCard();

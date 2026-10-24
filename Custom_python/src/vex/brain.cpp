@@ -230,84 +230,17 @@ SdCard::SdCard(){
 
 }
 
-int SdCard::cache_file(std::string filename){
-
-    if (MemoryOffset + sizeof(RobotStateData) > CACHE_MAX_BYTES) {
-        return false; // Cache full!
-    }
-
-    // 1. Copy the data into the raw block at the current offset
-    std::memcpy(raw_memory_block + current_byte_offset, &data, sizeof(RobotStateData));
-
-    // 2. Save the location offset in our map index
-    cache_index[key] = current_byte_offset;
-
-    // 3. Move the offset forward for the next data entry
-    current_byte_offset += sizeof(RobotStateData);
-    return true;
-
-    
-    std::string path = "/usd/";
-    path += filename;
-    FILE* file = fopen(path.c_str(), "r");
-
-    if (file == NULL){
-        return 1;
-    }
-
-    fseek(file, 0, SEEK_END);
-    long file_size = ftell(file);
-    
-    file_cache[filename] = (char*)malloc(file_size + 1);
-
-    fread(file_cache[filename], 1 , file_size, file);
-
-    file_cache[filename][file_size] = '\0';
-    file_sizes[filename] = file_size;
-
-    fclose(file);
-}
-
-char* SdCard::read_from_cache(std::string filename){
-    return file_cache[filename];
-}
 
 char* SdCard::loadfile(std::string filename, char* buffer){
-    if (file_cache.count(filename) > 0){
-        return read_from_cache(filename);
-    }else{
-        cache_file(filename);
-        return read_from_cache(filename);
-    }
+
 }
 
 void SdCard::savefile(std::string filename, char* buffer){
-    long new_size = file_sizes[filename] + strlen(buffer);
-    char* temp = (char*)realloc(file_cache[filename], new_size);
-    if (temp != NULL) {
-        file_cache[filename] = temp;
-    } else {
-        // Handle out-of-memory error
-        free(temp);
-        return;
-    }
-    file_cache[filename] = buffer;
+    
 }
 
 void SdCard::appendfile(std::string filename, char* buffer){
-    long new_size = file_sizes[filename] + strlen(buffer);
-    char* temp = (char*)realloc(file_cache[filename], new_size);
-    if (temp != NULL) {
-        file_cache[filename] = temp;
-    } else {
-        // Handle out-of-memory error
-        free(temp);
-        return;
-    }
-
-    file_cache[filename][file_sizes[filename]] = buffer;
-
-    free(temp);
+    
 }
 
 void SdCard::draw_image_from_file(std::string filename, int x, int y){

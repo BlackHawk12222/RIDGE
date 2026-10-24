@@ -54,8 +54,6 @@ EXTRA_CXXFLAGS += -I$(BINDIR)/micropython \
                   -Isrc/micropython/extmod \
 				  -Isrc/vex
 
-EXTRA_CXXFLAGS += -fno-rtti
-
 # 3. Explicitly scan and track deep source paths inside common.mk loops
 EXTRA_SRCDIRS += src/micropython \
                  src/micropython/py \
@@ -66,8 +64,11 @@ EXTRA_SRCDIRS += src/micropython \
 EXCLUDE_SRC_FROM_LIB += src/micropython/shared/runtime/pyexec.c \
                         src/micropython/py/builtinhelp.c
 
+OPTFLAGS = -Ofast -mcpu=cortex-a9 -mfpu=neon-vfpv3 -mfloat-abi=hard -ffast-math -flto -fno-rtti
+
 # 5. Global tracker symbols
 SRC_QSTR += src/mp_port.c src/modpros.c src/micropython/modules/vex_module.c
+
 
 ################################################################################
 ########## Nothing below this line should be edited by typical users ###########

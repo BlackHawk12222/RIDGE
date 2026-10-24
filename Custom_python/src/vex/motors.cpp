@@ -143,7 +143,7 @@ void Motor::spin_for(Direction direction, int angle, AngleUnits units, float vel
 void Motor::spin_to_position(int rotation, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
     /*fix to make units_v work and use switch statments*/
     
-    if (velocity > 600.0 || velocity < -600.0){
+    if (velocity > 600.0 || velocity < -600.0) [[unlikely]]{
         velocity = Velocity;
     }
 
@@ -233,7 +233,7 @@ void Motor::spin_to_position(int rotation, AngleUnits units, float velocity, Vel
 }
 
 void Motor::stop(BrakeMode mode){
-    if (mode != NALL){
+    if (mode != NALL) [[likely]]{
         motor->set_brake_mode((pros::v5::MotorBrake)mode);
         motor->brake();
     }else{
@@ -462,7 +462,7 @@ float Motor::efficiency(EfficiencyUnits units){
 }
 
 int Motor::temperature(TemperatureUnits units){
-    unsigned short int output=0;
+    uint32_t output=0;
     switch(units){
         case CELSIUS:
         {
@@ -665,7 +665,7 @@ void MotorGroup::spin_for(Direction direction, int angle, AngleUnits units, floa
 void MotorGroup::spin_to_position(int rotation, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
     /*fix to make units_v work and use switch statments*/
     
-    if (velocity > 600.0 || velocity < -600.0){
+    if (velocity > 600.0 || velocity < -600.0) [[unlikey]]{
         velocity = Velocity;
     }
 
@@ -733,7 +733,7 @@ void MotorGroup::spin_to_position(int rotation, AngleUnits units, float velocity
         {
             rotation/=360;
             motor->move_absolute(rotation, velocity);
-            if (TimeoutTime != -1.0f) {
+            if (TimeoutTime != -1.0f) [[likely]]{ 
                 pros::Task timeout([this]() {
                     this->timeout(); // Or simply timeout();
                 }, "timeout");
@@ -755,7 +755,7 @@ void MotorGroup::spin_to_position(int rotation, AngleUnits units, float velocity
 }
 
 void MotorGroup::stop(BrakeMode mode){
-    if (mode != NALL){
+    if (mode != NALL) [[likely]] {
         motor->set_brake_mode((pros::v5::MotorBrake)mode);
         motor->brake();
     }else{
