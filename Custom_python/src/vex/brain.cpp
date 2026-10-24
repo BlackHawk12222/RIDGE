@@ -113,11 +113,11 @@ void Screen::print_at(std::string text, int x, int y, std::string sep, int preci
 }
 
 int Screen::get_string_width(std::string string){
-    
+    return 1;
 }
 
 int Screen::get_string_height(std::string string){
-
+    return 1;
 }
 
 void Screen::clear_line(int line){
@@ -205,15 +205,15 @@ void Screen::set_clip_region(int x, int y, int width, int height){
 }
 
 bool Screen::pressing(){
-    
+    return true;
 }
 
 int Screen::x_position(){
-    
+    return 1;
 }
 
 int Screen::y_position(){
-    
+    return 1;
 }
 
 template<typename Func, typename... Args>
@@ -230,11 +230,6 @@ SdCard::SdCard(){
 
 }
 
-
-char* SdCard::loadfile(std::string filename, char* buffer){
-
-}
-
 void SdCard::savefile(std::string filename, char* buffer){
     
 }
@@ -248,19 +243,19 @@ void SdCard::draw_image_from_file(std::string filename, int x, int y){
 }
 
 bool SdCard::is_inserted(){
-
+    return true;
 }
 
 int SdCard::filesize(std::string filename){
-
+    return 1;
 }
 
 int SdCard::size(std::string filename){
-
+    return 1;
 }
 
 bool SdCard::exists(std::string filename){
-    
+    return true;
 }
 
 Brain::Brain(){

@@ -1,5 +1,9 @@
 ################################################################################
 ######################### User configurable parameters #########################
+
+# Add this line near the top of your Makefile
+PYTHON=python3
+
 # filename extensions
 CEXTS:=c
 ASMEXTS:=s S
