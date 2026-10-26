@@ -81,10 +81,22 @@ class Screen{
     private:
         mp_obj_base_t base; // Tied to MicroPython Screen type identity
         pros::text_format_e_t TextSize = pros::E_TEXT_MEDIUM;
+        Font font = MONO20;
         int ScreenX = 0;
         int ScreenY = 0;
+        int XPos = 0;
+        int YPos = 0;
+        int YOffset = 0;
+        int XOffset = 0;
         int PenWidth = 0;
         pros::Color PenColor = pros::Color::black;
+        bool Render = false;
+
+        int BufferLen = 0;
+        std::vector<int> YBuffer;
+        std::vector<int> XBuffer;
+        std::vector<std::string> StringBuffer;
+        
 
         bool is_number(const std::string& str);
 
