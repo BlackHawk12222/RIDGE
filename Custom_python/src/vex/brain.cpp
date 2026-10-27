@@ -3,12 +3,80 @@
 #include <sstream>
 #include <charconv>
 #include <map>
+#include <functional>
+#include <cstdio>
 #include "main.h"
 #include "vex/brain.hpp"
 
 extern "C" {
 #include "py/runtime.h"
 #include "py/obj.h"
+}
+
+float Battery::voltage(VoltageUnits units){
+    float output = 0.0f;
+    switch (units)
+    {
+    case VOLT:
+        output = pros::battery::get_voltage() / 1000;
+        break;
+    
+    default:
+        break;
+    }
+
+    return output;
+}
+
+float Battery::current(CurrentUnits units){
+    float output = 0.0f;
+
+    switch (units){
+        case CURRENT_AMPS:
+        {
+            output = pros::battery::get_current() / 1000;
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+
+    return output;
+}
+
+int Battery::capacity(){
+    return (int)pros::battery::get_capacity();
+}
+
+int Battery::temperature(TemperatureUnits units){
+    int output = 2;
+
+    switch (units)
+    {
+    case TEMPERATURE_PERCENT:
+        output = ((pros::battery::get_temperature() - 20) / (70 - 20)) * 100.0;
+        
+        // Constrain boundaries between 0% and 100%
+        if (output < 0.0) output = 0.0;
+        if (output > 100.0) output = 100.0;
+        break;
+    case CELSIUS:
+    {
+        output = (int)pros::battery::get_temperature();
+        break;
+    }
+    case FAHRENHEIT:
+    {
+        output = (int)((pros::battery::get_temperature() * 9.0 / 5.0) + 32.0);
+        break;
+    }
+    default:
+        break;
+    }
+
+    return output;
 }
 
 bool Screen::is_number(const std::string& str) {
@@ -352,57 +420,164 @@ void Screen::set_clip_region(int x, int y, int width, int height){
 }
 
 bool Screen::pressing(){
-    return true;
+    return status.touch_status;
 }
 
 int Screen::x_position(){
-    return 1;
+    return status.x;
 }
 
 int Screen::y_position(){
-    return 1;
+    return status.y;
 }
 
 template<typename Func, typename... Args>
-void Screen::pressed(Func callback, Args... args){
-    
+void Screen::pressed(Func callback, Args... args) {
+    // Bind the function and its arguments into a single parameterless lambda
+    current_callback_pressed = [=]() {
+        std::invoke(callback, args...); 
+    };
+
+    // Pass the static bridge function pointer to PROS
+    pros::screen::touch_callback(pros_callback_bridge_pressed, pros::E_TOUCH_PRESSED);
 }
 
 template<typename Func, typename... Args>
 void Screen::released(Func callback, Args... args){
-    
+
+    // Bind the function and its arguments into a single parameterless lambda
+    current_callback_released = [=]() {
+        std::invoke(callback, args...); 
+    };
+
+    // Pass the static bridge function pointer to PROS
+    pros::screen::touch_callback(pros_callback_bridge_released, pros::E_TOUCH_RELEASED);
 }
 
-SdCard::SdCard(){
+char* SdCard::loadfile(std::string filename, char* buffer){
+    std::string FilePath = "/usd/" + filename;
 
+    if (buffer == nullptr){
+        FILE* file = fopen(FilePath.c_str(), "r");
+        if (file == NULL){
+            mp_raise_OSError(5);
+        }
+
+        fseek(file, 0, SEEK_END);
+
+        long size = ftell(file);
+
+        char* NewBuffer = new char[size + 1];
+
+        NewBuffer[size] = '\0';
+
+        fread(NewBuffer, sizeof(NewBuffer), size, file);
+        fclose(file);
+
+        return NewBuffer;
+    }else{
+        FILE* file = fopen(FilePath.c_str(), "r");
+        if (file == NULL){
+            mp_raise_OSError(5);
+        }
+
+        fseek(file, 0, SEEK_END);
+
+        long size = ftell(file);
+
+        if (size >= sizeof(buffer)){
+            char* NewBuffer = new char[size + 1];
+
+            NewBuffer[size] = '\0';
+
+            fread(NewBuffer, sizeof(NewBuffer), size, file);
+            fclose(file);
+
+            return NewBuffer;
+        }else{
+            fread(buffer, sizeof(buffer), size, file);
+
+            buffer[size] = '\0';
+            fclose(file);
+
+            return buffer;
+        }
+    }
 }
 
 void SdCard::savefile(std::string filename, char* buffer){
-    
+    std::string FilePath = "/usd/" + filename;
+
+    FILE* file = fopen(FilePath.c_str(), "w");
+    if (file != NULL) {
+        fprintf(file, buffer);
+        fclose(file);
+    }else{
+        
+    }
 }
 
 void SdCard::appendfile(std::string filename, char* buffer){
-    
+    std::string FilePath = "/usd/" + filename;
+
+    FILE* file = fopen(FilePath.c_str(), "a");
+    if (file != NULL) {
+        fprintf(file, buffer);
+        fclose(file);
+    }else{
+        
+    }
 }
 
 void SdCard::draw_image_from_file(std::string filename, int x, int y){
-    
+    // in progress
 }
 
 bool SdCard::is_inserted(){
-    return true;
+    return pros::usd::is_installed();
 }
 
 int SdCard::filesize(std::string filename){
-    return 1;
+    std::string FilePath = "/usd/" + filename;
+
+    FILE* file = fopen(FilePath.c_str(), "r");
+    if (file == NULL){
+        mp_raise_OSError(5);
+    }
+
+    fseek(file, 0, SEEK_END);
+
+    long size = ftell(file);
+    fclose(file);
+    return size;
 }
 
 int SdCard::size(std::string filename){
-    return 1;
+    std::string FilePath = "/usd/" + filename;
+
+    FILE* file = fopen(FilePath.c_str(), "r");
+    if (file == NULL){
+        mp_raise_OSError(5);
+    }
+
+    fseek(file, 0, SEEK_END);
+
+    long size = ftell(file);
+    fclose(file);
+    return size;
 }
 
 bool SdCard::exists(std::string filename){
-    return true;
+    bool output = false;
+    std::string FilePath = "/usd/" + filename;
+
+    FILE* file = fopen(FilePath.c_str(), "r");
+    if (file != NULL){
+        output = true;
+    }
+
+    fclose(file);
+    return output;
 }
 
 Brain::Brain(){

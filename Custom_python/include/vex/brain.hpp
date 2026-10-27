@@ -73,7 +73,7 @@ class Battery{
 
         int capacity();
 
-        int temperature(TemperatureUnits);
+        int temperature(TemperatureUnits units);
 
 };
 
@@ -81,6 +81,7 @@ class Screen{
     private:
         mp_obj_base_t base; // Tied to MicroPython Screen type identity
         pros::text_format_e_t TextSize = pros::E_TEXT_MEDIUM;
+        pros::screen_touch_status_s_t status = pros::screen::touch_status();
         Font font = MONO20;
         int ScreenX = 0;
         int ScreenY = 0;
@@ -96,7 +97,22 @@ class Screen{
         std::vector<int> YBuffer;
         std::vector<int> XBuffer;
         std::vector<std::string> StringBuffer;
-        
+
+        static inline std::function<void()> current_callback_pressed = nullptr;
+
+        static void pros_callback_bridge_pressed() {
+            if (current_callback_pressed) {
+                current_callback_pressed(); 
+            }
+        }
+
+        static inline std::function<void()> current_callback_released = nullptr;
+
+        static void pros_callback_bridge_released() {
+            if (current_callback_released) {
+                current_callback_released(); 
+            }
+        }
 
         bool is_number(const std::string& str);
 
@@ -161,16 +177,13 @@ class Screen{
 };
 
 class SdCard{
-    private:
-
     public:
-        SdCard();
 
-        char* loadfile(std::string filename, char* buffer = new char[0]);
+        char* loadfile(std::string filename, char* buffer = nullptr);
 
-        void savefile(std::string filename, char* buffer = new char[0]);
+        void savefile(std::string filename, char* buffer = nullptr);
 
-        void appendfile(std::string filename, char* buffer = new char[0]);
+        void appendfile(std::string filename, char* buffer);
 
         void draw_image_from_file(std::string filename, int x, int y);
 

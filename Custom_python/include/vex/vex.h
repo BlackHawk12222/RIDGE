@@ -68,6 +68,9 @@ void vex_timer_clear(void* timer_ptr);
 int vex_timer_time(void* timer_ptr, int units);
 void vex_timer_event(void* timer_ptr, mp_obj_t callback_func, int delay_ms);
 
+/*DEFINE class for Brain, Screen, SdCard, Battery for c*/
+
+
 #ifdef __cplusplus
 }
 #endif
