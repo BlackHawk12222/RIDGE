@@ -54,11 +54,11 @@ Horizontal_AID = Rotation(Ports.PORT6, False)#---------------------SIX
 Inertial_ = Inertial(Ports.PORT7)#---------------------------------SEVEN
 
 liftOne = Motor(Ports.PORT15, GearSetting.RATIO_6_1, False)#-------FIFTEEN
-liftTwo = Motor(Ports.PORT16,GearSetting.RATIO_6_1,False)#---------SIXTEEN
+liftTwo = Motor(Ports.PORT16,GearSetting.RATIO_6_1,True)#---------SIXTEEN
 right_motor_a = Motor(Ports.PORT17, GearSetting.RATIO_6_1, False)#-SEVENTEEN
 right_motor_b = Motor(Ports.PORT18, GearSetting.RATIO_6_1, False)#-EIGHTEEN
 left_motor_a = Motor(Ports.PORT19, GearSetting.RATIO_6_1, True)#---NINETEEN
-left_motor_b = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)#---TWENTY   
+left_motor_b = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)#---TWENTY
 
 #creating motor grouping
 liftGroup = MotorGroup(liftOne,liftTwo)
@@ -216,28 +216,51 @@ X_diff_scaled = 0
 
 #MISC CODE(custom printing, velocity setting etc.)
 
+class display():
+
+    def __init__(self,object):
+         self.brainObject = object
+         self.BO = self.brainObject
+
+    def drawImage(self,name,x,y):
+        self.BO.screen.draw_image_from_file(name,x,y)
+
+    def reset(self,render=False):
+        self.BO.screen.clear_screen()
+        self.BO.screen.set_cursor(1,1)
+        if render == True:
+            self.BO.screen.render()
+
+    def printCS(self,text):
+        split = text.split(",")
+        for entry in split:
+            self.BO.screen.print(entry)
+            self.BO.screen.next_row()
+
+    def drawPB(self,x,y,width, height, percent, border,barColor,horizontalBar=False):
+        #draw progress bar
+    
+        if horizontalBar:
+            brain.screen.set_pen_width(0)
+            brain.screen.set_fill_color(Color.WHITE)
+            brain.screen.draw_rectangle(x,y,width+border,height+border)
+            brain.screen.set_fill_color(barColor)
+            brain.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width,height*(percent/100))
+        else:
+            brain.screen.set_pen_width(0)
+            brain.screen.set_fill_color(Color.WHITE)
+            brain.screen.draw_rectangle(x,y,width+border,height+border)
+            brain.screen.set_fill_color(barColor)
+            brain.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width*(percent/100),height)
+
 
 def lift_tick():
-    if controller_1.buttonR1.pressed:
+    if controller_1.buttonR1.pressing():
         liftGroup.spin(FORWARD)
-    elif controller_1.buttonR2.pressed:
+    elif controller_1.buttonR2.pressing():
         liftGroup.spin(REVERSE)
     else:
         liftGroup.stop()
-
-
-
-def printCS(text):
-    #prints to the brain screen, separating new lines at commas
-    global temp
-    temp = 1
-    for repeat_count2 in range(int(len(text))):
-        if (text[temp - 1]) == ",":
-            brain.screen.next_row()
-        else:
-            brain.screen.print(text[temp - 1])
-        temp = temp + 1
-        wait(5, MSEC)
 
 
 
@@ -279,27 +302,6 @@ def AIM_drive(mm,driveVelocity,err=0):
             resetDrivetrain()
             break
 
-
-def draw_progBar(x,y,width, height, percent, border,barColor,drawImage=None,image_width=0,image_height=0,horizontalBar=False):
-    
-    if horizontalBar:
-        brain.screen.set_pen_width(0)
-        brain.screen.set_fill_color(Color.WHITE)
-        brain.screen.draw_rectangle(x,y,width+border,height+border)
-        brain.screen.set_fill_color(barColor)
-        brain.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width,height*(percent/100))
-    else:
-        brain.screen.set_pen_width(0)
-        brain.screen.set_fill_color(Color.WHITE)
-        brain.screen.draw_rectangle(x,y,width+border,height+border)
-        brain.screen.set_fill_color(barColor)
-        brain.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width*(percent/100),height)
-
-    if drawImage is not None:
-        if image_width != 0 and image_height != 0:
-            brain.screen.draw_image_from_file(drawImage, x+(width/2)-(image_width/2)+border/2, y+(height/2)-(image_height/2)+border/2)
-        else:
-            brain.screen.draw_image_from_file(drawImage,x+border/2,y)
 
 
 #BAR SWITCHING LOGIC SCRIPTS VVVVVVVVVVVVVVVVVVV
@@ -626,12 +628,14 @@ def prog_setup():
 
     #reset the fill color so as not to interfere with text drawing
     brain.screen.set_fill_color(Color.TRANSPARENT)
-    
+
+    #create the display object for the brain
+    screen = display(brain)
     #main loop; eventually motor and sensor stats will be here, as well as data bars
     while True:
         ODOM_loop()
-        brain.screen.clear_screen()
-        brain.screen.set_cursor(1, 1)
+        screen.reset()
+        screen.drawImage("images/RidgeIcon.png",100,0)
         brain.screen.print(str("horizontal current: ") + str(Horizontal_current))
         brain.screen.next_row()
         brain.screen.print(str("current vertical: ") + str(Vertical_current))
@@ -647,11 +651,9 @@ def prog_setup():
         brain.screen.next_row()
         brain.screen.print(str("Delta vertical") + str(Delta_sideways))
         brain.screen.next_row()
+        screen.drawPB(150,0,50,100,brain.battery.capacity(),5,Color.GREEN)
         brain.screen.render()
-        wait(0.05, SECONDS)
         wait(5, MSEC)
-
-
 
 
 def CC_display_callback():
@@ -844,6 +846,8 @@ def bootAnim():
 
 
 def liftTick_callback():
+    liftGroup.set_velocity(100,PERCENT)
+    liftGroup.set_stopping(HOLD)
     while True:
         lift_tick()
 
@@ -863,22 +867,19 @@ brain.screen.print("debug started. If nothing appears after this, APF has encoun
 brain.screen.next_row()
 
 if brain.sdcard.is_inserted():
-    apfCode.init(Inertial_, Vertical_Rotation, Horizontal_rotation, Horizontal_AID, PosX, PosY, Avoidance_Distance, drivetrain, brain, 7764)
+    #apfCode.init(Inertial_, Vertical_Rotation, Horizontal_rotation, Horizontal_AID, PosX, PosY, Avoidance_Distance, drivetrain, brain, 7764)
     #apf = Thread(apfCode.apfTracking())
+    pass
 
 brain.screen.next_row()
 brain.screen.print("Debug for APF finished.")
 brain.screen.next_row()
-
 #Activate auto program; currently, this actually runs in ACPv1
 def aton():
     pass
 
-brain.screen.clear_screen()
-draw_progBar(50, 25, 25, 100, brain.battery.capacity(), 5, Color.GREEN)
-
 #PROGRAM RUN VVVVVVVVVVVVVVVVVVV
 comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
-#PROG = Thread( prog_setup )
-#VS = Thread( vs_setup )
+PROG = Thread( prog_setup )
+VS = Thread( vs_setup )
 #color_switching()
