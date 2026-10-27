@@ -32,7 +32,7 @@ def init(Inertial_, VerticalRotation, Horizontalrotation, HorizontalAID, Pos_X, 
     Horizontal_rotation = Horizontal_rotation
     Horizontal_AID = Horizontal_AID
     PosX = PosX
-    PosY = PosY
+    PosY = PosY 
     Avoidance_Distance = AvoidanceDistance
     drivetrain = DVT
     brain = robotBrain
