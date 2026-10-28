@@ -179,8 +179,22 @@ void Screen::print_at(std::string text, int x, int y, std::string sep, int preci
         if (is_number(text)){
             double number=std::stod(text);
             std::string output=std::format("{:.{}f}", number, precision);
+            if (Render){
+                BufferLen++;
+                YBuffer.push_back(ScreenY);
+                XBuffer.push_back(ScreenX);
+                StringBuffer.push_back(output);
+                return;
+            }
             pros::screen::print(TextSize, x, y, "%s", output);
         }else{
+            if (Render){
+                BufferLen++;
+                YBuffer.push_back(ScreenY);
+                XBuffer.push_back(ScreenX);
+                StringBuffer.push_back(text);
+                return;
+            }
             pros::screen::print(TextSize, x, y, "%s", text.c_str());
         }
         
@@ -196,6 +210,14 @@ void Screen::print_at(std::string text, int x, int y, std::string sep, int preci
         
         while (std::getline(ss, line)) {
             output += sep + line;
+        }
+
+        if (Render){
+            BufferLen++;
+            YBuffer.push_back(ScreenY);
+            XBuffer.push_back(ScreenX);
+            StringBuffer.push_back(output);
+            return;
         }
 
         pros::screen::print(TextSize, x, y, "%s", output.c_str());
@@ -411,6 +433,11 @@ void Screen::render(){
 
             pros::screen::print(TextSize, x, y, "%s", text.c_str());
         }
+
+        XBuffer = {};
+        YBuffer = {};
+        StringBuffer = {};
+        BufferLen = 0;
     }
     Render = true;
 }
@@ -581,6 +608,7 @@ bool SdCard::exists(std::string filename){
 }
 
 Brain::Brain(){
+    ThreeWirePort three_wire_port;
     Screen screen;
     SdCard sdcard;
     Battery Battery;
