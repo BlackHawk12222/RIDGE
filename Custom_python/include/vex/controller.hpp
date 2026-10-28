@@ -10,13 +10,15 @@ enum ControllerType{
 
 class ControllerScreen{
     private:
-        Controller* ControllerObj = nullptr;
+        pros::Controller* ControllerObj = nullptr;
 
         int ScreenRow = 0;
         int ScreenColumn = 0;
         
+        bool is_number(const std::string& str);
+
     public:
-        ControllerScreen(Controller* controller);
+        ControllerScreen(pros::Controller* controller);
 
         void print(std::string value, std::string sep, int precision);
 
@@ -35,30 +37,35 @@ class ControllerScreen{
 
 class ControllerButton{
     private:
-        Controller* ControllerObj = nullptr;
+        pros::Controller* ControllerObj = nullptr;
+        pros::controller_digital_e_t ButtonType;
         bool OldPos = false;
 
     public:
-        ControllerButton(pros::controller_digital_e_t Button, Controller* controller);
+        ControllerButton(pros::controller_digital_e_t Button, pros::Controller* controller);
 
         bool pressing();
 
-        void pressed();
+        template<typename Func, typename...Args>
+        void pressed(Func func, Args... args);
 
-        void released();
+        template<typename Func, typename...Args>
+        void released(Func func, Args... args);
 };
 
 class ControllerAxis{
     private:
-        Controller* ControllerObj = nullptr;
+        pros::Controller* ControllerObj = nullptr;
+        pros::controller_analog_e_t AxisType;
         int OldPos = 0;
 
     public:
-        ControllerAxis(pros::controller_analog_e_t Axis, Controller* controller);
+        ControllerAxis(pros::controller_analog_e_t Axis, pros::Controller* controller);
 
         int position();
 
-        void changed();
+        template<typename Func, typename...Args>
+        void changed(Func func, Args... args);
 };
 
 class Controller{
@@ -69,8 +76,6 @@ class Controller{
         Controller(ControllerType controller_type);
 
         void rumble(std::string pattern);
-
-        bool remote_control_code_enabled();
 };
 
 #endif // CONTROLLER_HPP
