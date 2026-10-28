@@ -3,6 +3,8 @@
 #include <iostream>
 #include <arm_neon.h>
 #include "main.h"
+#include "pros/apix.h"
+#include "vex/font_init.h"
 
 // MicroPython specific headers (must be inside extern "C")
 extern "C" {
@@ -39,6 +41,13 @@ extern "C" void mp_port_status(const char* message) {
 }
 
 void initialize() {
+
+    lv_obj_t* active_screen = lv_screen_active();
+
+    lv_obj_set_style_text_font(active_screen, &mono30, LV_PART_MAIN);
+
+    lv_obj_set_style_text_color(active_screen, lv_color_white(), LV_PART_MAIN);
+
     pros::screen::erase();
     status_screen_line = 1;
     report_status("MP: initializing");
