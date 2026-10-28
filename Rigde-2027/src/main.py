@@ -14,7 +14,8 @@ from vex import *
 brain = Brain()
 
 if brain.sdcard.is_inserted():
-    import apfCode, ACPv1
+    #import apfCode, ACPv1
+    pass
 
 def autonomous():
     brain.screen.clear_screen()
@@ -239,20 +240,19 @@ class display():
 
     def drawPB(self,x,y,width, height, percent, border,barColor,horizontalBar=False):
         #draw progress bar
-    
         if horizontalBar:
-            brain.screen.set_pen_width(0)
-            brain.screen.set_fill_color(Color.WHITE)
-            brain.screen.draw_rectangle(x,y,width+border,height+border)
-            brain.screen.set_fill_color(barColor)
-            brain.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width,height*(percent/100))
+            self.BO.screen.set_pen_width(0)
+            self.BO.screen.set_fill_color(Color.WHITE)
+            self.BO.screen.draw_rectangle(x,y,width+border,height+border)
+            self.BO.screen.set_fill_color(barColor)
+            self.BO.screen.draw_rectangle(x+border/2,y+border/2, width*(percent/100),height)
         else:
-            brain.screen.set_pen_width(0)
-            brain.screen.set_fill_color(Color.WHITE)
-            brain.screen.draw_rectangle(x,y,width+border,height+border)
-            brain.screen.set_fill_color(barColor)
-            brain.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width*(percent/100),height)
-
+            self.BO.screen.set_pen_width(0)
+            self.BO.screen.set_fill_color(Color.WHITE)
+            self.BO.screen.draw_rectangle(x,y,width+border,height+border)
+            self.BO.screen.set_fill_color(barColor)
+            self.BO.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width,height*(percent/100))
+        self.BO.screen.set_fill_color(Color.TRANSPARENT)
 
 def lift_tick():
     if controller_1.buttonR1.pressing():
@@ -651,7 +651,6 @@ def prog_setup():
         brain.screen.next_row()
         brain.screen.print(str("Delta vertical") + str(Delta_sideways))
         brain.screen.next_row()
-        screen.drawPB(150,0,50,100,brain.battery.capacity(),5,Color.GREEN)
         brain.screen.render()
         wait(5, MSEC)
 
@@ -879,7 +878,7 @@ def aton():
     pass
 
 #PROGRAM RUN VVVVVVVVVVVVVVVVVVV
-comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
+#comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
 PROG = Thread( prog_setup )
 VS = Thread( vs_setup )
 #color_switching()
