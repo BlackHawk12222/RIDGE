@@ -11,6 +11,9 @@ def _none():
 brain=Brain()
 cla: Thread
 
+if not brain.sdcard.exists("ACPv1/Config/ACPv1config.txt"):
+    brain.sdcard.savefile("ACPv1/Config/ACPv1config.txt")
+
 # Function for the driver control.
 def ACP_driver():
 
