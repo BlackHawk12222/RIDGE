@@ -14,7 +14,7 @@ from vex import *
 brain = Brain()
 
 if brain.sdcard.is_inserted():
-    #import apfCode, ACPv1
+    import ACPv1
     pass
 
 def autonomous():
@@ -42,7 +42,8 @@ controller_1 = Controller(PRIMARY)
 interface =  Controller(PARTNER)
 
 #3-wire ports
-pnu = DigitalOut(brain.three_wire_port.a)
+intakeLift = DigitalOut(brain.three_wire_port.a)
+claw = DigitalOut(brain.three_wire_port.b)
 
 #other bojects, in order of port, lowest first
 DistanceSensor = Distance(Ports.PORT1)#----------------------------ONE
@@ -53,6 +54,12 @@ Vertical_Rotation = Rotation(Ports.PORT5, False)#------------------FIVE
 Horizontal_AID = Rotation(Ports.PORT6, False)#---------------------SIX
 
 Inertial_ = Inertial(Ports.PORT7)#---------------------------------SEVEN
+
+Intake = Motor(Ports.PORT8)#---------------------------------------EIGHT
+#---------------------------------------------------------radio on NINE
+Claw = Motor(Ports.PORT10)#----------------------------------------TEN
+
+
 
 liftOne = Motor(Ports.PORT15, GearSetting.RATIO_6_1, False)#-------FIFTEEN
 liftTwo = Motor(Ports.PORT16,GearSetting.RATIO_6_1,True)#---------SIXTEEN
@@ -170,6 +177,11 @@ controller_1_precision = 0
 CC_display = Event()
 lift_run = Event()
 Obstacle_Points = ["0,600",0]
+
+motors=[]
+motorNames=[]
+motorPorts=[]
+
 Dist = 0
 MyColor = 0
 Color_Flips = 0
@@ -210,6 +222,7 @@ X_diff = 0
 X_assist_Current = 0
 xScale = 0
 X_diff_scaled = 0
+LiftVelocity = 0
 
 
 
@@ -254,13 +267,65 @@ class display():
             self.BO.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width,height*(percent/100))
         self.BO.screen.set_fill_color(Color.TRANSPARENT)
 
-def lift_tick():
-    if controller_1.buttonR1.pressing():
-        liftGroup.spin(FORWARD)
-    elif controller_1.buttonR2.pressing():
-        liftGroup.spin(REVERSE)
-    else:
-        liftGroup.stop()
+    def printMotors(self):
+        for i in range(len(motorNames)):
+            self.BO.screen.print(motorPorts[i]+motorNames[i]+motors[i].temperature(PERCENT))
+            self.BO.next_row()
+            
+
+class MotorTicks:
+    def __init__(self):
+        pass
+
+    def lift_tick(self):
+        if controller_1.buttonR1.pressing():
+            liftGroup.spin(FORWARD)
+        elif controller_1.buttonR2.pressing():
+            liftGroup.spin(REVERSE)
+        else:
+            liftGroup.stop()
+
+    def intake_tick(self):
+        if controller_1.buttonL1.pressing():
+            Intake.spin(FORWARD)
+        elif controller_1.buttonL2.pressing():
+            Intake.spin(REVERSE)
+        else:
+            Intake.stop()
+
+    def claw_tick(self):
+        if controller_1.buttonY.pressing():
+            Claw.spin(FORWARD)
+        elif controller_1.buttonB.pressing():
+            Claw.spin(REVERSE)
+        else:
+            Claw.stop()
+
+class MC:
+    
+    def __init__(self):
+        pass
+    
+    def MotorConfig(self):
+        global motors, motorNames
+        data = dir()
+
+        for item in data:
+            try:
+                itemType = str(type(eval(item)))
+            except NameError:
+                continue
+            if itemType == "<class 'motor'>":
+                motorNames.append(item)
+                motors.append(eval(item))
+                motorPorts.append(self.getMotorPort(eval(item)))
+
+    def getMotorPort(self,motor):
+        for port in range(Ports.PORT1, Ports.PORT20):
+            m=Motor(port)
+            if m.installed:
+                if m.power(PowerUnits.WATT) == motor.power(PowerUnits.WATT):
+                    return(port)
 
 
 
@@ -631,6 +696,7 @@ def prog_setup():
 
     #create the display object for the brain
     screen = display(brain)
+    mc=MC()
     #main loop; eventually motor and sensor stats will be here, as well as data bars
     while True:
         ODOM_loop()
@@ -845,10 +911,13 @@ def bootAnim():
 
 
 def liftTick_callback():
+    MT = MotorTicks()
     liftGroup.set_velocity(100,PERCENT)
     liftGroup.set_stopping(HOLD)
     while True:
-        lift_tick()
+        MT.lift_tick()
+        MT.claw_tick()
+        MT.intake_tick()
 
 
 
@@ -878,7 +947,7 @@ def aton():
     pass
 
 #PROGRAM RUN VVVVVVVVVVVVVVVVVVV
-#comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
+comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
 PROG = Thread( prog_setup )
 VS = Thread( vs_setup )
 #color_switching()
