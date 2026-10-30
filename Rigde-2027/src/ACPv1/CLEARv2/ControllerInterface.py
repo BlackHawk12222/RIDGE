@@ -104,6 +104,7 @@ def start(controller: Controller):
                 
                 last_known_buffer = ScreenBuffer.copy()
                 OldYPos = YPos
+                
         elif selection == 1:
             # Point calculator
 
@@ -115,6 +116,8 @@ def start(controller: Controller):
                     controller.screen.print("P: %d AB? %s"%(RightTeamPoints + 12, RightAtonBonus))
                 else:
                     controller.screen.print("P: %d AB? %s"%(RightTeamPoints, RightAtonBonus))
+
+                wait(50, MSEC)
 
                 controller.screen.set_cursor(1, 1)
 

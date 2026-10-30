@@ -920,13 +920,22 @@ try:
                 chunk_size=81
                 entry=[self.entry[i : i + chunk_size] for i in range(0, len(self.entry), chunk_size)]
 
+            if b"DATA" in self.entry:
+                brain.screen.set_pen_color(Color.GREEN)
+            elif b"WARN" in self.entry:
+                brain.screen.set_pen_color(Color.YELLOW)
+            elif b"ERR" in self.entry:
+                brain.screen.set_pen_color(Color.RED)
+            else:
+                brain.screen.set_pen_color(Color.WHITE)
+
             for i in range(len(entry)):
                 brain.screen.print(entry[i].decode(log.format))
                 brain.screen.new_line()
 
         def controller_interface_add(self, add_code: str, add_details: Any) -> None:
             reverse_code = self.reversecodes.get(self.codes.get(add_code), "ERR")
-            CInterface.add_to_buffer("%s %s" % ( reverse_code, add_details))
+            CInterface.add_to_buffer("%s %s" % (reverse_code, add_details))
         
         def add(self, add_code: str, add_details: Any) -> None:
             """

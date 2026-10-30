@@ -11,6 +11,9 @@ def _none():
 brain=Brain()
 cla: Thread
 
+if not brain.sdcard.exists("ACPv1/Config/ACPv1config.txt"):
+    brain.sdcard.savefile("ACPv1/Config/ACPv1config.txt")
+
 # Function for the driver control.
 def ACP_driver():
 
@@ -67,6 +70,9 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
     # Initialize motor lists as strings.
     RightMotors: list[str]=[]
     LeftMotors: list[str]=[]
+    inertial: str=""
+    XOdom: str=""
+    controller: str=""
 
     # Auto finds the motors, controller, Inertial, and odometry sensor in the code and saves them to a config file for later use.
     for item in ObjList:
@@ -76,7 +82,10 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
             continue
         
         if item_type == "<class 'controller'>":
-            controller=item
+            if "interface" in item or "Interface" in item:
+                Thread(CLEARv2.ControllerInterface.start, [eval(item)])  # type: ignore
+            else:
+                controller=item
         elif item_type == "<class 'motor'>":
             if "Right" in item or "right" in item:
                 RightMotors+=[item]
@@ -86,13 +95,13 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
             XOdom=item
         elif item_type == "<class 'inertial'>":
             inertial=item
-    
-    del ObjList
 
     brain.sdcard.savefile("ACPv1/Config/ACPv1config.txt", bytearray(b"LeftMotors: %s\n RightMotors: %s\n GearRatio: %1.5f \n Wheelsize_MM: %1.5f \n MotorMax_RPM: %d \n controller: %s \n Xodom: %s \nOdomWheelSize_MM: %1.5f \n StickType: %s \n inertial: %s"%(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial)))
 
     # Start the driver control and the autonomous function.
     comp=Competition(ACP_driver, AtonFunc)
+
+    ACP_driver()
 
     # Start the CLA thread for the CLEARv2 package.
     print(dir(CLEARv2.CLA))

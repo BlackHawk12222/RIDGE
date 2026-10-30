@@ -15,7 +15,7 @@ class Matrix():
     def __setitem__(self, row, col, value):
         self.data[row][col] = value
 
-    def __add__(self, other: Matrix):
+    def __add__(self, other):
         if isinstance(other, Matrix):
 
             if self.rows != other.rows or self.cols != other.cols:

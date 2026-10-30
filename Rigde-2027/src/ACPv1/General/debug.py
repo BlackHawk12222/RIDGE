@@ -1,23 +1,26 @@
-import utime  # type: ignore
+from vex import *
+import sys
+
+utime = Timer()
 
 """Used for debugging functions in code."""
 
-def start(func):
+def debug_start(func):
     """Does error handling, prints all variables, and gives time fof funtion."""
 
     def wrapper(*args, **kwargs):
         try:
-            speed:float=utime.ticks_ms()
+            speed:float=utime.time()
             print("Startingdebug for %s"%(func))
             func(*args, **kwargs)
             print(func)
-            print("Time of function: %f Msec"%((utime.ticks_diff(utime.ticks_ms(), speed))))
+            print("Time of function: %f Msec"%(utime.time() -speed))
             print(locals())
         except Exception as e:
             sys.print_exception(e) # type: ignore
     return wrapper
 
-def handling(func):
+def debug_handling(func):
     """Puts in error handling."""
 
     def wrapper(*args, **kwargs):
@@ -27,7 +30,7 @@ def handling(func):
             sys.print_exception(e) # type: ignore
     return wrapper
 
-def print(func):
+def debug_print(func):
     """Prints variables."""
 
     def wrapper(*args, **kwargs):
@@ -37,11 +40,11 @@ def print(func):
         print(locals())
     return wrapper
 
-def time(func):
+def debug_time(func):
     """Prints time to exec the function."""
 
     def wrapper(*args, **kwargs):
-        speed:float=utime.ticks_ms()
+        speed:float=utime.time()
         func(*args, **kwargs)
-        print("Time of function: %f Msec"%((utime.ticks_diff(utime.ticks_ms(), speed))))
+        print("Time of function: %f Msec"%(utime.time() - speed))
     return wrapper
