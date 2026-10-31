@@ -80,7 +80,7 @@ int brain_battery_temperature(void* brain_ptr, int units);
 void brain_screen_print(void* brain_ptr, const char* text, const char* sep, int precision);
 void brain_screen_set_cursor(void* brain_ptr, int row, int col);
 void brain_screen_next_row(void* brain_ptr);
-void brain_screen_clear_row(void* brain_ptr, int row=-1, int color); // Default color is BLACK.
+void brain_screen_clear_row(void* brain_ptr, int row, int color); // Default color is BLACK.
 int brain_screen_row(void* brain_ptr);
 int brain_screen_column(void* brain_ptr);
 void brain_screen_print_at(void* brain_ptr, const char* text, int x, int y, const char* sep, int precision, bool opaque);

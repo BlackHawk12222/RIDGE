@@ -257,6 +257,7 @@ void vex_timer_event(void* timer_ptr, mp_obj_t callback_func, int delay_ms) {
     pros::Task task(timer_rtos_task, params, "PythonTimerTask");
 }
 
+/*DEFINE class Brain for C*/
 void* brain_create(){
     return static_cast<void*>(new Brain());
 }
@@ -269,30 +270,98 @@ float brain_battery_voltage(void* brain_ptr, int units){
     return static_cast<Brain*>(brain_ptr) -> battery.voltage(static_cast<VoltageUnits>(units));
 }
 
-float brain_battery_current(void* brain_ptr, int units);
-int brain_battery_capacity(void* brain_ptr);
-int brain_battery_temperature(void* brain_ptr, int units);
+float brain_battery_current(void* brain_ptr, int units){
+    return static_cast<Brain*>(brain_ptr) -> battery.current(static_cast<CurrentUnits>(units));
+}
 
-void brain_screen_print(void* brain_ptr, const char* text, const char* sep, int precision);
-void brain_screen_set_cursor(void* brain_ptr, int row, int col);
-void brain_screen_next_row(void* brain_ptr);
-void brain_screen_clear_row(void* brain_ptr, int row=-1, int color); // Default color is BLACK.
-int brain_screen_row(void* brain_ptr);
-int brain_screen_column(void* brain_ptr);
-void brain_screen_print_at(void* brain_ptr, const char* text, int x, int y, const char* sep, int precision, bool opaque);
-int brain_screen_get_string_width(void* brain_ptr, const char* string);
-int brain_screen_get_string_height(void* brain_ptr, const char* string);
-void brain_screen_clear_line(void* brain_ptr, int line);
-void brain_screen_new_line(void* brain_ptr);
-void brain_screen_clear_screen(void* brain_ptr, int color); // Default color is BLACK.
-void brain_screen_set_font(void* brain_ptr, int font);
-void brain_screen_set_pen_width(void* brain_ptr, int value);
-void brain_screen_set_pen_color(void* brain_ptr, int color);
-void brain_screen_set_fill_color(void* brain_ptr, int color);
-void brain_screen_set_origin(void* brain_ptr, int x, int y);
-void brain_screen_draw_pixel(void* brain_ptr, int x, int y);
-void brain_screen_draw_line(void* brain_ptr, int start_x, int start_y, int end_x, int end_y);
-void brain_screen_draw_rectangle(void* brain_ptr, int x, int y, int width, int height, int color);
+int brain_battery_capacity(void* brain_ptr){
+    return static_cast<Brain*>(brain_ptr) -> battery.capacity();
+}
+    
+int brain_battery_temperature(void* brain_ptr, int units){
+    return static_cast<Brain*>(brain_ptr) -> battery.temperature(static_cast<TemperatureUnits>(units));
+}
+
+void brain_screen_print(void* brain_ptr, const char* text, const char* sep, int precision){
+    static_cast<Brain*>(brain_ptr) -> screen.print(text, sep, precision);
+}
+
+void brain_screen_set_cursor(void* brain_ptr, int row, int col){
+    static_cast<Brain*>(brain_ptr) -> screen.set_cursor(row, col);
+}
+
+void brain_screen_next_row(void* brain_ptr){
+    static_cast<Brain*>(brain_ptr) -> screen.next_row();
+}
+
+void brain_screen_clear_row(void* brain_ptr, int row, int color){
+    static_cast<Brain*>(brain_ptr) -> screen.clear_row(row, static_cast<Color>(color));
+}
+
+int brain_screen_row(void* brain_ptr){
+    static_cast<Brain*>(brain_ptr) -> screen.row();
+}
+
+int brain_screen_column(void* brain_ptr){
+    return static_cast<Brain*>(brain_ptr) -> screen.column();
+}
+
+void brain_screen_print_at(void* brain_ptr, const char* text, int x, int y, const char* sep, int precision, bool opaque){
+    static_cast<Brain*>(brain_ptr) -> screen.print_at(text, x, y, sep, precision, opaque);
+}
+
+int brain_screen_get_string_width(void* brain_ptr, const char* string){
+    return static_cast<Brain*>(brain_ptr) -> screen.get_string_width(string);
+}
+
+int brain_screen_get_string_height(void* brain_ptr, const char* string){
+    return static_cast<Brain*>(brain_ptr) -> screen.get_string_height(string);
+}
+
+void brain_screen_clear_line(void* brain_ptr, int line){
+    static_cast<Brain*>(brain_ptr) -> screen.clear_line(line);
+}
+
+void brain_screen_new_line(void* brain_ptr){
+    static_cast<Brain*>(brain_ptr) -> screen.new_line();
+}
+
+void brain_screen_clear_screen(void* brain_ptr, int color){
+    static_cast<Brain*>(brain_ptr) -> screen.clear_screen(static_cast<Color>(color));
+}
+
+void brain_screen_set_font(void* brain_ptr, int font){
+    static_cast<Brain*>(brain_ptr) -> screen.set_font(static_cast<Font>(font));
+}
+
+void brain_screen_set_pen_width(void* brain_ptr, int value){
+    static_cast<Brain*>(brain_ptr) -> screen.set_pen_width(value);
+}
+
+void brain_screen_set_pen_color(void* brain_ptr, int color){
+    static_cast<Brain*>(brain_ptr) -> screen.set_pen_color(static_cast<Color>(color));
+}
+
+void brain_screen_set_fill_color(void* brain_ptr, int color){
+    static_cast<Brain*>(brain_ptr) -> screen.set_fill_color(static_cast<Color>(color));
+}
+
+void brain_screen_set_origin(void* brain_ptr, int x, int y){
+    static_cast<Brain*>(brain_ptr) -> screen.set_origin(x, y);
+}
+
+void brain_screen_draw_pixel(void* brain_ptr, int x, int y){
+    static_cast<Brain*>(brain_ptr) -> screen.draw_pixel(x, y);
+}
+
+void brain_screen_draw_line(void* brain_ptr, int start_x, int start_y, int end_x, int end_y){
+    static_cast<Brain*>(brain_ptr) -> screen.draw_line(start_x, start_y, end_x, end_y);
+}
+
+void brain_screen_draw_rectangle(void* brain_ptr, int x, int y, int width, int height, int color){
+    static_cast<Brain*>(brain_ptr) -> screen.draw_rectangle(x, y, width, height, static_cast<Color>(color));
+}
+
 void brain_screen_draw_circle(void* brain_ptr, int x, int y, int radius, int color);
 void brain_screen_render(void* brain_ptr);
 void brain_screen_set_clip_region(void* brain_ptr, int x, int y, int width, int height);
