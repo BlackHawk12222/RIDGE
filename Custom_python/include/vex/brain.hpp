@@ -206,7 +206,10 @@ class SdCard{
 
 class Brain{
     public:
-        Brain();
+        ThreeWirePort three_wire_port;
+        Screen screen;
+        SdCard sdcard;
+        Battery battery;
 };
 
 #endif //BRAIN_HPP

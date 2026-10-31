@@ -606,10 +606,3 @@ bool SdCard::exists(std::string filename){
     fclose(file);
     return output;
 }
-
-Brain::Brain(){
-    ThreeWirePort three_wire_port;
-    Screen screen;
-    SdCard sdcard;
-    Battery Battery;
-}
