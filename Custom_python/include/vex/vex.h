@@ -108,8 +108,8 @@ typedef void (*c_callback_t)(void* user_data);
 void brain_screen_pressed(void* brain_ptr, c_callback_t callback, void* args);
 void brain_screen_released(void* brain_ptr, c_callback_t callback, void* args);
 
-char* brain_sdcard_loadfile(void* brain_ptr, const char* filename, char* buffer = nullptr);
-void brain_sdcard_savefile(void* brain_ptr, const char* filename, char* buffer = nullptr);
+char* brain_sdcard_loadfile(void* brain_ptr, const char* filename, char* buffer);
+void brain_sdcard_savefile(void* brain_ptr, const char* filename, char* buffer);
 void brain_sdcard_appendfile(void* brain_ptr, const char* filename, char* buffer);
 void brain_sdcard_draw_image_from_file(void* brain_ptr, const char* filename, int x, int y);
 bool brain_sdcard_is_inserted(void* brain_ptr);

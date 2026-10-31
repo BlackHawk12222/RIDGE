@@ -299,7 +299,7 @@ void brain_screen_clear_row(void* brain_ptr, int row, int color){
 }
 
 int brain_screen_row(void* brain_ptr){
-    static_cast<Brain*>(brain_ptr) -> screen.row();
+    return static_cast<Brain*>(brain_ptr) -> screen.row();
 }
 
 int brain_screen_column(void* brain_ptr){
@@ -362,22 +362,79 @@ void brain_screen_draw_rectangle(void* brain_ptr, int x, int y, int width, int h
     static_cast<Brain*>(brain_ptr) -> screen.draw_rectangle(x, y, width, height, static_cast<Color>(color));
 }
 
-void brain_screen_draw_circle(void* brain_ptr, int x, int y, int radius, int color);
-void brain_screen_render(void* brain_ptr);
-void brain_screen_set_clip_region(void* brain_ptr, int x, int y, int width, int height);
-bool brain_screen_pressing(void* brain_ptr);
-int brain_screen_x_position(void* brain_ptr);
-int brain_screen_y_position(void* brain_ptr);
+void brain_screen_draw_circle(void* brain_ptr, int x, int y, int radius, int color){
+    static_cast<Brain*>(brain_ptr) -> screen.draw_circle(x, y, radius, static_cast<Color>(color));
+}
+
+void brain_screen_render(void* brain_ptr){
+    static_cast<Brain*>(brain_ptr) -> screen.render();
+}
+
+void brain_screen_set_clip_region(void* brain_ptr, int x, int y, int width, int height){
+    static_cast<Brain*>(brain_ptr) -> screen.set_clip_region(x, y, width, height);
+}
+
+bool brain_screen_pressing(void* brain_ptr){
+    return static_cast<Brain*>(brain_ptr) -> screen.pressing();
+}
+
+int brain_screen_x_position(void* brain_ptr){
+    return static_cast<Brain*>(brain_ptr) -> screen.x_position();
+}
+
+int brain_screen_y_position(void* brain_ptr){
+    return static_cast<Brain*>(brain_ptr) -> screen.y_position();
+}
 
 typedef void (*c_callback_t)(void* user_data);
-void brain_screen_pressed(void* brain_ptr, c_callback_t callback, void* args);
-void brain_screen_released(void* brain_ptr, c_callback_t callback, void* args);
+void brain_screen_pressed(void* brain_ptr, c_callback_t callback, void* args){
+    if (!callback) return;
 
-char* brain_sdcard_loadfile(void* brain_ptr, const char* filename, char* buffer = nullptr);
-void brain_sdcard_savefile(void* brain_ptr, const char* filename, char* buffer = nullptr);
-void brain_sdcard_appendfile(void* brain_ptr, const char* filename, char* buffer);
-void brain_sdcard_draw_image_from_file(void* brain_ptr, const char* filename, int x, int y);
-bool brain_sdcard_is_inserted(void* brain_ptr);
-int brain_sdcard_filesize(void* brain_ptr, const char* filename);
-int brain_sdcard_size(void* brain_ptr, const char* filename);
-bool brain_sdcard_exists(void* brain_ptr, const char* filename);
+    // We pass a C++ lambda expression directly into your template!
+    // The lambda perfectly satisfies the 'Func' and 'Args...' parameters.
+    static_cast<Brain*>(brain_ptr) -> screen.pressed([=]() {
+        callback(args);
+    });
+}
+
+void brain_screen_released(void* brain_ptr, c_callback_t callback, void* args){
+    if (!callback) return;
+
+    // We pass a C++ lambda expression directly into your template!
+    // The lambda perfectly satisfies the 'Func' and 'Args...' parameters.
+    static_cast<Brain*>(brain_ptr) -> screen.released([=]() {
+        callback(args);
+    });
+}
+
+char* brain_sdcard_loadfile(void* brain_ptr, const char* filename, char* buffer){
+    return static_cast<Brain*>(brain_ptr) -> sdcard.loadfile(filename, buffer);
+}
+
+void brain_sdcard_savefile(void* brain_ptr, const char* filename, char* buffer){
+    static_cast<Brain*>(brain_ptr) -> sdcard.savefile(filename, buffer);
+}
+
+void brain_sdcard_appendfile(void* brain_ptr, const char* filename, char* buffer){
+    static_cast<Brain*>(brain_ptr) -> sdcard.appendfile(filename, buffer);
+}
+
+void brain_sdcard_draw_image_from_file(void* brain_ptr, const char* filename, int x, int y){
+    static_cast<Brain*>(brain_ptr) -> sdcard.draw_image_from_file(filename, x, y);
+}
+
+bool brain_sdcard_is_inserted(void* brain_ptr){
+    return static_cast<Brain*>(brain_ptr) -> sdcard.is_inserted();
+}
+
+int brain_sdcard_filesize(void* brain_ptr, const char* filename){
+    return static_cast<Brain*>(brain_ptr) -> sdcard.filesize(filename);
+}
+
+int brain_sdcard_size(void* brain_ptr, const char* filename){
+    return static_cast<Brain*>(brain_ptr) -> sdcard.size(filename);
+}
+
+bool brain_sdcard_exists(void* brain_ptr, const char* filename){
+    return static_cast<Brain*>(brain_ptr) -> sdcard.exists(filename);
+}

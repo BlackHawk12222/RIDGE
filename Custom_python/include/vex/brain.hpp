@@ -12,6 +12,7 @@
 extern "C" {
 #include "py/runtime.h"
 #include "py/obj.h"
+typedef void (*c_callback_t)(void* user_data);
 }
 
 struct Color{
@@ -177,10 +178,27 @@ class Screen{
         int y_position();
 
         template<typename Func, typename... Args>
-        void pressed(Func callback, Args... args);
+        void pressed(Func callback, Args... args) {
+            // Bind the function and its arguments into a single parameterless lambda
+            current_callback_pressed = [=]() {
+                std::invoke(callback, args...); 
+            };
+
+            // Pass the static bridge function pointer to PROS
+            pros::screen::touch_callback(pros_callback_bridge_pressed, pros::E_TOUCH_PRESSED);
+        }
 
         template<typename Func, typename... Args>
-        void released(Func callback, Args... args);
+        void released(Func callback, Args... args){
+
+            // Bind the function and its arguments into a single parameterless lambda
+            current_callback_released = [=]() {
+                std::invoke(callback, args...); 
+            };
+
+            // Pass the static bridge function pointer to PROS
+            pros::screen::touch_callback(pros_callback_bridge_released, pros::E_TOUCH_RELEASED);
+        }
 };
 
 class SdCard{

@@ -18,9 +18,15 @@ typedef struct _mp_timer_obj_t{
     void *cpp_handle;
 } mp_timer_obj_t;
 
+typedef struct _mp_brain_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_brain_obj_t;
+
 extern const mp_obj_type_t mp_motor_type;
 extern const mp_obj_type_t mp_motorgroup_type;
 extern const mp_obj_type_t mp_timer_type;
+extern const mp_obj_type_t mp_brain_type;
 
 static mp_obj_t mp_motor_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 1, 3, false); // strict 3 arguments
@@ -612,6 +618,29 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_TYPE_FLAG_NONE,
     make_new, mp_timer_make_new,
     locals_dict, &mp_timer_locals_dict
+);
+
+static mp_obj_t mp_brain_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 0, 0, false); // strict 0 arguments
+
+    mp_brain_obj_t *self = mp_obj_malloc(mp_brain_obj_t, type);
+    self->cpp_handle = brain_create();
+    return MP_OBJ_FROM_PTR(self);
+}
+
+
+static const mp_rom_map_elem_t mp_brain_locals_dict_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+};
+static MP_DEFINE_CONST_DICT(mp_brain_locals_dict, mp_brain_locals_dict_table);
+
+// Register the finalized Motor class metadata type
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_brain_type,
+    MP_QSTR_Brain,                  // Name exposed to Python
+    MP_TYPE_FLAG_NONE,
+    make_new, mp_brain_make_new,    // Constructor attachment
+    locals_dict, &mp_brain_locals_dict
 );
 
 // This dictionary holds everything inside the top-level namespace: 'import vex'
