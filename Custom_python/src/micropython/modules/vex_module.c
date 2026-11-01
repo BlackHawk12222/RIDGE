@@ -18,15 +18,36 @@ typedef struct _mp_timer_obj_t{
     void *cpp_handle;
 } mp_timer_obj_t;
 
+typedef struct _mp_brain_battery_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_brain_battery_obj_t;
+
+typedef struct _mp_brain_screen_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_brain_screen_obj_t;
+
+typedef struct _mp_brain_sdcard_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_brain_sdcard_obj_t;
+
 typedef struct _mp_brain_obj_t{
     mp_obj_base_t base;
     void *cpp_handle;
+    mp_obj_t screen;  // Stores instance of mp_brain_screen_obj_t
+    mp_obj_t sdcard;  // Stores instance of mp_brain_sdcard_obj_t
+    mp_obj_t battery; // Stores instance of mp_brain_battery_obj_t
 } mp_brain_obj_t;
 
 extern const mp_obj_type_t mp_motor_type;
 extern const mp_obj_type_t mp_motorgroup_type;
 extern const mp_obj_type_t mp_timer_type;
 extern const mp_obj_type_t mp_brain_type;
+extern const mp_obj_type_t mp_brain_screen_type;
+extern const mp_obj_type_t mp_brain_sdcard_type;
+extern const mp_obj_type_t mp_brain_battery_type;
 
 static mp_obj_t mp_motor_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 1, 3, false); // strict 3 arguments
@@ -620,14 +641,63 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &mp_timer_locals_dict
 );
 
+
+
+
+static const mp_rom_map_elem_t mp_brain_battery_locals_dict_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+};
+static MP_DEFINE_CONST_DICT(mp_brain_battery_locals_dict, mp_brain_battery_locals_dict_table);
+
+static const mp_rom_map_elem_t mp_brain_screen_locals_dict_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+};
+static MP_DEFINE_CONST_DICT(mp_brain_screen_locals_dict, mp_brain_screen_locals_dict_table);
+
+static void mp_brain_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    mp_brain_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+    // dest[0] == MP_OBJ_NULL means a READ lookup property (e.g. print(brain.screen))
+    if (dest[0] == MP_OBJ_NULL) {
+        if (attr == MP_QSTR_screen) {
+            dest[0] = self->screen;
+            return;
+        } else if (attr == MP_QSTR_sdcard) {
+            dest[0] = self->sdcard;
+            return;
+        } else if (attr == MP_QSTR_battery) {
+            dest[0] = self->battery;
+            return;
+        }
+    }
+    // Fall back to standard method/attribute resolution
+    dest[0] = MP_OBJ_NULL; 
+}
+
 static mp_obj_t mp_brain_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 0, false); // strict 0 arguments
 
-    mp_brain_obj_t *self = mp_obj_malloc(mp_brain_obj_t, type);
-    self->cpp_handle = brain_create();
-    return MP_OBJ_FROM_PTR(self);
-}
+    void *cpp_brain = brain_create();
 
+    // 2. Allocate parent wrapper struct
+    mp_brain_obj_t *self = mp_obj_malloc(mp_brain_obj_t, type);
+    self->cpp_handle = cpp_brain;
+
+    // 3. Allocate sub-structures, linking their pointers cleanly to internal segments
+    mp_brain_screen_obj_t *scr = mp_obj_malloc(mp_brain_screen_obj_t, &mp_brain_screen_type);
+    scr->cpp_handle = brain_get_screen(cpp_brain);
+
+    mp_brain_sdcard_obj_t *sd = mp_obj_malloc(mp_brain_sdcard_obj_t, &mp_brain_sdcard_type);
+    sd->cpp_handle = brain_get_sdcard(cpp_brain);
+
+    mp_brain_battery_obj_t *bat = mp_obj_malloc(mp_brain_battery_obj_t, &mp_brain_battery_type);
+    bat->cpp_handle = brain_get_battery(cpp_brain);
+
+    // 4. Assign Python reference bindings
+    self->screen = MP_OBJ_FROM_PTR(scr);
+    self->sdcard = MP_OBJ_FROM_PTR(sd);
+    self->battery = MP_OBJ_FROM_PTR(bat);
+}
 
 static const mp_rom_map_elem_t mp_brain_locals_dict_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
@@ -637,10 +707,10 @@ static MP_DEFINE_CONST_DICT(mp_brain_locals_dict, mp_brain_locals_dict_table);
 // Register the finalized Motor class metadata type
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_brain_type,
-    MP_QSTR_Brain,                  // Name exposed to Python
+    MP_QSTR_Brain,
     MP_TYPE_FLAG_NONE,
-    make_new, mp_brain_make_new,    // Constructor attachment
-    locals_dict, &mp_brain_locals_dict
+    make_new, mp_brain_make_new,
+    attr, mp_brain_attr
 );
 
 // This dictionary holds everything inside the top-level namespace: 'import vex'

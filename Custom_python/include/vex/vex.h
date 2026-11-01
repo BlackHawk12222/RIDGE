@@ -72,50 +72,54 @@ void vex_timer_event(void* timer_ptr, mp_obj_t callback_func, int delay_ms);
 void* brain_create();
 void brain_destroy(void* brain_ptr);
 
-float brain_battery_voltage(void* brain_ptr, int units);
-float brain_battery_current(void* brain_ptr, int units);
-int brain_battery_capacity(void* brain_ptr);
-int brain_battery_temperature(void* brain_ptr, int units);
+void* brain_get_screen(void* brain_ptr);
+void* brain_get_sdcard(void* brain_ptr);
+void* brain_get_battery(void* brain_ptr);
 
-void brain_screen_print(void* brain_ptr, const char* text, const char* sep, int precision);
-void brain_screen_set_cursor(void* brain_ptr, int row, int col);
-void brain_screen_next_row(void* brain_ptr);
-void brain_screen_clear_row(void* brain_ptr, int row, int color); // Default color is BLACK.
-int brain_screen_row(void* brain_ptr);
-int brain_screen_column(void* brain_ptr);
-void brain_screen_print_at(void* brain_ptr, const char* text, int x, int y, const char* sep, int precision, bool opaque);
-int brain_screen_get_string_width(void* brain_ptr, const char* string);
-int brain_screen_get_string_height(void* brain_ptr, const char* string);
-void brain_screen_clear_line(void* brain_ptr, int line);
-void brain_screen_new_line(void* brain_ptr);
-void brain_screen_clear_screen(void* brain_ptr, int color); // Default color is BLACK.
-void brain_screen_set_font(void* brain_ptr, int font);
-void brain_screen_set_pen_width(void* brain_ptr, int value);
-void brain_screen_set_pen_color(void* brain_ptr, int color);
-void brain_screen_set_fill_color(void* brain_ptr, int color);
-void brain_screen_set_origin(void* brain_ptr, int x, int y);
-void brain_screen_draw_pixel(void* brain_ptr, int x, int y);
-void brain_screen_draw_line(void* brain_ptr, int start_x, int start_y, int end_x, int end_y);
-void brain_screen_draw_rectangle(void* brain_ptr, int x, int y, int width, int height, int color);
-void brain_screen_draw_circle(void* brain_ptr, int x, int y, int radius, int color);
-void brain_screen_render(void* brain_ptr);
-void brain_screen_set_clip_region(void* brain_ptr, int x, int y, int width, int height);
-bool brain_screen_pressing(void* brain_ptr);
-int brain_screen_x_position(void* brain_ptr);
-int brain_screen_y_position(void* brain_ptr);
+float brain_battery_voltage(void* battery_ptr, int units);
+float brain_battery_current(void* battery_ptr, int units);
+int brain_battery_capacity(void* battery_ptr);
+int brain_battery_temperature(void* battery_ptr, int units);
+
+void brain_screen_print(void* screen_ptr, const char* text, const char* sep, int precision);
+void brain_screen_set_cursor(void* screen_ptr, int row, int col);
+void brain_screen_next_row(void* screen_ptr);
+void brain_screen_clear_row(void* screen_ptr, int row, int color); // Default color is BLACK.
+int brain_screen_row(void* screen_ptr);
+int brain_screen_column(void* screen_ptr);
+void brain_screen_print_at(void* screen_ptr, const char* text, int x, int y, const char* sep, int precision, bool opaque);
+int brain_screen_get_string_width(void* screen_ptr, const char* string);
+int brain_screen_get_string_height(void* screen_ptr, const char* string);
+void brain_screen_clear_line(void* screen_ptr, int line);
+void brain_screen_new_line(void* screen_ptr);
+void brain_screen_clear_screen(void* screen_ptr, int color); // Default color is BLACK.
+void brain_screen_set_font(void* screen_ptr, int font);
+void brain_screen_set_pen_width(void* screen_ptr, int value);
+void brain_screen_set_pen_color(void* screen_ptr, int color);
+void brain_screen_set_fill_color(void* screen_ptr, int color);
+void brain_screen_set_origin(void* screen_ptr, int x, int y);
+void brain_screen_draw_pixel(void* screen_ptr, int x, int y);
+void brain_screen_draw_line(void* screen_ptr, int start_x, int start_y, int end_x, int end_y);
+void brain_screen_draw_rectangle(void* screen_ptr, int x, int y, int width, int height, int color);
+void brain_screen_draw_circle(void* screen_ptr, int x, int y, int radius, int color);
+void brain_screen_render(void* screen_ptr);
+void brain_screen_set_clip_region(void* screen_ptr, int x, int y, int width, int height);
+bool brain_screen_pressing(void* screen_ptr);
+int brain_screen_x_position(void* screen_ptr);
+int brain_screen_y_position(void* screen_ptr);
 
 typedef void (*c_callback_t)(void* user_data);
-void brain_screen_pressed(void* brain_ptr, c_callback_t callback, void* args);
-void brain_screen_released(void* brain_ptr, c_callback_t callback, void* args);
+void brain_screen_pressed(void* screen_ptr, c_callback_t callback, void* args);
+void brain_screen_released(void* screen_ptr, c_callback_t callback, void* args);
 
-char* brain_sdcard_loadfile(void* brain_ptr, const char* filename, char* buffer);
-void brain_sdcard_savefile(void* brain_ptr, const char* filename, char* buffer);
-void brain_sdcard_appendfile(void* brain_ptr, const char* filename, char* buffer);
-void brain_sdcard_draw_image_from_file(void* brain_ptr, const char* filename, int x, int y);
-bool brain_sdcard_is_inserted(void* brain_ptr);
-int brain_sdcard_filesize(void* brain_ptr, const char* filename);
-int brain_sdcard_size(void* brain_ptr, const char* filename);
-bool brain_sdcard_exists(void* brain_ptr, const char* filename);
+char* brain_sdcard_loadfile(void* sdcard_ptr, const char* filename, char* buffer);
+void brain_sdcard_savefile(void* sdcard_ptr, const char* filename, char* buffer);
+void brain_sdcard_appendfile(void* sdcard_ptr, const char* filename, char* buffer);
+void brain_sdcard_draw_image_from_file(void* sdcard_ptr, const char* filename, int x, int y);
+bool brain_sdcard_is_inserted(void* sdcard_ptr);
+int brain_sdcard_filesize(void* sdcard_ptr, const char* filename);
+int brain_sdcard_size(void* sdcard_ptr, const char* filename);
+bool brain_sdcard_exists(void* sdcard_ptr, const char* filename);
 
 
 
