@@ -650,7 +650,8 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     // Bind Classes into the module namespace
     { MP_ROM_QSTR(MP_QSTR_Motor), MP_ROM_PTR(&mp_motor_type) },
     { MP_ROM_QSTR(MP_QSTR_MotorGroup), MP_ROM_PTR(&mp_motorgroup_type) },
-    { MP_ROM_QSTR(MP_QSTR_Timer), MP_ROM_PTR(&mp_timer_type)},
+    { MP_ROM_QSTR(MP_QSTR_Timer), MP_ROM_PTR(&mp_timer_type) },
+    { MP_ROM_QSTR(MP_QSTR_Brain), MP_ROM_PTR(&mp_brain_type) },
 
     // Bind Global Enum Constants directly to the module scope
     { MP_ROM_QSTR(MP_QSTR_NALL),         MP_ROM_INT(-1) },
