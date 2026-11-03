@@ -399,25 +399,30 @@ int brain_screen_y_position(void* screen_ptr){
 }
 
 typedef void (*c_callback_t)(void* user_data);
-void brain_screen_pressed(void* screen_ptr, c_callback_t callback, void* args){
-    if (!callback) return;
 
-    // We pass a C++ lambda expression directly into your template!
-    // The lambda perfectly satisfies the 'Func' and 'Args...' parameters.
-    static_cast<Screen*>(screen_ptr) -> pressed([=]() {
-        callback(args);
+void brain_screen_pressed(void* screen_ptr, c_callback_t callback, void* args) {
+    if (!callback || !screen_ptr) return;
+
+    // By explicitly capturing the raw pointers by value, they are safely copied 
+    // into the internal storage of the lambda object managed by the PROS Event system.
+    static_cast<Screen*>(screen_ptr)->pressed([callback, args]() {
+        if (callback) {
+            callback(args);
+        }
     });
 }
 
-void brain_screen_released(void* screen_ptr, c_callback_t callback, void* args){
-    if (!callback) return;
+void brain_screen_released(void* screen_ptr, c_callback_t callback, void* args) {
+    if (!callback || !screen_ptr) return;
 
-    // We pass a C++ lambda expression directly into your template!
-    // The lambda perfectly satisfies the 'Func' and 'Args...' parameters.
-    static_cast<Screen*>(screen_ptr) -> released([=]() {
-        callback(args);
+    // Explicit capture prevents stack lifetime issues
+    static_cast<Screen*>(screen_ptr)->released([callback, args]() {
+        if (callback) {
+            callback(args);
+        }
     });
 }
+
 
 char* brain_sdcard_loadfile(void* brain_ptr, const char* filename, char* buffer){
     return static_cast<Brain*>(brain_ptr) -> sdcard.loadfile(filename, buffer);
