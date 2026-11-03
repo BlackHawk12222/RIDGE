@@ -4,6 +4,9 @@
 # Add this line near the top of your Makefile
 PYTHON=python3
 
+# This forces PROS to use aggressive optimization instead of the default -Os
+OPTIMIZATIONFLAGS=-O3 -ffast-math
+
 # filename extensions
 CEXTS:=c
 ASMEXTS:=s S
@@ -50,13 +53,15 @@ EXTRA_CFLAGS += -I$(BINDIR)/micropython \
                 -Isrc/micropython \
                 -Isrc/micropython/py \
                 -Isrc/micropython/extmod \
-				-Isrc/micropython/modules
+				-Isrc/micropython/modules \
+				-O3 -ffast-math
 
 EXTRA_CXXFLAGS += -I$(BINDIR)/micropython \
                   -Isrc/micropython \
                   -Isrc/micropython/py \
                   -Isrc/micropython/extmod \
-				  -Isrc/vex
+				  -Isrc/vex \
+				  -O3 -ffast-math
 
 # 3. Explicitly scan and track deep source paths inside common.mk loops
 EXTRA_SRCDIRS += src/micropython \
@@ -68,11 +73,8 @@ EXTRA_SRCDIRS += src/micropython \
 EXCLUDE_SRC_FROM_LIB += src/micropython/shared/runtime/pyexec.c \
                         src/micropython/py/builtinhelp.c
 
-OPTFLAGS = -Ofast -mcpu=cortex-a9 -mfpu=neon-vfpv3 -mfloat-abi=hard -ffast-math -flto -fno-rtti
-
 # 5. Global tracker symbols
 SRC_QSTR += src/mp_port.c src/modpros.c src/micropython/modules/vex_module.c
-
 
 ################################################################################
 ########## Nothing below this line should be edited by typical users ###########

@@ -458,29 +458,6 @@ int Screen::y_position(){
     return status.y;
 }
 
-template<typename Func, typename... Args>
-void Screen::pressed(Func callback, Args... args) {
-    // Bind the function and its arguments into a single parameterless lambda
-    current_callback_pressed = [=]() {
-        std::invoke(callback, args...); 
-    };
-
-    // Pass the static bridge function pointer to PROS
-    pros::screen::touch_callback(pros_callback_bridge_pressed, pros::E_TOUCH_PRESSED);
-}
-
-template<typename Func, typename... Args>
-void Screen::released(Func callback, Args... args){
-
-    // Bind the function and its arguments into a single parameterless lambda
-    current_callback_released = [=]() {
-        std::invoke(callback, args...); 
-    };
-
-    // Pass the static bridge function pointer to PROS
-    pros::screen::touch_callback(pros_callback_bridge_released, pros::E_TOUCH_RELEASED);
-}
-
 char* SdCard::loadfile(std::string filename, char* buffer){
     std::string FilePath = "/usd/" + filename;
 
@@ -605,11 +582,4 @@ bool SdCard::exists(std::string filename){
 
     fclose(file);
     return output;
-}
-
-Brain::Brain(){
-    ThreeWirePort three_wire_port;
-    Screen screen;
-    SdCard sdcard;
-    Battery Battery;
 }

@@ -18,9 +18,36 @@ typedef struct _mp_timer_obj_t{
     void *cpp_handle;
 } mp_timer_obj_t;
 
+typedef struct _mp_brain_battery_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_brain_battery_obj_t;
+
+typedef struct _mp_brain_screen_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_brain_screen_obj_t;
+
+typedef struct _mp_brain_sdcard_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_brain_sdcard_obj_t;
+
+typedef struct _mp_brain_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+    mp_obj_t screen;  // Stores instance of mp_brain_screen_obj_t
+    mp_obj_t sdcard;  // Stores instance of mp_brain_sdcard_obj_t
+    mp_obj_t battery; // Stores instance of mp_brain_battery_obj_t
+} mp_brain_obj_t;
+
 extern const mp_obj_type_t mp_motor_type;
 extern const mp_obj_type_t mp_motorgroup_type;
 extern const mp_obj_type_t mp_timer_type;
+extern const mp_obj_type_t mp_brain_type;
+extern const mp_obj_type_t mp_brain_screen_type;
+extern const mp_obj_type_t mp_brain_sdcard_type;
+extern const mp_obj_type_t mp_brain_battery_type;
 
 static mp_obj_t mp_motor_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 1, 3, false); // strict 3 arguments
@@ -614,6 +641,442 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &mp_timer_locals_dict
 );
 
+/* Defining class brain.battery for micropython module. */
+static mp_obj_t mp_brain_battery_voltage(mp_obj_t self_ptr, mp_obj_t units_t){
+    mp_brain_battery_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int units = mp_obj_get_int(units_t);
+
+    float output;
+    output = brain_battery_voltage(self -> cpp_handle, units);
+    return mp_obj_new_float(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_battery_voltage_obj, mp_brain_battery_voltage);
+
+static mp_obj_t mp_brain_battery_current(mp_obj_t self_ptr, mp_obj_t units_t){
+    mp_brain_battery_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int units = mp_obj_get_int(units_t);
+
+    float output;
+    output = brain_battery_current(self -> cpp_handle, units);
+    return mp_obj_new_float(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_battery_current_obj, mp_brain_battery_current);
+
+static mp_obj_t mp_brain_battery_capacity(mp_obj_t self_ptr){
+    mp_brain_battery_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int output;
+    output = brain_battery_capacity(self -> cpp_handle);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_battery_capacity_obj, mp_brain_battery_capacity);
+
+static mp_obj_t mp_brain_battery_temperature(mp_obj_t self_ptr, mp_obj_t units_t){
+    mp_brain_battery_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int units = mp_obj_get_int(units_t);
+
+    int output;
+    output = brain_battery_temperature(self -> cpp_handle, units);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_battery_temperature_obj, mp_brain_battery_temperature);
+
+static const mp_rom_map_elem_t mp_brain_battery_locals_dict_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+    { MP_ROM_QSTR(MP_QSTR_voltage), MP_ROM_PTR(&mp_brain_battery_voltage_obj) },
+    { MP_ROM_QSTR(MP_QSTR_current), MP_ROM_PTR(&mp_brain_battery_current_obj) },
+    { MP_ROM_QSTR(MP_QSTR_capacity), MP_ROM_PTR(&mp_brain_battery_capacity_obj) },
+    { MP_ROM_QSTR(MP_QSTR_temperature), MP_ROM_PTR(&mp_brain_battery_temperature_obj) },
+};
+static MP_DEFINE_CONST_DICT(mp_brain_battery_locals_dict, mp_brain_battery_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_brain_battery_type,
+    MP_QSTR_battery,
+    MP_TYPE_FLAG_NONE,
+    locals_dict, &mp_brain_battery_locals_dict
+);
+
+/* Defining class brain.screen for micropython module. */
+
+static mp_obj_t mp_brain_screen_print(size_t n_args, const mp_obj_t *args) {
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    const char* text = mp_obj_get_str(args[1]);
+
+    // Defining default values.
+    const char* sep = (n_args > 2) ? mp_obj_get_str(args[2])   : "";      // DEGREES macro value
+    int precision = (n_args > 3) ? mp_obj_get_float(args[3]) : 2;
+
+    brain_screen_print(self -> cpp_handle, text, sep, precision);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_print_obj, 2, 4, mp_brain_screen_print);
+
+static mp_obj_t mp_brain_screen_set_cursor(mp_obj_t self_ptr, mp_obj_t row_t, mp_obj_t col_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int row = mp_obj_get_int(row_t);
+    int col = mp_obj_get_int(col_t);
+
+    brain_screen_set_cursor(self -> cpp_handle, row, col);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_set_cursor_obj, mp_brain_screen_set_cursor);
+
+static mp_obj_t mp_brain_screen_next_row(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    brain_screen_next_row(self -> cpp_handle);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_next_row_obj, mp_brain_screen_next_row);
+
+static mp_obj_t mp_brain_screen_clear_row(mp_obj_t self_ptr, mp_obj_t row_t, mp_obj_t color_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int row = mp_obj_get_int(row_t);
+    int color = mp_obj_get_int(color_t);
+
+    brain_screen_clear_row(self -> cpp_handle, row, color);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_clear_row_obj, mp_brain_screen_clear_row);
+
+static mp_obj_t mp_brain_screen_row(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int output = 0;
+
+    output = brain_screen_row(self -> cpp_handle);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_row_obj, mp_brain_screen_row);
+
+static mp_obj_t mp_brain_screen_column(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int output = 0;
+
+    output = brain_screen_column(self -> cpp_handle);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_column_obj, mp_brain_screen_column);
+
+static mp_obj_t mp_brain_screen_print_at(size_t n_args, const mp_obj_t *args) {
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    const char* text = mp_obj_get_str(args[1]);
+
+    int x = mp_obj_get_int(args[2]);
+    int y = mp_obj_get_int(args[3]);
+
+    // Defining default values.
+    const char* sep = (n_args > 4) ? mp_obj_get_str(args[4])   : "";      // DEGREES macro value
+    int precision = (n_args > 5) ? mp_obj_get_float(args[5]) : 2;
+    bool opaque = (n_args > 6) ? mp_obj_is_true(args[6])   : true;
+
+    brain_screen_print_at(self -> cpp_handle, text, x, y, sep, precision, opaque);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_print_obj, 4, 7, mp_brain_screen_print);
+
+static mp_obj_t mp_brain_screen_get_string_width(mp_obj_t self_ptr, mp_obj_t string_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    const char* text = mp_obj_get_str(string_t);
+
+    int output = 0;
+
+    output = brain_screen_get_string_width(self -> cpp_handle, text);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_get_string_width_obj, mp_brain_screen_get_string_width);
+
+static mp_obj_t mp_brain_screen_get_string_height(mp_obj_t self_ptr, mp_obj_t string_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    const char* text = mp_obj_get_str(string_t);
+
+    int output = 0;
+
+    output = brain_screen_get_string_height(self -> cpp_handle, text);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_get_string_height_obj, mp_brain_screen_get_string_height);
+
+static mp_obj_t mp_brain_screen_clear_line(mp_obj_t self_ptr, mp_obj_t line_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int line = mp_obj_get_int(line_t);
+
+    brain_screen_clear_line(self -> cpp_handle, line);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_clear_line_obj, mp_brain_screen_clear_line);
+
+static mp_obj_t mp_brain_screen_new_line(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    brain_screen_new_line(self -> cpp_handle);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_new_line_obj, mp_brain_screen_new_line);
+
+static mp_obj_t mp_brain_screen_clear_screen(mp_obj_t self_ptr, mp_obj_t color_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int color = mp_obj_get_int(color_t);
+
+    brain_screen_clear_screen(self -> cpp_handle, color);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_clear_screen_obj, mp_brain_screen_clear_screen);
+
+static mp_obj_t mp_brain_screen_set_font(mp_obj_t self_ptr, mp_obj_t font_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int font = mp_obj_get_int(font_t);
+
+    brain_screen_set_font(self -> cpp_handle, font);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_font_obj, mp_brain_screen_set_font);
+
+static mp_obj_t mp_brain_screen_set_pen_width(mp_obj_t self_ptr, mp_obj_t value_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int value = mp_obj_get_int(value_t);
+
+    brain_screen_set_pen_width(self -> cpp_handle, value);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_pen_width_obj, mp_brain_screen_set_pen_width);
+
+static mp_obj_t mp_brain_screen_set_pen_color(mp_obj_t self_ptr, mp_obj_t color_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int color = mp_obj_get_int(color_t);
+
+    brain_screen_set_pen_color(self -> cpp_handle, color);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_pen_color_obj, mp_brain_screen_set_pen_color);
+
+static mp_obj_t mp_brain_screen_set_fill_color(mp_obj_t self_ptr, mp_obj_t color_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int color = mp_obj_get_int(color_t);
+
+    brain_screen_set_fill_color(self -> cpp_handle, color);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_fill_color_obj, mp_brain_screen_set_fill_color);
+
+static mp_obj_t mp_brain_screen_set_origin(mp_obj_t self_ptr, mp_obj_t x_t, mp_obj_t y_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int x = mp_obj_get_int(x_t);
+    int y = mp_obj_get_int(y_t);
+
+    brain_screen_set_origin(self -> cpp_handle, x, y);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_set_origin_obj, mp_brain_screen_set_origin);
+
+static mp_obj_t mp_brain_screen_draw_pixel(mp_obj_t self_ptr, mp_obj_t x_t, mp_obj_t y_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int x = mp_obj_get_int(x_t);
+    int y = mp_obj_get_int(y_t);
+
+    brain_screen_draw_pixel(self -> cpp_handle, x, y);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_draw_pixel_obj, mp_brain_screen_draw_pixel);
+
+static mp_obj_t mp_brain_screen_draw_line(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    int start_x = mp_obj_get_int(args[1]);
+    int start_y = mp_obj_get_int(args[2]);
+    int end_x = mp_obj_get_int(args[3]);
+    int end_y = mp_obj_get_int(args[4]);
+
+    brain_screen_draw_line(self -> cpp_handle, start_x, start_y, end_x, end_y);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_line_obj, 5, 5, mp_brain_screen_draw_line);
+
+static mp_obj_t mp_brain_screen_draw_rectangle(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    int x = mp_obj_get_int(args[1]);
+    int y = mp_obj_get_int(args[2]);
+    int width = mp_obj_get_int(args[3]);
+    int height = mp_obj_get_int(args[4]);
+    int color = (n_args > 5) ? mp_obj_get_int(args[5]) : 0; // Default color is BLACK
+
+    brain_screen_draw_rectangle(self -> cpp_handle, x, y, width, height, color);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_rectangle_obj, 5, 6,mp_brain_screen_draw_rectangle);
+
+static mp_obj_t mp_brain_screen_draw_circle(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    int x = mp_obj_get_int(args[1]);
+    int y = mp_obj_get_int(args[2]);
+    int width = mp_obj_get_int(args[3]);
+    int height = mp_obj_get_int(args[4]);
+
+    brain_screen_draw_circle(self -> cpp_handle, x, y, width, height);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_circle_obj, 5, 5, mp_brain_screen_draw_circle);
+
+static mp_obj_t mp_brain_screen_render(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    brain_screen_render(self -> cpp_handle);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_render_obj, mp_brain_screen_render);
+
+static mp_obj_t mp_brain_screen_set_clip_region(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    int x = mp_obj_get_int(args[1]);
+    int y = mp_obj_get_int(args[2]);
+    int width = mp_obj_get_int(args[3]);
+    int height = mp_obj_get_int(args[4]);
+
+    brain_screen_set_clip_region(self -> cpp_handle, x, y, width, height);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_set_clip_region_obj, 5, 5, mp_brain_screen_set_clip_region);
+
+static mp_obj_t mp_brain_screen_pressing(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    bool output = false;
+
+    output = brain_screen_pressing(self -> cpp_handle);
+    return output ? mp_const_true : mp_const_false;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_pressing_obj, mp_brain_screen_pressing);
+
+static mp_obj_t mp_brain_screen_x_position(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int output = 0;
+
+    output = brain_screen_x_position(self -> cpp_handle);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_x_position_obj, mp_brain_screen_x_position);
+
+static mp_obj_t mp_brain_screen_y_position(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int output = 0;
+
+    output = brain_screen_y_position(self -> cpp_handle);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_y_position_obj, mp_brain_screen_y_position);
+
+
+
+static const mp_rom_map_elem_t mp_brain_screen_locals_dict_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+};
+static MP_DEFINE_CONST_DICT(mp_brain_screen_locals_dict, mp_brain_screen_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_brain_screen_type,
+    MP_QSTR_screen,
+    MP_TYPE_FLAG_NONE,
+    locals_dict, &mp_brain_screen_locals_dict 
+);
+
+/* Defining class brain.sdcard for micropython module. */
+static const mp_rom_map_elem_t mp_brain_sdcard_locals_dict_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+};
+static MP_DEFINE_CONST_DICT(mp_brain_sdcard_locals_dict, mp_brain_sdcard_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_brain_sdcard_type,
+    MP_QSTR_sdcard,
+    MP_TYPE_FLAG_NONE,
+    locals_dict, &mp_brain_sdcard_locals_dict
+);
+
+
+static void mp_brain_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    mp_brain_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+    // dest[0] == MP_OBJ_NULL means a READ lookup property (e.g. print(brain.screen))
+    if (dest[0] == MP_OBJ_NULL) {
+        if (attr == MP_QSTR_screen) {
+            dest[0] = self->screen;
+            return;
+        } else if (attr == MP_QSTR_sdcard) {
+            dest[0] = self->sdcard;
+            return;
+        } else if (attr == MP_QSTR_battery) {
+            dest[0] = self->battery;
+            return;
+        }
+    }
+    // Fall back to standard method/attribute resolution
+    dest[0] = MP_OBJ_NULL; 
+}
+
+static mp_obj_t mp_brain_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 0, 0, false); // strict 0 arguments
+
+    void *cpp_brain = brain_create();
+
+    // 2. Allocate parent wrapper struct
+    mp_brain_obj_t *self = mp_obj_malloc(mp_brain_obj_t, type);
+    self->cpp_handle = cpp_brain;
+
+    // 3. Allocate sub-structures, linking their pointers cleanly to internal segments
+    mp_brain_screen_obj_t *scr = mp_obj_malloc(mp_brain_screen_obj_t, &mp_brain_screen_type);
+    scr->cpp_handle = brain_get_screen(cpp_brain);
+
+    mp_brain_sdcard_obj_t *sd = mp_obj_malloc(mp_brain_sdcard_obj_t, &mp_brain_sdcard_type);
+    sd->cpp_handle = brain_get_sdcard(cpp_brain);
+
+    mp_brain_battery_obj_t *bat = mp_obj_malloc(mp_brain_battery_obj_t, &mp_brain_battery_type);
+    bat->cpp_handle = brain_get_battery(cpp_brain);
+
+    // 4. Assign Python reference bindings
+    self->screen = MP_OBJ_FROM_PTR(scr);
+    self->sdcard = MP_OBJ_FROM_PTR(sd);
+    self->battery = MP_OBJ_FROM_PTR(bat);
+}
+
+static const mp_rom_map_elem_t mp_brain_locals_dict_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+};
+static MP_DEFINE_CONST_DICT(mp_brain_locals_dict, mp_brain_locals_dict_table);
+
+// Register the finalized Motor class metadata type
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_brain_type,
+    MP_QSTR_Brain,
+    MP_TYPE_FLAG_NONE,
+    make_new, mp_brain_make_new,
+    attr, mp_brain_attr,
+    locals_dict, &mp_brain_locals_dict
+);
+
 // This dictionary holds everything inside the top-level namespace: 'import vex'
 static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),    MP_ROM_QSTR(MP_QSTR_vex) },
@@ -621,7 +1084,8 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     // Bind Classes into the module namespace
     { MP_ROM_QSTR(MP_QSTR_Motor), MP_ROM_PTR(&mp_motor_type) },
     { MP_ROM_QSTR(MP_QSTR_MotorGroup), MP_ROM_PTR(&mp_motorgroup_type) },
-    { MP_ROM_QSTR(MP_QSTR_Timer), MP_ROM_PTR(&mp_timer_type)},
+    { MP_ROM_QSTR(MP_QSTR_Timer), MP_ROM_PTR(&mp_timer_type) },
+    { MP_ROM_QSTR(MP_QSTR_Brain), MP_ROM_PTR(&mp_brain_type) },
 
     // Bind Global Enum Constants directly to the module scope
     { MP_ROM_QSTR(MP_QSTR_NALL),         MP_ROM_INT(-1) },
