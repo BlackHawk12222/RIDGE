@@ -935,7 +935,7 @@ try:
 
         def controller_interface_add(self, add_code: str, add_details: Any) -> None:
             reverse_code = self.reversecodes.get(self.codes.get(add_code), "ERR")
-            CInterface.add_to_buffer("%s %s" % ( reverse_code, add_details))
+            CInterface.add_to_buffer("%s %s" % (reverse_code, add_details))
         
         def add(self, add_code: str, add_details: Any) -> None:
             """

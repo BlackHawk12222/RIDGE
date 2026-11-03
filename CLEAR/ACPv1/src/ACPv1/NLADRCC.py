@@ -1,7 +1,7 @@
 import math
 
 class NLADRC():
-    def __init__(self, Kp, KpScale, b0, Omega_o, alpha=0.5, delta=0.1, MaxAccel=5.0, dt=0.02):
+    def __init__(self, Kp, KpScale, b0, Omega_o, alpha=0.5, delta=0.1, MaxAccel=5.0, dt=0.01):
         self.Kp = Kp
         self.KpScale = KpScale
         self.b0 = b0

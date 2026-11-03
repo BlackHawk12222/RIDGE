@@ -82,7 +82,10 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
             continue
         
         if item_type == "<class 'controller'>":
-            controller=item
+            if "interface" in item or "Interface" in item:
+                Thread(CLEARv2.ControllerInterface.start, [eval(item)])  # type: ignore
+            else:
+                controller=item
         elif item_type == "<class 'motor'>":
             if "Right" in item or "right" in item:
                 RightMotors+=[item]
@@ -97,6 +100,8 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
 
     # Start the driver control and the autonomous function.
     comp=Competition(ACP_driver, AtonFunc)
+
+    ACP_driver()
 
     # Start the CLA thread for the CLEARv2 package.
     print(dir(CLEARv2.CLA))
