@@ -989,10 +989,52 @@ static mp_obj_t mp_brain_screen_y_position(mp_obj_t self_ptr){
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_y_position_obj, mp_brain_screen_y_position);
 
+static mp_obj_t mp_brain_screen_pressed(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
+    brain_screen_pressed(self -> cpp_handle, callback, args);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_pressed_obj, mp_brain_screen_pressed);
+
+static mp_obj_t mp_brain_screen_released(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    brain_screen_released(self -> cpp_handle, callback, args);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_released_obj, mp_brain_screen_released);
 
 static const mp_rom_map_elem_t mp_brain_screen_locals_dict_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+    { MP_ROM_QSTR(MP_QSTR_print), MP_ROM_PTR(&mp_brain_screen_print_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_cursor), MP_ROM_PTR(&mp_brain_screen_set_cursor_obj) },
+    { MP_ROM_QSTR(MP_QSTR_next_row), MP_ROM_PTR(&mp_brain_screen_next_row_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clear_row), MP_ROM_PTR(&mp_brain_screen_clear_row_obj) },
+    { MP_ROM_QSTR(MP_QSTR_row), MP_ROM_PTR(&mp_brain_screen_row_obj) },
+    { MP_ROM_QSTR(MP_QSTR_column), MP_ROM_PTR(&mp_brain_screen_column_obj) },
+    { MP_ROM_QSTR(MP_QSTR_print_at), MP_ROM_PTR(&mp_brain_screen_print_at_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_string_width), MP_ROM_PTR(&mp_brain_screen_get_string_width_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_string_height), MP_ROM_PTR(&mp_brain_screen_get_string_height_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clear_line), MP_ROM_PTR(&mp_brain_screen_clear_line_obj) },
+    { MP_ROM_QSTR(MP_QSTR_new_line), MP_ROM_PTR(&mp_brain_screen_new_line_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clear_screen), MP_ROM_PTR(&mp_brain_screen_clear_screen_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_font), MP_ROM_PTR(&mp_brain_screen_set_font_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_pen_width), MP_ROM_PTR(&mp_brain_screen_set_pen_width_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_pen_color), MP_ROM_PTR(&mp_brain_screen_set_pen_color_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_fill_color), MP_ROM_PTR(&mp_brain_screen_set_fill_color_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_origin), MP_ROM_PTR(&mp_brain_screen_set_origin_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_pixel), MP_ROM_PTR(&mp_brain_screen_draw_pixel_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_line), MP_ROM_PTR(&mp_brain_screen_draw_line_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_rectangle), MP_ROM_PTR(&mp_brain_screen_draw_rectangle_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_circle), MP_ROM_PTR(&mp_brain_screen_draw_circle_obj) },
+    { MP_ROM_QSTR(MP_QSTR_render), MP_ROM_PTR(&mp_brain_screen_render_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_clip_region), MP_ROM_PTR(&mp_brain_screen_set_clip_region_obj) },
+    { MP_ROM_QSTR(MP_QSTR_pressing), MP_ROM_PTR(&mp_brain_screen_pressing_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x_position), MP_ROM_PTR(&mp_brain_screen_x_position_obj) },
+    { MP_ROM_QSTR(MP_QSTR_y_position), MP_ROM_PTR(&mp_brain_screen_y_position_obj) },
+    { MP_ROM_QSTR(MP_QSTR_pressed), MP_ROM_PTR(&mp_brain_screen_pressed_obj) },
+    { MP_ROM_QSTR(MP_QSTR_released), MP_ROM_PTR(&mp_brain_screen_released_obj) },
 };
 static MP_DEFINE_CONST_DICT(mp_brain_screen_locals_dict, mp_brain_screen_locals_dict_table);
 
@@ -1003,9 +1045,102 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &mp_brain_screen_locals_dict 
 );
 
+static mp_obj_t mp_brain_sdcard_loadfile(size_t n_args, const mp_obj_t *args){
+    mp_brain_sdcard_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    const char* filename = mp_obj_str_get_str(args[1]);
+    const char* buffer = (n_args > 2) ? mp_obj_str_get_str(args[2]) : NULL;
+
+    char* result;
+    result = brain_sdcard_loadfile(self -> cpp_handle, filename, buffer);
+    return mp_obj_new_str(result, strlen(result));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_sdcard_loadfile_obj, 2, 3, mp_brain_sdcard_loadfile);
+
+static mp_obj_t mp_brain_sdcard_savefile(size_t n_args, const mp_obj_t *args){
+    mp_brain_sdcard_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    const char* filename = mp_obj_str_get_str(args[1]);
+    const char* buffer = (n_args > 2) ? mp_obj_str_get_str(args[2]) : NULL;
+
+    brain_sdcard_savefile(self -> cpp_handle, filename, buffer);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_sdcard_savefile_obj, 2, 3, mp_brain_sdcard_savefile);
+
+static mp_obj_t mp_brain_sdcard_appendfile(mp_obj_t self_ptr, mp_obj_t filename_t, mp_obj_t buffer_t){
+    mp_brain_sdcard_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    const char* filename = mp_obj_str_get_str(filename_t);
+    const char* buffer = mp_obj_str_get_str(buffer_t);
+
+    brain_sdcard_appendfile(self -> cpp_handle, filename, buffer);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_sdcard_appendfile_obj, mp_brain_sdcard_appendfile);
+
+static mp_obj_t mp_brain_sdcard_draw_image_from_file(size_t n_args, const mp_obj_t *args){
+    mp_brain_sdcard_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    const char* filename = mp_obj_str_get_str(args[1]);
+    int x = mp_obj_get_int(args[2]);
+    int y = mp_obj_get_int(args[3]);
+
+    brain_sdcard_draw_image_from_file(self -> cpp_handle, filename, x, y);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_sdcard_draw_image_from_file_obj, 4, 4, mp_brain_sdcard_draw_image_from_file);
+
+static mp_obj_t mp_brain_sdcard_is_inserted(mp_obj_t self_ptr){
+    mp_brain_sdcard_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    bool output = false;
+    output = brain_sdcard_is_inserted(self -> cpp_handle);
+    return output ? mp_const_true : mp_const_false;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_sdcard_is_inserted_obj, mp_brain_sdcard_is_inserted);
+
+static mp_obj_t mp_brain_sdcard_filesize(mp_obj_t self_ptr, mp_obj_t filename_t){
+    mp_brain_sdcard_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    const char* filename = mp_obj_str_get_str(filename_t);
+    size_t output = 0;
+    output = brain_sdcard_filesize(self -> cpp_handle, filename);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_sdcard_filesize_obj, mp_brain_sdcard_filesize);
+
+static mp_obj_t mp_brain_sdcard_size(mp_obj_t self_ptr, mp_obj_t filename_t){
+    mp_brain_sdcard_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    const char* filename = mp_obj_str_get_str(filename_t);
+    size_t output = 0;
+    output = brain_sdcard_size(self -> cpp_handle, filename);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_sdcard_size_obj, mp_brain_sdcard_size);
+
+static mp_obj_t mp_brain_sdcard_exists(mp_obj_t self_ptr, mp_obj_t filename_t){
+    mp_brain_sdcard_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    const char* filename = mp_obj_str_get_str(filename_t);
+    bool output = false;
+    output = brain_sdcard_exists(self -> cpp_handle, filename);
+    return output ? mp_const_true : mp_const_false;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_sdcard_exists_obj, mp_brain_sdcard_exists);
+
 /* Defining class brain.sdcard for micropython module. */
 static const mp_rom_map_elem_t mp_brain_sdcard_locals_dict_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+    { MP_ROM_QSTR(MP_QSTR_loadfile), MP_ROM_PTR(&mp_brain_sdcard_loadfile_obj) },
+    { MP_ROM_QSTR(MP_QSTR_savefile), MP_ROM_PTR(&mp_brain_sdcard_savefile_obj) },
+    { MP_ROM_QSTR(MP_QSTR_appendfile), MP_ROM_PTR(&mp_brain_sdcard_appendfile_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_image_from_file), MP_ROM_PTR(&mp_brain_sdcard_draw_image_from_file_obj) },
+    { MP_ROM_QSTR(MP_QSTR_is_inserted), MP_ROM_PTR(&mp_brain_sdcard_is_inserted_obj) },
+    { MP_ROM_QSTR(MP_QSTR_filesize), MP_ROM_PTR(&mp_brain_sdcard_filesize_obj) },
+    { MP_ROM_QSTR(MP_QSTR_size), MP_ROM_PTR(&mp_brain_sdcard_size_obj) },
+    { MP_ROM_QSTR(MP_QSTR_exists), MP_ROM_PTR(&mp_brain_sdcard_exists_obj) },
 };
 static MP_DEFINE_CONST_DICT(mp_brain_sdcard_locals_dict, mp_brain_sdcard_locals_dict_table);
 
