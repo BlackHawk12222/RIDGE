@@ -705,10 +705,10 @@ MP_DEFINE_CONST_OBJ_TYPE(
 static mp_obj_t mp_brain_screen_print(size_t n_args, const mp_obj_t *args) {
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    const char* text = mp_obj_get_str(args[1]);
+    const char* text = mp_obj_str_get_str(args[1]);
 
     // Defining default values.
-    const char* sep = (n_args > 2) ? mp_obj_get_str(args[2])   : "";      // DEGREES macro value
+    const char* sep = (n_args > 2) ? mp_obj_str_get_str(args[2])   : "";      // DEGREES macro value
     int precision = (n_args > 3) ? mp_obj_get_float(args[3]) : 2;
 
     brain_screen_print(self -> cpp_handle, text, sep, precision);
@@ -769,25 +769,25 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_column_obj, mp_brain_screen_col
 static mp_obj_t mp_brain_screen_print_at(size_t n_args, const mp_obj_t *args) {
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    const char* text = mp_obj_get_str(args[1]);
+    const char* text = mp_obj_str_get_str(args[1]);
 
     int x = mp_obj_get_int(args[2]);
     int y = mp_obj_get_int(args[3]);
 
     // Defining default values.
-    const char* sep = (n_args > 4) ? mp_obj_get_str(args[4])   : "";      // DEGREES macro value
+    const char* sep = (n_args > 4) ? mp_obj_str_get_str(args[4])   : "";      // DEGREES macro value
     int precision = (n_args > 5) ? mp_obj_get_float(args[5]) : 2;
     bool opaque = (n_args > 6) ? mp_obj_is_true(args[6])   : true;
 
     brain_screen_print_at(self -> cpp_handle, text, x, y, sep, precision, opaque);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_print_obj, 4, 7, mp_brain_screen_print);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_print_at_obj, 4, 7, mp_brain_screen_print_at);
 
 static mp_obj_t mp_brain_screen_get_string_width(mp_obj_t self_ptr, mp_obj_t string_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
-    const char* text = mp_obj_get_str(string_t);
+    const char* text = mp_obj_str_get_str(string_t);
 
     int output = 0;
 
@@ -799,7 +799,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_get_string_width_obj, mp_brain_
 static mp_obj_t mp_brain_screen_get_string_height(mp_obj_t self_ptr, mp_obj_t string_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
-    const char* text = mp_obj_get_str(string_t);
+    const char* text = mp_obj_str_get_str(string_t);
 
     int output = 0;
 
