@@ -15,7 +15,6 @@ brain = Brain()
 
 if brain.sdcard.is_inserted():
     import ACPv1
-    pass
 
 def autonomous():
     brain.screen.clear_screen()
@@ -228,12 +227,65 @@ X_assist_Current = 0
 xScale = 0
 X_diff_scaled = 0
 LiftVelocity = 0
-
+UseACP = False
+Loading = False
 
 
 #BEGIN CODE HERE ###############################################################
 
 #MISC CODE(custom printing, velocity setting etc.)
+class robot():
+    def __init__(self):
+        self.liftRaised = False
+        pass
+
+
+    def TankDrive(self,buffer=5):
+        #tank drive code for when ACP is not being used
+        while True:
+            left_drive_smart.set_velocity(controller_1.axis3.position(), PERCENT)
+            right_drive_smart.set_velocity(controller_1.axis2.position(), PERCENT)
+            if math.fabs(controller_1.axis3.position()) < buffer:
+                left_drive_smart.set_velocity(0,PERCENT)
+            if math.fabs(controller_1.axis2.position()) < buffer:
+                right_drive_smart.set_velocity(0,PERCENT)
+            left_drive_smart.spin(FORWARD)
+            right_drive_smart.spin(FORWARD)
+            wait(5, MSEC)
+
+
+    def autoload(self):
+        global Loading
+        #loads and lifts a cup and pin stack in the intake
+        while True:
+            if controller_1.buttonA.pressing():
+                Loading = True
+                liftGroup.set_velocity(100,PERCENT)
+                Claw.set_velocity(100,PERCENT)
+                if self.liftRaised:
+                    self.liftRaised = False
+                    grabber.set(False)
+                    liftGroup.spin_to_position(0,DEGREES,100,PERCENT,False)
+                    Claw.spin_to_position(0,DEGREES)
+                else:
+                    self.liftRaised = True
+                    controller_1.screen.print("running")
+                    grabber.set(False)
+                    liftGroup.spin_to_position(0,DEGREES)
+                    Claw.spin_to_position(0,DEGREES)
+                    while math.fabs(liftGroup.position(DEGREES))>10 and math.fabs(Claw.position(DEGREES))>10:
+                        wait(5,MSEC)
+                    Intake.spin(FORWARD)
+                    wait(0.5,SECONDS)
+                    grabber.set(True)
+                    wait(100,MSEC)
+                    liftGroup.spin_to_position(700,DEGREES,100,PERCENT,False)
+                    Claw.spin_to_position(195,DEGREES)
+                    wait(500,MSEC)
+                    liftGroup.stop()
+                    Intake.stop()
+                Loading = False
+
 
 class display():
 
@@ -287,33 +339,28 @@ class MotorTicks:
         pass
 
     def lift_tick(self):
-        if controller_1.buttonL1.pressing():
-            liftGroup.spin(FORWARD)
-        elif controller_1.buttonL2.pressing():
-            liftGroup.spin(REVERSE)
-        else:
-            liftGroup.stop()
+        if not Loading:
+            if controller_1.buttonL1.pressing():
+                liftGroup.spin(FORWARD)
+            elif controller_1.buttonL2.pressing():
+                liftGroup.spin(REVERSE)
+            else:
+                liftGroup.stop()
 
     def intake_tick(self):
-        if controller_1.buttonR1.pressing():
-            Intake.spin(FORWARD)
-        elif controller_1.buttonR2.pressing():
-            Intake.spin(REVERSE)
-        else:
-            Intake.stop()
+        if not Loading:
+            if controller_1.buttonR1.pressing():
+                Intake.spin(FORWARD)
+            elif controller_1.buttonR2.pressing():
+                Intake.spin(REVERSE)
+            else:
+                Intake.stop()
 
-    def claw_tick(self):
-        if controller_1.buttonY.pressing():
-            Claw.spin(FORWARD)
-        elif controller_1.buttonB.pressing():
-            Claw.spin(REVERSE)
-        else:
-            Claw.stop()
 
     def liftTick(self):
-        if controller_1.buttonX.pressing():
-            if self.Xrelease:
-                self.Xrelease = False
+        if controller_1.buttonUp.pressing():
+            if self.Uprelease:
+                self.Uprelease = False
                 if not self.intakeOn:
                     intakeLift.set(True)
                     self.intakeOn = True
@@ -321,12 +368,12 @@ class MotorTicks:
                     intakeLift.set(False)
                     self.intakeOn = False
         else:
-            self.Xrelease = True
+            self.Uprelease = True
 
-    def clawTick(self):
-        if controller_1.buttonUp.pressing():
-            if self.Uprelease:
-                self.Uprelease = False
+    def grabberTick(self):
+        if controller_1.buttonX.pressing():
+            if self.Xrelease:
+                self.Xrelease = False
                 if not self.clawOpen:
                     grabber.set(True)
                     self.clawOpen = True
@@ -334,7 +381,7 @@ class MotorTicks:
                     grabber.set(False)
                     self.clawOpen = False
         else:
-            self.Uprelease = True
+            self.Xrelease = True
 
 class MC:
     
@@ -807,7 +854,7 @@ def draw_button(draw_button_x, draw_button_y, draw_button_width, draw_button_hei
 
 def bootAnim():
     #User interface and setup complete animation code
-    global button_pressed, Auto_Side, MyColor, v, sizeDrawRound, AnimProgress, screen_precision, console_precision
+    global button_pressed, Auto_Side, MyColor, v, sizeDrawRound, AnimProgress, screen_precision, console_precision, UseACP
     
     #print out side selection menu
     while True:
@@ -875,7 +922,39 @@ def bootAnim():
         
         brain.screen.render()
         wait(5, MSEC)
+        #clear the brain screen and wait until it's not being pressed before moving on to color selection. This avoids having problems with a single touch registering both side and color
     
+    brain.screen.clear_screen()
+    while brain.screen.pressing():
+        wait(5, MSEC)
+    if brain.sdcard.is_inserted():
+        while True:
+            #draw color selection buttons. Refer to side selection button drawing for how this works.
+            brain.screen.clear_screen()
+            brain.screen.set_cursor(1, 1)
+
+            brain.screen.print("use ACP?")
+            
+            brain.screen.set_pen_color(Color.CYAN)
+            brain.screen.set_fill_color(Color.TRANSPARENT)
+            
+            draw_button(100, 100, 100, 100)
+            
+            if button_pressed == 1:
+                UseACP = True
+                break
+            
+            brain.screen.set_pen_color(Color.RED)
+            brain.screen.set_fill_color(Color.TRANSPARENT)
+            
+            draw_button(210, 100, 100, 100)
+            
+            if button_pressed == 1:
+                UseACP = False
+                break
+            
+            brain.screen.render()
+            wait(5, MSEC)
     #clear the screen after side and color selection are compelte
     brain.screen.clear_screen()
     brain.screen.render()
@@ -949,12 +1028,12 @@ def liftTick_callback():
     MT = MotorTicks()
     liftGroup.set_velocity(100,PERCENT)
     liftGroup.set_stopping(HOLD)
+    Claw.spin_to_position(-20,DEGREES)
     while True:
         MT.lift_tick()
-        MT.claw_tick()
         MT.intake_tick()
         MT.liftTick()
-        MT.clawTick()
+        MT.grabberTick()
 
 
 
@@ -985,8 +1064,18 @@ def aton():
     pass
 
 #PROGRAM RUN VVVVVVVVVVVVVVVVVVV
-if brain.sdcard.is_inserted():
-    comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
+
+K56721 = robot()
+
 PROG = Thread( prog_setup )
 VS = Thread( vs_setup )
+
+
+if brain.sdcard.is_inserted() and UseACP:
+    comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
+else:
+    claw  = Thread(K56721.autoload)
+    drive = Thread(K56721.TankDrive(2))
+
+
 #color_switching()
