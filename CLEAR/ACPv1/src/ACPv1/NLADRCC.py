@@ -19,6 +19,7 @@ class NLADRC():
         self.z1 = 0.0  # Estimated Measurement
         self.z2 = 0.0  # Estimated Disturbance
         self.Past_U = 0.0
+        self.SaturationError = 0.0 # Tracks physical motor saturation
 
     def _fal(self, error):
         """ Classic Han's FAL function to avoid chattering near zero error """
@@ -46,7 +47,26 @@ class NLADRC():
         
         # Euler integration for Extended State Observer
         self.z1 += (self.z2 + self.beta1 * FalEsoError + self.b0 * self.Past_U) * self.dt
-        self.z2 += (self.beta2 * FalEsoError) * self.dt
+
+         # 2. Update State 2 (Estimated Disturbance) with Observer Anti-Windup
+        # Calculate the intended raw disturbance step
+        DisturbanceStep = self.beta2 * FalEsoError
+        
+        # If the motor was saturated on the last loop, check if the observer 
+        # is trying to wind up the disturbance in the same direction.
+        if self.SaturationError > 0 and DisturbanceStep > 0:
+            # Saturated positive and trying to increase disturbance -> Freeze growth
+            DisturbanceStep = 0.0
+        elif self.SaturationError < 0 and DisturbanceStep < 0:
+            # Saturated negative and trying to decrease disturbance -> Freeze growth
+            DisturbanceStep = 0.0
+
+        self.z2 += DisturbanceStep * self.dt
+
+        # Secondary Safety: Hard clamp the estimated disturbance to the maximum 
+        # logical capabilities of the motor limits scaled by your plant gain.
+        MaxLogicalDisturbance = abs(MaxOutput * self.b0)
+        self.z2 = max(min(self.z2, MaxLogicalDisturbance), -MaxLogicalDisturbance)
 
         ControlError = self.SmoothedTarget - self.z1
 
@@ -63,6 +83,8 @@ class NLADRC():
         # Anti-windup clamp
         UClamped = max(min(u, MaxOutput), MinOutput)
         self.Past_U = UClamped
+
+        self.SaturationError = u - UClamped  # Track how much we saturated the control signal
 
         return UClamped
 
