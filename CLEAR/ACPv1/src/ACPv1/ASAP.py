@@ -118,7 +118,8 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
         InertialHeading=Inertial.heading()
 
         # Check if the robot Should be going straight.
-        StaySraight=bool( abs(RightPos - LeftPos) <= Controllertolrance)
+        # StaySraight=bool( abs(RightPos - LeftPos) <= Controllertolrance)
+        StaySraight = False
 
         # Toggle the heading if the robot is going straight and it has not been checked yet.
         if StaySraight and not CheckedIfStraight:
@@ -230,17 +231,21 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             TempVeryHigh=False
 
         # Anti fighting code to prevent the motors from fighting each other when they are not in sync.
-        if  abs(RightMotor1Velocity_RPM) >= MotorRpmMax:
-            PowerDeff=RightMotor1Velocity_RPM - MotorRpmMax
-            AntiFightOutputRight=[RightOutput - (PowerDeff*AntiFightGain), RightOutput]
-        else:
-            AntiFightOutputRight=[RightOutput, max(min(RightOutput+((VelocityDiffrenceRight/2)*AntiFightGain), 12), -12)]
 
-        if abs(LeftMotor1Velocity_RPM) >= MotorRpmMax:
-            PowerDeff=LeftMotor1Velocity_RPM - MotorRpmMax
-            AntiFightOutputLeft=[LeftOutput - (PowerDeff*AntiFightGain), LeftOutput]
-        else:
-            AntiFightOutputLeft=[LeftOutput, max(min(LeftOutput+((VelocityDiffrenceLeft/2)*AntiFightGain), 12), -12)]
+        AntiFightOutputRight=[RightOutput, RightOutput]
+        AntiFightOutputLeft=[LeftOutput, LeftOutput]
+
+        # if  abs(RightMotor1Velocity_RPM) >= MotorRpmMax:
+        #     PowerDeff=RightMotor1Velocity_RPM - MotorRpmMax
+        #     AntiFightOutputRight=[RightOutput - (PowerDeff*AntiFightGain), RightOutput]
+        # else:
+        #     AntiFightOutputRight=[RightOutput, max(min(RightOutput+((VelocityDiffrenceRight/2)*AntiFightGain), 12), -12)]
+
+        # if abs(LeftMotor1Velocity_RPM) >= MotorRpmMax:
+        #     PowerDeff=LeftMotor1Velocity_RPM - MotorRpmMax
+        #     AntiFightOutputLeft=[LeftOutput - (PowerDeff*AntiFightGain), LeftOutput]
+        # else:
+        #     AntiFightOutputLeft=[LeftOutput, max(min(LeftOutput+((VelocityDiffrenceLeft/2)*AntiFightGain), 12), -12)]
 
         #print(AntiFightOutputRight, AntiFightOutputLeft)
 
