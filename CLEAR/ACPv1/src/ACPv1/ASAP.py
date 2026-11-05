@@ -7,7 +7,7 @@ from .General.LKF import LinearKalmanFilter, Matrix
 from .NLADRCC import NLADRC
 
 def _rpm_to_wheel_speed_mps(rpm: float, wheel_diameter_mm: float, gear_ratio: float = 1.0) -> float:
-    return rpm * math.pi * (wheel_diameter_mm / 1000) / (60 * gear_ratio)
+    return rpm * gear_ratio * math.pi * (wheel_diameter_mm / 1000) / 60
 
 
 def Start(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: float, WheelSize_MM: float, MotorRpmMax: int, Controller: Controller, XOdom: Rotation, OdomWheelSize_MM, StickType: str, Inertial: Inertial):
@@ -23,25 +23,25 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
     for motor in RightMotorList:
         motor.set_stopping(COAST)
 
-    KP = 5     # Modest tracking aggressiveness to start
+    KP = 0.1    # Modest tracking aggressiveness to start
     KPScale = 0.0     # Turn off error-scaling initially to establish a baseline
-    B0 = 1     # Neutral input-to-output gain scaling
-    Omega_o = 8    # Safe observer bandwidth for a 100Hz (dt=0.01) loop
+    B0 = 8.33    # Neutral input-to-output gain scaling
+    Omega_o = 3.5    # Safe observer bandwidth for a 100Hz (dt=0.01) loop
     Alpha = 1.0       # IMPORTANT: Sets _fal() to linear mode for safe initial tuning
     MaxAccel = 5.0    # Gentler target ramping to protect your hardware initially
-    Delta = 0.5
+    Delta = 5.0
     Dt = 0.01
 
     # Motor controller object creation.
-    LeftController=NLADRC(KP, KPScale, B0, Omega_o, Alpha, Delta, MaxAccel)
-    RightController=NLADRC(KP, KPScale, B0, Omega_o, Alpha, Delta, MaxAccel)
+    LeftController=NLADRC(KP, KPScale, B0, Omega_o, Alpha, Delta, MaxAccel, Dt)
+    RightController=NLADRC(KP, KPScale, B0, Omega_o, Alpha, Delta, MaxAccel, Dt)
 
     # Reset for clean start.
     RightController.reset(0)
     LeftController.reset(0)
 
     # Kalman Filter for True Speed Estimation
-    TrueSpeedObservationScale = 1.0 if "Tank" in StickType or "tank" in StickType else 1 / (WheelSize_MM / 1000)
+    TrueSpeedObservationScale =1
     TrueSpeedFilter=LinearKalmanFilter(A=Matrix([[1.0]]), B=Matrix([[Dt]]), H=Matrix([[TrueSpeedObservationScale]]), Q=Matrix([[0.1]]), R=Matrix([[0.8]]), x0=Matrix([[0.0]]), P0=Matrix([[9.0]]))
     LeftEncoderSpeed = LinearKalmanFilter(A=Matrix([[1.0]]), B=Matrix([[0]]), H=Matrix([[1]]), Q=Matrix([[0.5]]), R=Matrix([[0.05]]), x0=Matrix([[0.0]]), P0=Matrix([[9.0]]))
     RightEncoderSpeed = LinearKalmanFilter(A=Matrix([[1.0]]), B=Matrix([[0]]), H=Matrix([[1]]), Q=Matrix([[0.5]]), R=Matrix([[0.05]]), x0=Matrix([[0.0]]), P0=Matrix([[9.0]]))
@@ -199,8 +199,8 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             elif InertialHeading < heading - headingTolrance:
                 headingCorrection=(InertialHeading - heading) * HeadingCorrectionGain
 
-            TargetRightRPM=max(min(RequestedRightRPM-SlipOffsetRight + headingCorrection, MotorRpmMax), -MotorRpmMax)
-            TargetLeftRPM=max(min(RequestedLeftRPM-SlipOffsetLeft - headingCorrection, MotorRpmMax), -MotorRpmMax)
+            TargetRightRPM=max(min(RequestedRightRPM + SlipOffsetRight + headingCorrection, MotorRpmMax), -MotorRpmMax)
+            TargetLeftRPM=max(min(RequestedLeftRPM + SlipOffsetLeft - headingCorrection, MotorRpmMax), -MotorRpmMax)
 
 
         LeftOutput=LeftController.compute(TargetLeftRPM, ActualLeftRPM, Dt, 12, -12)
@@ -230,13 +230,13 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             TempVeryHigh=False
 
         # Anti fighting code to prevent the motors from fighting each other when they are not in sync.
-        if  RightMotor1Velocity_RPM >= MotorRpmMax:
+        if  abs(RightMotor1Velocity_RPM) >= MotorRpmMax:
             PowerDeff=RightMotor1Velocity_RPM - MotorRpmMax
             AntiFightOutputRight=[RightOutput - (PowerDeff*AntiFightGain), RightOutput]
         else:
             AntiFightOutputRight=[RightOutput, max(min(RightOutput+((VelocityDiffrenceRight/2)*AntiFightGain), 12), -12)]
 
-        if LeftMotor1Velocity_RPM >= MotorRpmMax:
+        if abs(LeftMotor1Velocity_RPM) >= MotorRpmMax:
             PowerDeff=LeftMotor1Velocity_RPM - MotorRpmMax
             AntiFightOutputLeft=[LeftOutput - (PowerDeff*AntiFightGain), LeftOutput]
         else:
@@ -268,7 +268,7 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             for i in range(len(RightMotorList)):
                 RightMotorList[i].spin(FORWARD, AntiFightOutputRight[i], VOLT)
 
-        #print(timer.time() -StartTime)
+        print(timer.time() -StartTime)
         #print("output: %s, %s TrueSpeed: %s, targets: %s, %s RightRPM: %s LeftRPM: %s"%(AntiFightOutputLeft, AntiFightOutputRight, TrueSpeed, TargetLeftRPM, TargetRightRPM, ActualRightRPM, ActualLeftRPM))
 
         # Takes the time of calculation and waits the rest of the time to make sure the loop runs at 100Hz.
