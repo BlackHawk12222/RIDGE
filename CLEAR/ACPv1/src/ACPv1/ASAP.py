@@ -23,7 +23,7 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
     for motor in RightMotorList:
         motor.set_stopping(COAST)
 
-    KP = 0.1    # Modest tracking aggressiveness to start
+    KP = 1    # Modest tracking aggressiveness to start
     KPScale = 0.0     # Turn off error-scaling initially to establish a baseline
     B0 = 8.33    # Neutral input-to-output gain scaling
     Omega_o = 3.5    # Safe observer bandwidth for a 100Hz (dt=0.01) loop
