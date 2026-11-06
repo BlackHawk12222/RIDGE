@@ -1,0 +1,4 @@
+#ifndef ROTATION_HPP
+#define ROTATION_HPP
+
+#endif // ROTATION_HPP

@@ -4,7 +4,9 @@
 #include <charconv>
 #include <map>
 #include <functional>
+#include <fstream>
 #include <cstdio>
+#include "upng/upng.h"
 #include "main.h"
 #include "vex/brain.hpp"
 
@@ -533,8 +535,103 @@ void SdCard::appendfile(std::string filename, char* buffer){
     }
 }
 
+// --- Private Helper: Safe Bare-Metal BMP Decoder ---
+void SdCard::draw_bmp(std::ifstream& file, int x_offset, int y_offset) {
+    uint8_t header[54];
+    file.seekg(0, std::ios::beg);
+    file.read(reinterpret_cast<char*>(header), 54);
+
+    uint32_t data_offset = *reinterpret_cast<uint32_t*>(&header[10]);
+    int32_t  width       = *reinterpret_cast<int32_t*>(&header[18]);
+    int32_t  height      = *reinterpret_cast<int32_t*>(&header[22]);
+    uint16_t bits_per_px = *reinterpret_cast<uint16_t*>(&header[28]);
+
+    if (bits_per_px != 24) {
+        printf("Error: Only uncompressed 24-bit BMP files are supported.\n");
+        return;
+    }
+
+    int row_size = ((width * 3 + 3) & ~3);
+    std::vector<uint8_t> row_buffer(row_size);
+    file.seekg(data_offset, std::ios::beg);
+
+    for (int y = height - 1; y >= 0; --y) {
+        file.read(reinterpret_cast<char*>(row_buffer.data()), row_size);
+        for (int x = 0; x < width; ++x) {
+            int target_x = x + x_offset;
+            int target_y = y + y_offset;
+
+            if (target_x >= 0 && target_x < 480 && target_y >= 0 && target_y < 272) {
+                uint8_t b = row_buffer[x * 3];
+                uint8_t g = row_buffer[x * 3 + 1];
+                uint8_t r = row_buffer[x * 3 + 2];
+                pros::screen::set_pen((r << 16) | (g << 8) | b);
+                pros::screen::draw_pixel(target_x, target_y);
+            }
+        }
+    }
+}
+
+// --- Private Helper: uPNG ARM-safe Decoder ---
+void SdCard::draw_png(const std::string& filename, int x_offset, int y_offset) {
+    upng_t* upng = upng_new_from_file(filename.c_str());
+    if (upng == NULL) return;
+
+    if (upng_header(upng) == UPNG_EOK && upng_decode(upng) == UPNG_EOK) {
+        unsigned width = upng_get_width(upng);
+        unsigned height = upng_get_height(upng);
+        const unsigned char* buffer = upng_get_buffer(upng);
+        upng_format format = upng_get_format(upng);
+
+        // Standard PNG formats throw either 3 channels (RGB) or 4 channels (RGBA)
+        int channels = (format == UPNG_RGBA8) ? 4 : 3;
+
+        for (unsigned y = 0; y < height; ++y) {
+            for (unsigned x = 0; x < width; ++x) {
+                int target_x = x + x_offset;
+                int target_y = y + y_offset;
+
+                if (target_x >= 0 && target_x < 480 && target_y >= 0 && target_y < 272) {
+                    int idx = (y * width + x) * channels;
+                    uint8_t r = buffer[idx + 0];
+                    uint8_t g = buffer[idx + 1];
+                    uint8_t b = buffer[idx + 2];
+
+                    pros::screen::set_pen((r << 16) | (g << 8) | b);
+                    pros::screen::draw_pixel(target_x, target_y);
+                }
+            }
+        }
+    } else {
+        printf("uPNG Error: Failed to decode PNG line. Code: %d\n", upng_get_error(upng));
+    }
+    upng_free(upng);
+}
+
 void SdCard::draw_image_from_file(std::string filename, int x, int y){
-    // in progress
+    std::ifstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+        printf("Error: File not found %s\n", filename.c_str());
+        return;
+    }
+
+    uint8_t magic[4];
+    file.read(reinterpret_cast<char*>(magic), 4);
+
+    if (magic[0] == 'B' && magic[1] == 'M') {
+        printf("Drawing BMP...\n");
+        draw_bmp(file, x, y);
+        file.close();
+    } 
+    else if (magic[0] == 0x89 && magic[1] == 'P' && magic[2] == 'N' && magic[3] == 'G') {
+        printf("Drawing PNG...\n");
+        file.close(); // Close file stream so uPNG can mount the path cleanly
+        draw_png(filename, x, y);
+    } 
+    else {
+        printf("Format not supported. Only standard .png and 24-bit .bmp files.\n");
+        file.close();
+    }
 }
 
 bool SdCard::is_inserted(){

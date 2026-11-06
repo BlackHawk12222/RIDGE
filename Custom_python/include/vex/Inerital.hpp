@@ -1,0 +1,4 @@
+#ifndef INERTIAL_HPP
+#define INERTIAL_HPP
+
+#endif // INERTIAL_HPP

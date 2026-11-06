@@ -202,6 +202,12 @@ class Screen{
 };
 
 class SdCard{
+    private:
+        // --- Private Helper: Safe Bare-Metal BMP Decoder ---
+        void draw_bmp(std::ifstream& file, int x_offset, int y_offset);
+        
+        // --- Private Helper: uPNG ARM-safe Decoder ---
+        void draw_png(const std::string& filename, int x_offset, int y_offset);
     public:
 
         char* loadfile(std::string filename, char* buffer = nullptr);
