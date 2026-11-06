@@ -8,6 +8,8 @@ extern "C"{
 #include "py/runtime.h"
 #include "py/obj.h"
 
+typedef void (*c_callback_t)(void* user_data);  // Used for callbacks.
+
 /* DEFINE class Motor for C */
 void* motor_create(int port, int gears, bool reversed);
 void motor_destroy(void* motor_ptr);
@@ -108,7 +110,7 @@ bool brain_screen_pressing(void* screen_ptr);
 int brain_screen_x_position(void* screen_ptr);
 int brain_screen_y_position(void* screen_ptr);
 
-typedef void (*c_callback_t)(void* user_data);
+
 void brain_screen_pressed(void* screen_ptr, c_callback_t callback, void* args);
 void brain_screen_released(void* screen_ptr, c_callback_t callback, void* args);
 
@@ -120,6 +122,51 @@ bool brain_sdcard_is_inserted(void* sdcard_ptr);
 int brain_sdcard_filesize(void* sdcard_ptr, const char* filename);
 int brain_sdcard_size(void* sdcard_ptr, const char* filename);
 bool brain_sdcard_exists(void* sdcard_ptr, const char* filename);
+
+/*DEFINE class Controller in C*/
+void* create_controller();
+void destroy_controller(void* controller_ptr);
+
+void* get_controller_screen(void* controller_ptr);
+
+void* get_controller_button_A(void* controller_ptr);
+void* get_controller_button_B(void* controller_ptr);
+void* get_controller_button_X(void* controller_ptr);
+void* get_controller_button_Y(void* controller_ptr);
+void* get_controller_button_Up(void* controller_ptr);
+void* get_controller_button_Down(void* controller_ptr);
+void* get_controller_button_Left(void* controller_ptr);
+void* get_controller_button_Right(void* controller_ptr);
+void* get_controller_button_R1(void* controller_ptr);
+void* get_controller_button_R2(void* controller_ptr);
+void* get_controller_button_L1(void* controller_ptr);
+void* get_controller_button_L2(void* controller_ptr);
+
+void* get_controller_axis_1(void* controller_ptr);
+void* get_controller_axis_2(void* controller_ptr);
+void* get_controller_axis_3(void* controller_ptr);
+void* get_controller_axis_4(void* controller_ptr);
+
+void controller_screen_print(void* screen_ptr, const char* value, const char* sep, int precision);
+void controller_screen_set_cursor(void* screen_ptr,int row, int column);
+int controller_screen_column(void* screen_ptr);
+int controller_screen_row(void* screen_ptr);
+void controller_screen_clear_screen(void* screen_ptr);
+void controller_screen_clear_row(void* screen_ptr,int row);
+void controller_screen_next_row(void* screen_ptr);
+
+bool controller_button_pressing(void* button_ptr);
+void controller_button_pressed(void* button_ptr, c_callback_t func, void *args);
+void controller_button_released(void* button_ptr, c_callback_t func, void *args);
+
+int controller_axis_position(void* axis_ptr);
+void controller_axis_changed(void* axis_ptr, c_callback_t func, void *args);
+
+/*DEFINE class Inertial for C*/
+
+
+
+/*DEFINE class Rotation for C*/
 
 
 

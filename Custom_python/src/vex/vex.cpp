@@ -4,6 +4,8 @@
 #include "vex/brain.hpp"
 #include "vex/timer.hpp"
 #include "vex/controller.hpp"
+#include "vex/Inerital.hpp"
+#include "vex/Rotation.hpp"
 
 extern "C"{
     #include "py/runtime.h"

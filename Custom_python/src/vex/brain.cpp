@@ -6,13 +6,13 @@
 #include <functional>
 #include <fstream>
 #include <cstdio>
-#include "upng/upng.h"
 #include "main.h"
 #include "vex/brain.hpp"
 
 extern "C" {
-#include "py/runtime.h"
-#include "py/obj.h"
+    #include "vex/upng/upng.h"
+    #include "py/runtime.h"
+    #include "py/obj.h"
 }
 
 float Battery::voltage(VoltageUnits units){
