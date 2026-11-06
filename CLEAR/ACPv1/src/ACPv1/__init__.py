@@ -99,12 +99,11 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
     brain.sdcard.savefile("ACPv1/Config/ACPv1config.txt", bytearray(b"LeftMotors: %s\n RightMotors: %s\n GearRatio: %1.5f \n Wheelsize_MM: %1.5f \n MotorMax_RPM: %d \n controller: %s \n Xodom: %s \nOdomWheelSize_MM: %1.5f \n StickType: %s \n inertial: %s"%(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial)))
 
     # Start the driver control and the autonomous function.
-    comp=Competition(ACP_driver, AtonFunc)
+    comp=Competition(_none, AtonFunc)
 
     ACP_driver()
 
     # Start the CLA thread for the CLEARv2 package.
-    print(dir(CLEARv2.CLA))
     cla=CLEARv2.CLA.CLAStart()
 
     return comp
