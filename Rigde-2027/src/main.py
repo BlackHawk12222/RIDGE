@@ -44,13 +44,14 @@ Interface =  Controller(PARTNER)
 intakeLift = DigitalOut(brain.three_wire_port.a)
 grabber = DigitalOut(brain.three_wire_port.b)
 
-#other bojects, in order of port, lowest first
-DistanceSensor = Distance(Ports.PORT1)#----------------------------ONE
-ColorSensor = Optical(Ports.PORT2)#--------------------------------TWO
-Bar_Switcher = Motor(Ports.PORT3, GearSetting.RATIO_18_1, False)#--THREE
-Horzontal_rotation = Rotation(Ports.PORT4, False)#----------------FOUR
-Xodom = Rotation(Ports.PORT5, False)#------------------FIVE
-Horizontal_AID = Rotation(Ports.PORT6, False)#---------------------SIX
+#other objects, in order of port, lowest first
+Yodom = Rotation(Ports.PORT1, False)#------------------------------ONE
+Horzontal_rotation = Rotation(Ports.PORT2, False)#-----------------TWO
+#------------------------------------------------horizontal_AID on FOURTEEN
+ColorSensor = Optical(Ports.PORT4)#-------------------------------FOUR
+Bar_Switcher = Motor(Ports.PORT5, GearSetting.RATIO_18_1, False)#--FIVE
+
+DistanceSensor = Distance(Ports.PORT6)#----------------------------SIX
 
 Inertial_ = Inertial(Ports.PORT7)#---------------------------------SEVEN
 
@@ -58,7 +59,7 @@ Intake = Motor(Ports.PORT8)#---------------------------------------EIGHT
 #---------------------------------------------------------radio on NINE
 Claw = Motor(Ports.PORT10)#----------------------------------------TEN
 
-
+Horizontal_AID = Rotation(Ports.PORT14, False)#--------------------FOURTEEN
 
 liftOne = Motor(Ports.PORT15, GearSetting.RATIO_6_1, False)#-------FIFTEEN
 liftTwo = Motor(Ports.PORT16,GearSetting.RATIO_6_1,True)#---------SIXTEEN
@@ -223,6 +224,7 @@ direction_to_turn = 0
 DX_Correction = 0
 X_ACAOM = 0
 X_diff = 0
+oldX_diff = 0
 X_assist_Current = 0
 xScale = 0
 X_diff_scaled = 0
@@ -239,16 +241,26 @@ class robot():
         self.liftRaised = False
         pass
 
-
+    def proportional(self,val,pwr=2):
+        if val < 0:
+            return(-1*(val**pwr)/10**pwr)
+        else:
+            return((val**pwr)/10**pwr)
+    
     def TankDrive(self,buffer=5):
         #tank drive code for when ACP is not being used
         while True:
-            left_drive_smart.set_velocity(controller_1.axis3.position(), PERCENT)
-            right_drive_smart.set_velocity(controller_1.axis2.position(), PERCENT)
+            if not self.liftRaised:
+                left_drive_smart.set_velocity(self.proportional(controller_1.axis3.position()), PERCENT)
+                right_drive_smart.set_velocity(self.proportional(controller_1.axis2.position()), PERCENT)
+            else:
+                left_drive_smart.set_velocity(controller_1.axis3.position()/2, PERCENT)
+                right_drive_smart.set_velocity(controller_1.axis2.position()/2, PERCENT)
             if math.fabs(controller_1.axis3.position()) < buffer:
                 left_drive_smart.set_velocity(0,PERCENT)
             if math.fabs(controller_1.axis2.position()) < buffer:
                 right_drive_smart.set_velocity(0,PERCENT)
+
             left_drive_smart.spin(FORWARD)
             right_drive_smart.spin(FORWARD)
             wait(5, MSEC)
@@ -267,6 +279,8 @@ class robot():
                     grabber.set(False)
                     liftGroup.spin_to_position(0,DEGREES,100,PERCENT,False)
                     Claw.spin_to_position(0,DEGREES)
+                    while not liftGroup.position()<10:
+                        wait(5,MSEC)
                 else:
                     self.liftRaised = True
                     controller_1.screen.print("running")
@@ -285,6 +299,7 @@ class robot():
                     liftGroup.stop()
                     Intake.stop()
                 Loading = False
+    
 
 
 class display():
@@ -333,7 +348,7 @@ class display():
 class MotorTicks:
     def __init__(self):
         self.intakeOn = False
-        self.clawOpen = False
+        self.clawOpen = True
         self.Xrelease = True
         self.Uprelease = True
         pass
@@ -374,11 +389,14 @@ class MotorTicks:
         if controller_1.buttonX.pressing():
             if self.Xrelease:
                 self.Xrelease = False
+                Claw.set_velocity(100,PERCENT)
                 if not self.clawOpen:
                     grabber.set(True)
+                    Claw.spin_to_position(0,DEGREES)
                     self.clawOpen = True
                 else:
                     grabber.set(False)
+                    Claw.spin_to_position(300,DEGREES)
                     self.clawOpen = False
         else:
             self.Xrelease = True
@@ -457,8 +475,9 @@ def AIM_drive(mm,driveVelocity,err=0):
 def Check_for_bar():
     #checks if an object (the control bar) is close enough. If it is, check to see if it's our own color, and activate the spin command
     check_dist()
-    if Dist < 50:
+    if Dist < 140:
         check_color_redundancy()
+        controller_1.screen.print("1")
     spin_motor()
 
 
@@ -476,6 +495,7 @@ def check_color_redundancy():
     global Color_Flips
     Color_Flips = 1
     if ColorSensor.color() == Color.BLUE and MyColor == "blue" or ColorSensor.color() == Color.RED and MyColor == "red":
+        controller_1.screen.print("0")
         Color_Flips = 0
 
 
@@ -483,10 +503,11 @@ def check_color_redundancy():
 def spin_motor():
     #spins Bar_Switcher if Color_fips is 1(spin motor). Continues to do so until distance is too far away(robot has moved away) or color is correct.
     while Color_Flips == 1:
-        Bar_Switcher.spin_for(FORWARD, 180, DEGREES)
+        controller_1.screen.print("2")
+        Bar_Switcher.spin_for(FORWARD, 100, DEGREES)
         wait(0.1, SECONDS)
         check_dist()
-        if Dist < 50:
+        if Dist < 150:
             check_color_redundancy()
     Bar_Switcher.stop()
 
@@ -630,7 +651,7 @@ def ODOM_loop():
     Heading = Inertial_.heading(DEGREES)
     
     # Get current values for the odom pod
-    Vertical_current = Xodom.position(DEGREES)
+    Vertical_current = Yodom.position(DEGREES)
     Horizontal_current = Horzontal_rotation.position(DEGREES)
     X_assist_Current = Horizontal_AID.position(DEGREES)
     
@@ -661,23 +682,23 @@ def ODOM_loop():
 
 
 def offset_accommodation():
+    X_ACOM = 0
     #calculate the X_diff, which is subracted from the larger tracking wheel to find how much the robot has actually moved sideways; used to eliminate the X-change scripts picking up in-place rotation
     
-    global xScale, X_diff, X_diff_scaled, X_ACAOM
+    global xScale, X_diff, X_diff_scaled, X_ACAOM,oldX_diff
     
-    #initialize the xScale variable - calculate this here: https://scratch.mit.edu/projects/1375798690/editor/
-    xScale = 1.22222
+    #initialize the xScale variable - calculate this here: https://scratch.mit.edu/projects/1375798690/
+    xScale = 0.36
     
     #calculate the difference in the X tracking wheels. Horizontal_AID will be the "smaller" wheel(the one closer to the robot's center of rotation), and Horizontal_rotation the main wheel, farther away from the center of rotation.(I plan on adding the calibration program for this in the future. It's currently a blockly program right now.)
-    X_diff = X_assist_Current - Horizontal_current
+    X_diff = (Horizontal_current - X_assist_Current) - oldX_diff 
     
     #set the scaled difference, ready to be subtracted from the Horizontal_rotation sensor.
     X_diff_scaled = X_diff * xScale
     
     #give the X_diff_scaled a better name; X_ACOM is the final value used in the odometry.
     X_ACAOM = X_diff_scaled
-
-
+    oldX_diff += X_diff
 
 #RUNNING SCRIPTS VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
 
@@ -687,11 +708,9 @@ def color_switching():
     #initialize and run color sensing. Also set drive stopping and set Bar_switcher to 100% velocity
     global MyColor, drivetrain, Bar_Switcher, ColorSensor
 
-    drivetrain.set_stopping(BRAKE)
-
     Bar_Switcher.set_velocity(100, PERCENT)
 
-    MyColor = "red"
+    #MyColor = "red"
 
     ColorSensor.set_light(LedStateType.ON)
     ColorSensor.set_light_power(100, PERCENT)
@@ -760,7 +779,7 @@ def prog_setup():
     #initalize variables
     PosX = 0
     PosY = 0
-    Last_forward = Xodom.position(DEGREES)
+    Last_forward = Yodom.position(DEGREES)
     Last_sideways = Horzontal_rotation.position(DEGREES)
     
     SETUP_progression = SETUP_progression + 1
@@ -780,6 +799,9 @@ def prog_setup():
     screen = display(brain)
     mc=MC()
     #main loop; eventually motor and sensor stats will be here, as well as data bars
+    Horizontal_AID.set_position(0,DEGREES)
+    Horzontal_rotation.set_position(0,DEGREES)
+    Yodom.set_position(0,DEGREES)
     while True:
         ODOM_loop()
         screen.reset()
@@ -799,6 +821,9 @@ def prog_setup():
         brain.screen.next_row()
         brain.screen.print(str("Delta vertical") + str(Delta_sideways))
         brain.screen.next_row()
+        brain.screen.print(str("XACOM") + str(X_ACAOM))
+        brain.screen.next_row()
+        brain.screen.print(str("XDIFF ") + str(X_diff))
         brain.screen.render()
         wait(5, MSEC)
 
@@ -1075,7 +1100,7 @@ if brain.sdcard.is_inserted() and UseACP:
     comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
 else:
     claw  = Thread(K56721.autoload)
-    drive = Thread(K56721.TankDrive(2))
+    drive = Thread(lambda: K56721.TankDrive(2))
 
 
-#color_switching()
+color_switching()
