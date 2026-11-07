@@ -1,6 +1,9 @@
 #ifndef CONTROLLER_HPP
 #define CONTROLLER_HPP
 
+#include <tuple>
+#include <utility>
+
 #include "main.h"
 
 enum ControllerType{
@@ -39,7 +42,6 @@ class ControllerButton{
     private:
         pros::Controller* ControllerObj = nullptr;
         pros::controller_digital_e_t ButtonType;
-        bool OldPos = false;
 
     public:
         ControllerButton(pros::controller_digital_e_t Button, pros::Controller* controller);
@@ -47,32 +49,42 @@ class ControllerButton{
         bool pressing();
 
         template<typename Func, typename...Args>
-        void pressed(Func func, std::tuple<Args...> args){
-            auto bound_callable = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
-            
-            // Wrap it inside a pros::Task lambda. 
-            pros::Task([this, bound_callable]() mutable {
-                while (1){
-                    if (this -> ControllerObj -> get_digital_new_press(this -> ButtonType)){
-                        std::apply(callback, args);
-                    }
+        void pressed(Func func, Args... args){
+            auto callback = [func = std::forward<Func>(func),
+                             callback_args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
+                std::apply(func, callback_args);
+            };
+            const bool initial_pos = ControllerObj->get_digital(ButtonType);
 
+            pros::Task([this, previous_pos = initial_pos, callback = std::move(callback)]() mutable {
+                bool previous = previous_pos;
+                while (true){
+                    const bool current = ControllerObj->get_digital(ButtonType);
+                    if (current && !previous){
+                        callback();
+                    }
+                    previous = current;
                     pros::delay(50);
                 }
             });
         }
 
         template<typename Func, typename...Args>
-        void released(Func func, std::tuple<Args...> args){
-            auto bound_callable = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
-            
-            // Wrap it inside a pros::Task lambda. 
-            pros::Task([this, bound_callable]() mutable {
-                while (1){
-                    if (this -> ControllerObj -> get_digital_new_release(this -> ButtonType)){
-                        std::apply(callback, args);
-                    }
+        void released(Func func, Args... args){
+            auto callback = [func = std::forward<Func>(func),
+                             callback_args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
+                std::apply(func, callback_args);
+            };
+            const bool initial_pos = ControllerObj->get_digital(ButtonType);
 
+            pros::Task([this, previous_pos = initial_pos, callback = std::move(callback)]() mutable {
+                bool previous = previous_pos;
+                while (true){
+                    const bool current = ControllerObj->get_digital(ButtonType);
+                    if (!current && previous){
+                        callback();
+                    }
+                    previous = current;
                     pros::delay(50);
                 }
             });
@@ -83,7 +95,6 @@ class ControllerAxis{
     private:
         pros::Controller* ControllerObj = nullptr;
         pros::controller_analog_e_t AxisType;
-        int OldPos = 0;
 
     public:
         ControllerAxis(pros::controller_analog_e_t Axis, pros::Controller* controller);
@@ -91,16 +102,21 @@ class ControllerAxis{
         int position();
 
         template<typename Func, typename...Args>
-        void changed(Func func, std::tuple<Args...> args){
-            auto bound_callable = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
-            
-            // Wrap it inside a pros::Task lambda. 
-            pros::Task([this, bound_callable]() mutable {
-                while (1){
-                    if (this -> ControllerObj -> get_analog(this -> AxisType) != this -> OldPos){
-                        std::apply(callback, args);
-                    }
+        void changed(Func func, Args... args){
+            auto callback = [func = std::forward<Func>(func),
+                             callback_args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
+                std::apply(func, callback_args);
+            };
+            const int initial_pos = ControllerObj->get_analog(AxisType);
 
+            pros::Task([this, previous_pos = initial_pos, callback = std::move(callback)]() mutable {
+                int previous = previous_pos;
+                while (true){
+                    const int current = ControllerObj->get_analog(AxisType);
+                    if (current != previous){
+                        callback();
+                    }
+                    previous = current;
                     pros::delay(50);
                 }
             });

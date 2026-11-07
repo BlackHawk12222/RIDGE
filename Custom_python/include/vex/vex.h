@@ -162,7 +162,7 @@ void controller_button_released(void* button_ptr, c_callback_t func, void *args)
 int controller_axis_position(void* axis_ptr);
 void controller_axis_changed(void* axis_ptr, c_callback_t func, void *args);
 
-void controller_rumble(void* controller_ptr, const char* pattern);
+void controller_rumble_c(void* controller_ptr, const char* pattern);
 
 /*DEFINE class Inertial for C*/
 

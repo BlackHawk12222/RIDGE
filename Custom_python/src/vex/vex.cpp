@@ -594,6 +594,6 @@ void controller_axis_changed(void* axis_ptr, c_callback_t func, void *args){
     });
 }
 
-void controller_rumble(void* controller_ptr, const char* pattern){
+void controller_rumble_c(void* controller_ptr, const char* pattern){
     static_cast<Controller*>(controller_ptr)->rumble(pattern);
 }

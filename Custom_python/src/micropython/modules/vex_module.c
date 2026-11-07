@@ -1252,6 +1252,110 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &mp_brain_locals_dict
 );
 
+static mp_obj_t mp_controller_button_pressing(mp_obj_t self_ptr){
+    mp_controller_button_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    bool output = false;
+
+    output = controller_button_pressing(self -> cpp_handle);
+    return output ? mp_const_true : mp_const_false;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_controller_button_pressing_obj, mp_controller_button_pressing);
+
+static mp_obj_t mp_controller_button_pressed(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
+    mp_controller_button_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    controller_button_pressed(self -> cpp_handle, callback, args);
+
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_controller_button_pressed_obj, mp_controller_button_pressed);
+
+static mp_obj_t mp_controller_button_released(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
+    mp_controller_button_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    controller_button_released(self -> cpp_handle, callback, args);
+
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_controller_button_released_obj, mp_controller_button_released);
+
+static const mp_rom_map_elem_t mp_controller_button_locals_dict_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+    { MP_ROM_QSTR(MP_QSTR_pressing), MP_ROM_PTR(&mp_controller_button_pressing_obj) },
+    { MP_ROM_QSTR(MP_QSTR_pressed), MP_ROM_PTR(&mp_controller_button_pressed_obj) },
+    { MP_ROM_QSTR(MP_QSTR_released), MP_ROM_PTR(&mp_controller_button_released_obj) }
+
+};
+static MP_DEFINE_CONST_DICT(mp_controller_button_locals_dict, mp_controller_button_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_controller_button_type,
+    MP_QSTR_button,
+    MP_TYPE_FLAG_NONE,
+    locals_dict, &mp_controller_button_locals_dict
+);
+
+static mp_obj_t mp_controller_axis_position(mp_obj_t self_ptr){
+    mp_controller_axis_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int output = 0;
+
+    output = controller_axis_position(self -> cpp_handle);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_controller_axis_position_obj, mp_controller_axis_position);
+
+static mp_obj_t mp_controller_axis_changed(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
+    mp_controller_axis_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    controller_axis_changed(self -> cpp_handle, callback, args);
+
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_controller_axis_changed_obj, mp_controller_axis_changed);
+
+static const mp_rom_map_elem_t mp_controller_axis_locals_dict_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+    { MP_ROM_QSTR(MP_QSTR_position), MP_ROM_PTR(&mp_controller_axis_position_obj) },
+    { MP_ROM_QSTR(MP_QSTR_changed), MP_ROM_PTR(&mp_controller_axis_changed_obj) },
+
+};
+static MP_DEFINE_CONST_DICT(mp_controller_axis_locals_dict, mp_controller_axis_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_controller_axis_type,
+    MP_QSTR_axis,
+    MP_TYPE_FLAG_NONE,
+    locals_dict, &mp_controller_axis_locals_dict
+);
+
+static mp_obj_t mp_controller_screen_print(size_t n_args, const mp_obj_t* args){
+    mp_controller_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    const char* value = mp_obj_str_get_str(args[1]);
+    const char* sep = (n_args > 2) ? mp_obj_str_get_str(args[2]) : "";
+    int precision = (n_args > 3) ? mp_obj_get_int(args[3]) : 2;
+
+    controller_screen_print(self->cpp_handle, value, sep, precision);
+
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_controller_screen_print_obj, 2, 4, mp_controller_screen_print);
+
+static const mp_rom_map_elem_t mp_controller_screen_locals_dict_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+
+};
+static MP_DEFINE_CONST_DICT(mp_controller_screen_locals_dict, mp_controller_screen_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_controller_screen_type,
+    MP_QSTR_screen,
+    MP_TYPE_FLAG_NONE,
+    locals_dict, &mp_controller_screen_locals_dict
+);
+
 static void mp_controller_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     mp_controller_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
@@ -1402,7 +1506,7 @@ static mp_obj_t mp_controller_rumble(mp_obj_t self_ptr, mp_obj_t pattern_t){
 
     const char* pattern = mp_obj_str_get_str(pattern_t);
 
-    controller_rumble(self -> cpp_handle, pattern);
+    controller_rumble_c(self -> cpp_handle, pattern);
     return mp_const_none;
 }
 MP_DEFINE_CONST_FUN_OBJ_2(mp_controller_rumble_obj, mp_controller_rumble);
@@ -1416,6 +1520,8 @@ static MP_DEFINE_CONST_DICT(mp_controller_locals_dict, mp_controller_locals_dict
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_controller_type,
     MP_QSTR_Controller,
+
+    
     MP_TYPE_FLAG_NONE,
     make_new, mp_controller_make_new,
     attr, mp_controller_attr,
