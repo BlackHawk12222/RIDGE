@@ -231,11 +231,30 @@ X_diff_scaled = 0
 LiftVelocity = 0
 UseACP = False
 Loading = False
+ClawIsLimited = False
+GrabberIsOn = False
+GrabberIsReleased = False
 
 
 #BEGIN CODE HERE ###############################################################
 
 #MISC CODE(custom printing, velocity setting etc.)
+def toggle_claw_limits():
+    global ClawIsLimited
+
+    if ClawIsLimited:
+        Claw.set_max_torque(2.5, CurrentUnits.AMP)
+        ClawIsLimited = False
+    else:
+        Claw.set_max_torque(0.5, CurrentUnits.AMP)
+        ClawIsLimited = True
+
+def grabber_set(value: bool):
+    global GrabberIsOn
+
+    grabber.set(value)
+    GrabberIsOn = value
+
 class robot():
     def __init__(self):
         self.liftRaised = False
@@ -267,7 +286,7 @@ class robot():
 
 
     def autoload(self):
-        global Loading
+        global Loading, GrabberIsReleased
         #loads and lifts a cup and pin stack in the intake
         while True:
             if controller_1.buttonA.pressing():
@@ -276,24 +295,33 @@ class robot():
                 Claw.set_velocity(100,PERCENT)
                 if self.liftRaised:
                     self.liftRaised = False
-                    grabber.set(False)
+                    grabber_set(False)
+                    GrabberIsReleased = False
                     liftGroup.spin_to_position(0,DEGREES,100,PERCENT,False)
-                    Claw.spin_to_position(0,DEGREES)
+                    if not ClawIsLimited:
+                        toggle_claw_limits()
+                    Claw.spin_to_position(-40,DEGREES)
                     while not liftGroup.position()<10:
                         wait(5,MSEC)
                 else:
                     self.liftRaised = True
                     controller_1.screen.print("running")
-                    grabber.set(False)
+                    grabber_set(False)
+                    GrabberIsReleased = False
                     liftGroup.spin_to_position(0,DEGREES)
-                    Claw.spin_to_position(0,DEGREES)
+                    if not ClawIsLimited:
+                        toggle_claw_limits()
+                    Claw.spin_to_position(-40,DEGREES)
                     while math.fabs(liftGroup.position(DEGREES))>10 and math.fabs(Claw.position(DEGREES))>10:
                         wait(5,MSEC)
                     Intake.spin(FORWARD)
                     wait(0.5,SECONDS)
-                    grabber.set(True)
+                    grabber_set(True)
+                    GrabberIsReleased = False
                     wait(100,MSEC)
-                    liftGroup.spin_to_position(700,DEGREES,100,PERCENT,False)
+                    liftGroup.spin_to_position(600,DEGREES,100,PERCENT,False)
+                    if ClawIsLimited:
+                        toggle_claw_limits()
                     Claw.spin_to_position(195,DEGREES)
                     wait(500,MSEC)
                     liftGroup.stop()
@@ -386,16 +414,19 @@ class MotorTicks:
             self.Uprelease = True
 
     def grabberTick(self):
+        global GrabberIsReleased
         if controller_1.buttonX.pressing():
             if self.Xrelease:
                 self.Xrelease = False
                 Claw.set_velocity(100,PERCENT)
-                if not self.clawOpen:
-                    grabber.set(True)
+                if not self.clawOpen and GrabberIsReleased:
+                    grabber_set(True)
                     Claw.spin_to_position(0,DEGREES)
                     self.clawOpen = True
+                    GrabberIsReleased = True
                 else:
-                    grabber.set(False)
+                    grabber_set(False)
+                    wait(50, MSEC)
                     Claw.spin_to_position(300,DEGREES)
                     self.clawOpen = False
         else:
@@ -475,7 +506,7 @@ def AIM_drive(mm,driveVelocity,err=0):
 def Check_for_bar():
     #checks if an object (the control bar) is close enough. If it is, check to see if it's our own color, and activate the spin command
     check_dist()
-    if Dist < 140:
+    if Dist < 140 and (ColorSensor.color() == Color.BLUE or ColorSensor.color() == Color.RED or ColorSensor.color() == Color.YELLOW) and ColorSensor.is_near_object():
         check_color_redundancy()
         controller_1.screen.print("1")
     spin_motor()
@@ -775,6 +806,10 @@ def prog_setup():
     Avoidance_Distance = 100
     
     SETUP_progression = SETUP_progression + 1
+
+    # Sensor setup.
+    Horizontal_AID.set_position(0,DEGREES)
+    Horzontal_rotation.set_position(0,DEGREES)
     
     #initalize variables
     PosX = 0
@@ -799,8 +834,7 @@ def prog_setup():
     screen = display(brain)
     mc=MC()
     #main loop; eventually motor and sensor stats will be here, as well as data bars
-    Horizontal_AID.set_position(0,DEGREES)
-    Horzontal_rotation.set_position(0,DEGREES)
+    
     Yodom.set_position(0,DEGREES)
     while True:
         ODOM_loop()
@@ -1053,7 +1087,10 @@ def liftTick_callback():
     MT = MotorTicks()
     liftGroup.set_velocity(100,PERCENT)
     liftGroup.set_stopping(HOLD)
-    Claw.spin_to_position(-20,DEGREES)
+    if not ClawIsLimited:
+        toggle_claw_limits()
+    Claw.spin_to_position(-40,DEGREES)
+    grabber_set(False)
     while True:
         MT.lift_tick()
         MT.intake_tick()
