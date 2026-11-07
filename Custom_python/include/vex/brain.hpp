@@ -87,7 +87,6 @@ class Battery{
 
 class Screen{
     private:
-        mp_obj_base_t base; // Tied to MicroPython Screen type identity
         pros::text_format_e_t TextSize = pros::E_TEXT_MEDIUM;
         pros::screen_touch_status_s_t status = pros::screen::touch_status();
         Font font = MONO20;

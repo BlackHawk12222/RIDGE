@@ -1,5 +1,4 @@
 #include "vex/vex.h"
-#include "main.h"
 #include "vex/motors.hpp"
 #include "vex/brain.hpp"
 #include "vex/timer.hpp"
@@ -456,4 +455,145 @@ int brain_sdcard_size(void* brain_ptr, const char* filename){
 
 bool brain_sdcard_exists(void* brain_ptr, const char* filename){
     return static_cast<Brain*>(brain_ptr) -> sdcard.exists(filename);
+}
+
+/*DEFINE class Controller in C*/
+void* create_controller(int controller_type){
+    return static_cast<void*>(new Controller(static_cast<ControllerType>(controller_type)));
+}
+
+void destroy_controller(void* controller_ptr){
+    delete static_cast<Controller*>(controller_ptr);
+}
+
+void* get_controller_screen(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->screen);
+}
+
+void* get_controller_button_A(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->buttonA);
+}
+
+void* get_controller_button_B(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->buttonB);
+}
+
+void* get_controller_button_X(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->buttonX);
+}
+
+void* get_controller_button_Y(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->buttonY);
+}
+
+void* get_controller_button_Up(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->buttonUp);
+}
+
+void* get_controller_button_Down(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->buttonDown);
+}
+
+void* get_controller_button_Left(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->buttonLeft);
+}
+
+void* get_controller_button_Right(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->buttonRight);
+}
+
+void* get_controller_button_R1(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->buttonR1);
+}
+
+void* get_controller_button_R2(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->buttonR2);
+}
+
+void* get_controller_button_L1(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->buttonL1);
+}
+
+void* get_controller_button_L2(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->buttonL2);
+}
+
+void* get_controller_axis_1(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->axis1);
+}
+
+void* get_controller_axis_2(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->axis2);
+}
+
+void* get_controller_axis_3(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->axis3);
+}
+
+void* get_controller_axis_4(void* controller_ptr){
+    return static_cast<void*>(static_cast<Controller*>(controller_ptr)->axis4);
+}
+
+void controller_screen_print(void* screen_ptr, const char* value, const char* sep, int precision){
+    static_cast<ControllerScreen*>(screen_ptr)->print(value, sep, precision);
+}
+
+void controller_screen_set_cursor(void* screen_ptr,int row, int column){
+    static_cast<ControllerScreen*>(screen_ptr)->set_cursor(row, column);
+}
+
+int controller_screen_column(void* screen_ptr){
+    return static_cast<ControllerScreen*>(screen_ptr)->column();
+}
+
+int controller_screen_row(void* screen_ptr){
+    return static_cast<ControllerScreen*>(screen_ptr)->row();
+}
+
+void controller_screen_clear_screen(void* screen_ptr){
+    static_cast<ControllerScreen*>(screen_ptr)->clear_screen();
+}
+
+void controller_screen_clear_row(void* screen_ptr,int row){
+    static_cast<ControllerScreen*>(screen_ptr)->clear_row(row);
+}
+
+void controller_screen_next_row(void* screen_ptr){
+    static_cast<ControllerScreen*>(screen_ptr)->next_row();
+}
+
+bool controller_button_pressing(void* button_ptr){
+    return static_cast<ControllerButton*>(button_ptr)->pressing();
+}
+
+void controller_button_pressed(void* button_ptr, c_callback_t func, void *args){
+    static_cast<ControllerButton*>(button_ptr)->pressed([func, args]() {
+        if (func) {
+            func(args);
+        }
+    });
+}
+
+void controller_button_released(void* button_ptr, c_callback_t func, void *args){
+    static_cast<ControllerButton*>(button_ptr)->released([func, args]() {
+        if (func) {
+            func(args);
+        }
+    });
+}
+
+int controller_axis_position(void* axis_ptr){
+    return static_cast<ControllerAxis*>(axis_ptr)->position();
+}
+
+void controller_axis_changed(void* axis_ptr, c_callback_t func, void *args){
+    static_cast<ControllerAxis*>(axis_ptr)->changed([func, args]() {
+        if (func) {
+            func(args);
+        }
+    });
+}
+
+void controller_rumble(void* controller_ptr, const char* pattern){
+    static_cast<Controller*>(controller_ptr)->rumble(pattern);
 }

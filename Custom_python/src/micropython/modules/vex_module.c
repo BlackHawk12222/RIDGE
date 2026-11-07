@@ -40,6 +40,43 @@ typedef struct _mp_brain_obj_t{
     mp_obj_t battery; // Stores instance of mp_brain_battery_obj_t
 } mp_brain_obj_t;
 
+typedef struct _mp_controller_screen_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_controller_screen_obj_t;
+
+typedef struct _mp_controller_button_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_controller_button_obj_t;
+
+typedef struct _mp_controller_axis_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_controller_axis_obj_t;
+
+typedef struct _mp_controller_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+    mp_obj_t screen;
+    mp_obj_t buttonA;
+    mp_obj_t buttonB;
+    mp_obj_t buttonX;
+    mp_obj_t buttonY;
+    mp_obj_t buttonUp;
+    mp_obj_t buttonDown;
+    mp_obj_t buttonLeft;
+    mp_obj_t buttonRight;
+    mp_obj_t buttonR1;
+    mp_obj_t buttonR2;
+    mp_obj_t buttonL1;
+    mp_obj_t buttonL2;
+    mp_obj_t axis1;
+    mp_obj_t axis2;
+    mp_obj_t axis3;
+    mp_obj_t axis4;
+} mp_controller_obj_t;
+
 extern const mp_obj_type_t mp_motor_type;
 extern const mp_obj_type_t mp_motorgroup_type;
 extern const mp_obj_type_t mp_timer_type;
@@ -47,6 +84,10 @@ extern const mp_obj_type_t mp_brain_type;
 extern const mp_obj_type_t mp_brain_screen_type;
 extern const mp_obj_type_t mp_brain_sdcard_type;
 extern const mp_obj_type_t mp_brain_battery_type;
+extern const mp_obj_type_t mp_controller_screen_type;
+extern const mp_obj_type_t mp_controller_button_type;
+extern const mp_obj_type_t mp_controller_axis_type;
+extern const mp_obj_type_t mp_controller_type;
 
 static mp_obj_t mp_motor_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 1, 3, false); // strict 3 arguments
@@ -1211,6 +1252,176 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &mp_brain_locals_dict
 );
 
+static void mp_controller_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    mp_controller_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+    // dest[0] == MP_OBJ_NULL means a READ lookup property (e.g. print(controller.screen))
+    if (dest[0] == MP_OBJ_NULL) {
+        switch (attr) {
+            case MP_QSTR_screen:
+                dest[0] = self->screen;
+                return;
+            case MP_QSTR_buttonA:
+                dest[0] = self->buttonA;
+                return;
+            case MP_QSTR_buttonB:
+                dest[0] = self->buttonB;
+                return;
+            case MP_QSTR_buttonX:
+                dest[0] = self->buttonX;
+                return;
+            case MP_QSTR_buttonY:
+                dest[0] = self->buttonY;
+                return;
+            case MP_QSTR_buttonUp:
+                dest[0] = self->buttonUp;
+                return;
+            case MP_QSTR_buttonDown:
+                dest[0] = self->buttonDown;
+                return;
+            case MP_QSTR_buttonLeft:
+                dest[0] = self->buttonLeft;
+                return;
+            case MP_QSTR_buttonRight:
+                dest[0] = self->buttonRight;
+                return;
+            case MP_QSTR_buttonL1:
+                dest[0] = self->buttonL1;
+                return;
+            case MP_QSTR_buttonL2:
+                dest[0] = self->buttonL2;
+                return;
+            case MP_QSTR_buttonR1:
+                dest[0] = self->buttonR1;
+                return;
+            case MP_QSTR_buttonR2:
+                dest[0] = self->buttonR2;
+                return;
+            case MP_QSTR_axis1:
+                dest[0] = self->axis1;
+                return;
+            case MP_QSTR_axis2:
+                dest[0] = self->axis2;
+                return;
+            case MP_QSTR_axis3:
+                dest[0] = self->axis3;
+                return;
+            case MP_QSTR_axis4:
+                dest[0] = self->axis4;
+                return;    
+        }
+    }
+    // Fall back to standard method/attribute resolution
+    dest[0] = MP_OBJ_NULL; 
+}
+
+static mp_obj_t mp_controller_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 1, 1, false); // strict 1 argument
+
+    int controller_type = mp_obj_get_int(args[0]);
+    void *cpp_controller = create_controller(controller_type);
+
+    // 2. Allocate parent wrapper struct
+    mp_controller_obj_t *self = mp_obj_malloc(mp_controller_obj_t, type);
+    self->cpp_handle = cpp_controller;
+
+    mp_controller_screen_obj_t *scr = mp_obj_malloc(mp_controller_screen_obj_t, &mp_controller_screen_type);
+    scr->cpp_handle = get_controller_screen(cpp_controller);
+
+    mp_controller_button_obj_t *butA = mp_obj_malloc(mp_controller_button_obj_t, &mp_controller_button_type);
+    butA->cpp_handle = get_controller_button_A(cpp_controller);
+
+    mp_controller_button_obj_t *butB = mp_obj_malloc(mp_controller_button_obj_t, &mp_controller_button_type);
+    butB->cpp_handle = get_controller_button_B(cpp_controller);
+
+    mp_controller_button_obj_t *butX = mp_obj_malloc(mp_controller_button_obj_t, &mp_controller_button_type);
+    butX->cpp_handle = get_controller_button_X(cpp_controller);
+
+    mp_controller_button_obj_t *butY = mp_obj_malloc(mp_controller_button_obj_t, &mp_controller_button_type);
+    butY->cpp_handle = get_controller_button_Y(cpp_controller);
+
+    mp_controller_button_obj_t *butUp = mp_obj_malloc(mp_controller_button_obj_t, &mp_controller_button_type);
+    butUp->cpp_handle = get_controller_button_Up(cpp_controller);
+
+    mp_controller_button_obj_t *butDown = mp_obj_malloc(mp_controller_button_obj_t, &mp_controller_button_type);
+    butDown->cpp_handle = get_controller_button_Down(cpp_controller);
+
+    mp_controller_button_obj_t *butLeft = mp_obj_malloc(mp_controller_button_obj_t, &mp_controller_button_type);
+    butLeft->cpp_handle = get_controller_button_Left(cpp_controller);
+
+    mp_controller_button_obj_t *butRight = mp_obj_malloc(mp_controller_button_obj_t, &mp_controller_button_type);
+    butRight->cpp_handle = get_controller_button_Right(cpp_controller);
+
+    mp_controller_button_obj_t *butL1 = mp_obj_malloc(mp_controller_button_obj_t, &mp_controller_button_type);
+    butL1->cpp_handle = get_controller_button_L1(cpp_controller);
+
+    mp_controller_button_obj_t *butL2 = mp_obj_malloc(mp_controller_button_obj_t, &mp_controller_button_type);
+    butL2->cpp_handle = get_controller_button_L2(cpp_controller);
+
+    mp_controller_button_obj_t *butR1 = mp_obj_malloc(mp_controller_button_obj_t, &mp_controller_button_type);
+    butR1->cpp_handle = get_controller_button_R1(cpp_controller);
+
+    mp_controller_button_obj_t *butR2 = mp_obj_malloc(mp_controller_button_obj_t, &mp_controller_button_type);
+    butR2->cpp_handle = get_controller_button_R2(cpp_controller);
+
+    mp_controller_axis_obj_t *axis1 = mp_obj_malloc(mp_controller_axis_obj_t, &mp_controller_axis_type);
+    axis1->cpp_handle = get_controller_axis_1(cpp_controller);
+
+    mp_controller_axis_obj_t *axis2 = mp_obj_malloc(mp_controller_axis_obj_t, &mp_controller_axis_type);
+    axis2->cpp_handle = get_controller_axis_2(cpp_controller);
+
+    mp_controller_axis_obj_t *axis3 = mp_obj_malloc(mp_controller_axis_obj_t, &mp_controller_axis_type);
+    axis3->cpp_handle = get_controller_axis_3(cpp_controller);
+
+    mp_controller_axis_obj_t *axis4 = mp_obj_malloc(mp_controller_axis_obj_t, &mp_controller_axis_type);
+    axis4->cpp_handle = get_controller_axis_4(cpp_controller);
+
+    self->screen = MP_OBJ_FROM_PTR(scr);
+    self->buttonA = MP_OBJ_FROM_PTR(butA);
+    self->buttonB = MP_OBJ_FROM_PTR(butB);
+    self->buttonX = MP_OBJ_FROM_PTR(butX);
+    self->buttonY = MP_OBJ_FROM_PTR(butY);
+    self->buttonUp = MP_OBJ_FROM_PTR(butUp);
+    self->buttonDown = MP_OBJ_FROM_PTR(butDown);
+    self->buttonLeft = MP_OBJ_FROM_PTR(butLeft);
+    self->buttonRight = MP_OBJ_FROM_PTR(butRight);
+    self->buttonL1 = MP_OBJ_FROM_PTR(butL1);
+    self->buttonL2 = MP_OBJ_FROM_PTR(butL2);
+    self->buttonR1 = MP_OBJ_FROM_PTR(butR1);
+    self->buttonR2 = MP_OBJ_FROM_PTR(butR2);
+    self->axis1 = MP_OBJ_FROM_PTR(axis1);
+    self->axis2 = MP_OBJ_FROM_PTR(axis2);
+    self->axis3 = MP_OBJ_FROM_PTR(axis3);
+    self->axis4 = MP_OBJ_FROM_PTR(axis4);
+
+    return MP_OBJ_FROM_PTR(self);
+}
+
+static mp_obj_t mp_controller_rumble(mp_obj_t self_ptr, mp_obj_t pattern_t){
+    mp_controller_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    const char* pattern = mp_obj_str_get_str(pattern_t);
+
+    controller_rumble(self -> cpp_handle, pattern);
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_2(mp_controller_rumble_obj, mp_controller_rumble);
+
+static const mp_rom_map_elem_t mp_controller_locals_dict_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+    { MP_ROM_QSTR(MP_QSTR_rumble), MP_ROM_PTR(&mp_controller_rumble_obj) },
+};
+static MP_DEFINE_CONST_DICT(mp_controller_locals_dict, mp_controller_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_controller_type,
+    MP_QSTR_Controller,
+    MP_TYPE_FLAG_NONE,
+    make_new, mp_controller_make_new,
+    attr, mp_controller_attr,
+    locals_dict, &mp_controller_locals_dict
+);
+
 // This dictionary holds everything inside the top-level namespace: 'import vex'
 static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),    MP_ROM_QSTR(MP_QSTR_vex) },
@@ -1220,7 +1431,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_MotorGroup), MP_ROM_PTR(&mp_motorgroup_type) },
     { MP_ROM_QSTR(MP_QSTR_Timer), MP_ROM_PTR(&mp_timer_type) },
     { MP_ROM_QSTR(MP_QSTR_Brain), MP_ROM_PTR(&mp_brain_type) },
-
+    { MP_ROM_QSTR(MP_QSTR_Controller), MP_ROM_PTR(&mp_controller_type) },
     // Bind Global Enum Constants directly to the module scope
     { MP_ROM_QSTR(MP_QSTR_NALL),         MP_ROM_INT(-1) },
     { MP_ROM_QSTR(MP_QSTR_COAST),         MP_ROM_INT(0) },

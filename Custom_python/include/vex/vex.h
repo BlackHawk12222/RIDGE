@@ -124,7 +124,7 @@ int brain_sdcard_size(void* sdcard_ptr, const char* filename);
 bool brain_sdcard_exists(void* sdcard_ptr, const char* filename);
 
 /*DEFINE class Controller in C*/
-void* create_controller();
+void* create_controller(int controller_type);
 void destroy_controller(void* controller_ptr);
 
 void* get_controller_screen(void* controller_ptr);
@@ -161,6 +161,8 @@ void controller_button_released(void* button_ptr, c_callback_t func, void *args)
 
 int controller_axis_position(void* axis_ptr);
 void controller_axis_changed(void* axis_ptr, c_callback_t func, void *args);
+
+void controller_rumble(void* controller_ptr, const char* pattern);
 
 /*DEFINE class Inertial for C*/
 

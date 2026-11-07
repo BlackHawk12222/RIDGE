@@ -47,10 +47,36 @@ class ControllerButton{
         bool pressing();
 
         template<typename Func, typename...Args>
-        void pressed(Func func, Args... args);
+        void pressed(Func func, std::tuple<Args...> args){
+            auto bound_callable = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
+            
+            // Wrap it inside a pros::Task lambda. 
+            pros::Task([this, bound_callable]() mutable {
+                while (1){
+                    if (this -> ControllerObj -> get_digital_new_press(this -> ButtonType)){
+                        std::apply(callback, args);
+                    }
+
+                    pros::delay(50);
+                }
+            });
+        }
 
         template<typename Func, typename...Args>
-        void released(Func func, Args... args);
+        void released(Func func, std::tuple<Args...> args){
+            auto bound_callable = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
+            
+            // Wrap it inside a pros::Task lambda. 
+            pros::Task([this, bound_callable]() mutable {
+                while (1){
+                    if (this -> ControllerObj -> get_digital_new_release(this -> ButtonType)){
+                        std::apply(callback, args);
+                    }
+
+                    pros::delay(50);
+                }
+            });
+        }
 };
 
 class ControllerAxis{
@@ -65,14 +91,49 @@ class ControllerAxis{
         int position();
 
         template<typename Func, typename...Args>
-        void changed(Func func, Args... args);
+        void changed(Func func, std::tuple<Args...> args){
+            auto bound_callable = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
+            
+            // Wrap it inside a pros::Task lambda. 
+            pros::Task([this, bound_callable]() mutable {
+                while (1){
+                    if (this -> ControllerObj -> get_analog(this -> AxisType) != this -> OldPos){
+                        std::apply(callback, args);
+                    }
+
+                    pros::delay(50);
+                }
+            });
+        }
 };
 
 class Controller{
     private:
         pros::Controller* ControllerObj = nullptr;
 
+        
+
     public:
+        ControllerScreen* screen;
+
+        ControllerAxis* axis1 = nullptr;
+        ControllerAxis* axis2 = nullptr;
+        ControllerAxis* axis3 = nullptr;
+        ControllerAxis* axis4 = nullptr;
+
+        ControllerButton* buttonA = nullptr;
+        ControllerButton* buttonB = nullptr;
+        ControllerButton* buttonX = nullptr;
+        ControllerButton* buttonY = nullptr;
+        ControllerButton* buttonDown = nullptr;
+        ControllerButton* buttonUp = nullptr;
+        ControllerButton* buttonLeft = nullptr;
+        ControllerButton* buttonRight = nullptr;
+        ControllerButton* buttonR1 = nullptr;
+        ControllerButton* buttonR2 = nullptr;
+        ControllerButton* buttonL1 = nullptr;
+        ControllerButton* buttonL2 = nullptr;
+
         Controller(ControllerType controller_type);
 
         void rumble(std::string pattern);

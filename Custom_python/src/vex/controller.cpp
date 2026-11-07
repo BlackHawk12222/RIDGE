@@ -78,40 +78,6 @@ bool ControllerButton::pressing(){
     return ControllerObj -> get_digital(ButtonType);
 }
 
-template<typename Func, typename...Args>
-void ControllerButton::pressed(Func func, Args... args){
-    auto bound_callable = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
-    
-    // Wrap it inside a pros::Task lambda. 
-    // Capturing by value [=] ensures args remain valid if local variables fall out of scope.
-    pros::Task([this, bound_callable]() mutable {
-        while (1){
-            if (this -> ControllerObj -> get_digital_new_press(this -> ButtonType)){
-                bound_callable();
-            }
-
-            pros::delay(50);
-        }
-    });
-}
-
-template<typename Func, typename...Args>
-void ControllerButton::released(Func func, Args... args){
-    auto bound_callable = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
-    
-    // Wrap it inside a pros::Task lambda. 
-    // Capturing by value [=] ensures args remain valid if local variables fall out of scope.
-    pros::Task([this, bound_callable]() mutable {
-        while (1){
-            if (this -> ControllerObj -> get_digital_new_release(this -> ButtonType)){
-                bound_callable();
-            }
-
-            pros::delay(50);
-        }
-    });
-}
-
 ControllerAxis::ControllerAxis(pros::controller_analog_e_t Axis, pros::Controller* controller){
     ControllerObj = controller;
     AxisType = Axis;
@@ -119,23 +85,6 @@ ControllerAxis::ControllerAxis(pros::controller_analog_e_t Axis, pros::Controlle
 
 int ControllerAxis::position(){
     return ControllerObj -> get_analog(AxisType);
-}
-
-template<typename Func, typename...Args>
-void ControllerAxis::changed(Func func, Args... args){
-    auto bound_callable = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
-    
-    // Wrap it inside a pros::Task lambda. 
-    // Capturing by value [=] ensures args remain valid if local variables fall out of scope.
-    pros::Task([this, bound_callable]() mutable {
-        while (1){
-            if (this -> ControllerObj -> get_analog(this -> AxisType) != this -> OldPos){
-                bound_callable();
-            }
-
-            pros::delay(50);
-        }
-    });
 }
 
 Controller::Controller(ControllerType controller_type){
