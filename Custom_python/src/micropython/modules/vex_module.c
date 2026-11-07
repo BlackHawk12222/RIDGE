@@ -1343,7 +1343,19 @@ static mp_obj_t mp_controller_screen_print(size_t n_args, const mp_obj_t* args){
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_controller_screen_print_obj, 2, 4, mp_controller_screen_print);
 
-static const mp_rom_map_elem_t mp_controller_screen_locals_dict_table[] = {
+static mp_obj_t mp_controller_screen_set_cursor(mp_obj_t screen_ptr, mp_obj_t x_t, mp_obj_t y_t){
+    mp_controller_screen_obj_t *self = MP_OBJ_TO_PTR(screen_ptr);
+
+    int x = mp_obj_get_int(x_t);
+    int y = mp_obj_get_int(y_t);
+
+    controller_screen_set_cursor(self->cpp_handle, x, y);
+
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_controller_screen_set_cursor_obj, mp_controller_screen_set_cursor);
+
+static const mp_rom_map_elem_t mp_controller_screen_locals_dict_table[] = {mp_controller_screen_set_cursor
     // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
 
 };
