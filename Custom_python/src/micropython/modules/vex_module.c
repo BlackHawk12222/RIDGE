@@ -12,7 +12,6 @@ typedef struct _mp_motorgroup_obj_t{
     void *cpp_handle;
 } mp_motorgroup_obj_t;
 
-
 typedef struct _mp_timer_obj_t{
     mp_obj_base_t base;
     void *cpp_handle;

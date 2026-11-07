@@ -5,7 +5,7 @@
 PYTHON=python3
 
 # This forces PROS to use aggressive optimization instead of the default -Os
-OPTIMIZATIONFLAGS=-O3 -ffast-math
+OPTIMIZATIONFLAGS=-O3 -ffast-math -flto
 
 # filename extensions
 CEXTS:=c
@@ -54,14 +54,14 @@ EXTRA_CFLAGS += -I$(BINDIR)/micropython \
                 -Isrc/micropython/py \
                 -Isrc/micropython/extmod \
 				-Isrc/micropython/modules \
-				-O3 -ffast-math
+				-O3 -ffast-math -flto
 
 EXTRA_CXXFLAGS += -I$(BINDIR)/micropython \
                   -Isrc/micropython \
                   -Isrc/micropython/py \
                   -Isrc/micropython/extmod \
 				  -Isrc/vex \
-				  -O3 -ffast-math
+				  -O3 -ffast-math -flto
 
 # 3. Explicitly scan and track deep source paths inside common.mk loops
 EXTRA_SRCDIRS += src/micropython \
