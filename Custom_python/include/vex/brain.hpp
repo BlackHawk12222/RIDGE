@@ -7,6 +7,7 @@
 #include <charconv>
 #include <map>
 #include "main.h"
+#include "vex/font_init.h"
 #include "timer.hpp"
 
 extern "C" {
@@ -87,7 +88,6 @@ class Battery{
 
 class Screen{
     private:
-        pros::text_format_e_t TextSize = pros::E_TEXT_MEDIUM;
         pros::screen_touch_status_s_t status = pros::screen::touch_status();
         Font font = MONO20;
         int ScreenX = 0;
@@ -97,13 +97,15 @@ class Screen{
         int YOffset = 0;
         int XOffset = 0;
         int PenWidth = 0;
-        pros::Color PenColor = pros::Color::black;
+        pros::Color PenColor = pros::Color::white;
+        uint32_t BackgroundColor = 0;
         bool Render = false;
 
-        int BufferLen = 0;
         std::vector<int> YBuffer;
         std::vector<int> XBuffer;
         std::vector<std::string> StringBuffer;
+        std::vector<bool> OpaqueBuffer;
+        std::map<std::pair<int, int>, lv_obj_t*> TextLabels;
 
         static inline std::function<void()> current_callback_pressed = nullptr;
 
@@ -122,6 +124,12 @@ class Screen{
         }
 
         bool is_number(const std::string& str);
+        const lv_font_t* current_font() const;
+        int font_height() const;
+        int character_width() const;
+        std::string format_text(const std::string& text, const std::string& sep, int precision);
+        void draw_text(const std::string& text, int x, int y, bool opaque);
+        void delete_text_labels(int x, int y, int width, int height);
 
     public:
         void print(std::string text, std::string sep = "", int precision = 2);
@@ -136,7 +144,7 @@ class Screen{
 
         int column();
 
-        void print_at(std::string text, int x, int y, std::string sep="", int precision=2, bool opaque=true);
+        void print_at(std::string text, int x, int y, std::string sep=" ", int precision=2, bool opaque=true);
 
         int get_string_width(std::string string);
 
@@ -211,9 +219,9 @@ class SdCard{
 
         char* loadfile(std::string filename, char* buffer, size_t buffer_size, size_t* result_size);
 
-        void savefile(std::string filename, const char* buffer = nullptr);
+        void savefile(std::string filename, const char* buffer = nullptr, size_t buffer_size = 0);
 
-        void appendfile(std::string filename, const char* buffer);
+        void appendfile(std::string filename, const char* buffer, size_t buffer_size);
 
         void draw_image_from_file(std::string filename, int x, int y);
 

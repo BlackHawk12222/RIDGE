@@ -17,7 +17,7 @@ try:
     from gc import collect, mem_alloc  # type: ignore 
     from ustruct import pack_into
     from micropython import const  # type: ignore
-    import ACPv1.CLEARv2.ControllerInterface as CInterface
+    from . import ControllerInterface as CInterface
     
     log_time= Timer() # Main timer used.
     log_link=MessageLink(Ports.PORT21, "CLEAR32449", VexlinkType.MANAGER)
@@ -34,7 +34,7 @@ try:
                     self.modulelist={}
                     self.memory: float=0
                     self.currentMemory: float=0
-                    self.memory_tolrance: int=const(int(str(settings.settings.get('memory_tolrance_KB '))))
+                    self.memory_tolrance: int=int(str(settings.settings.get('memory_tolrance_KB ')))
                     self.aton: bool=False
                     self.driver: bool=False
                     self.comp_switch: bool=False
@@ -86,8 +86,8 @@ try:
                     self.optical_object={}
                     self.optical_color={}
                     self.optical_connected={}
-                    self.inertial_axis_tolerance=const(float(str(settings.settings.get('inertial_axis_tolrance_Gs '))))
-                    self.inertial_gyro_tolerance=const(int(str(settings.settings.get('inertial_gyro_tolrance_DEGREES '))))
+                    self.inertial_axis_tolerance=float(str(settings.settings.get('inertial_axis_tolrance_Gs ')))
+                    self.inertial_gyro_tolerance=int(str(settings.settings.get('inertial_gyro_tolrance_DEGREES ')))
                     self.inertial_calibrating=False
                     self.inertial_connected=True
                     self.inertial_rotation_history=0
@@ -100,7 +100,7 @@ try:
                     self.rotation_connection={}
                     self.rotation_angle_history={}
                     self.rotation_position_history={}
-                    self.distance_tolrance=const(int(str(settings.settings.get('distance_tolrance_MM '))))
+                    self.distance_tolrance=int(str(settings.settings.get('distance_tolrance_MM ')))
                     self.distance_connection={}
                     self.distance_object={}
                     self.distance_history={}
@@ -644,7 +644,7 @@ try:
                 controller= Controller()
                 """
 
-                controllerid=const(id(controller))
+                controllerid=id(controller)
 
                 if controllerid not in self.button_values:
                     self.button_values[controllerid]=[True,True,True,True,True,True,True,True,True,True,True,True]
@@ -725,7 +725,7 @@ try:
                 value= Int, Boolean, Float
                 """
 
-                self.valueid=const(str(name))
+                self.valueid=str(name)
 
                 # Adds id if not in set.
                 if self.valueid not in self.variables:
@@ -777,12 +777,12 @@ try:
             self._buffer_offset=0
             self._last_write=0
             self.robot_active=False
-            self.memory_change=const("DSM0")
-            self.module_change=const("DSP0")
-            self.aton_start=const("DSC0")
-            self.controller_axis=const("DC1")
-            self.controller_button=const("DC0")
-            self.variable=const("DV0")
+            self.memory_change="DSM0"
+            self.module_change="DSP0"
+            self.aton_start="DSC0"
+            self.controller_axis="DC1"
+            self.controller_button="DC0"
+            self.variable="DV0"
             self.VariablesAdded=[]
 
             brain.sdcard.savefile("ACPv1/Config/Logstart.txt")  # Clears Logstart file for refresh of instructions in it.
@@ -951,7 +951,7 @@ try:
             """
                 
             timestamp: int = log_time.time()
-            self.entry: bytearray=const(b"%d [%d ms], %s, %s\n" %(self._index, timestamp, self.codes.get(add_code), add_details))
+            self.entry: bytearray=bytearray(b"%d [%d ms], %s, %s\n" %(self._index, timestamp, self.codes.get(add_code), add_details))
             self._bufferSize: int=len(self.entry)
 
             pack_into("=%ds"%(self._bufferSize), self.buffer, self._buffer_offset, self.entry)
@@ -1048,82 +1048,82 @@ try:
 
             start:int=log_time.time()
 
-            self.format:str=const(str(settings.settings.get('format_used ')))
-            self.tolrance:int=const(int(str(settings.settings.get('default_tolrance '))))
-            wait_time_logging:int=const(int(str(settings.settings.get('logging_loop_wait '))))
+            self.format:str=str(settings.settings.get('format_used '))
+            self.tolrance:int=int(str(settings.settings.get('default_tolrance ')))
+            wait_time_logging:int=int(str(settings.settings.get('logging_loop_wait ')))
 
             if "True" in str(settings.settings.get('gc_use ')):
-                gc_use:bool=const(True)
+                gc_use:bool=True
             else:
-                gc_use:bool=const(False)
+                gc_use:bool=False
 
             if "True" in str(settings.settings.get('log_battery ')):
-                log_battery:bool=const(True)
+                log_battery:bool=True
             else:
-                log_battery:bool=const(False)
+                log_battery:bool=False
 
             if "True" in str(settings.settings.get('log_memory ')):
-                log_memory:bool=const(True)
+                log_memory:bool=True
             else:
-                log_memory:bool=const(False)
+                log_memory:bool=False
 
             if "True" in str(settings.settings.get('log_modules ')):
-                log_modules:bool=const(True)
+                log_modules:bool=True
             else:
-                log_modules:bool=const(False)
+                log_modules:bool=False
 
             if "True" in str(settings.settings.get('print_read ')):
-                self.printing:bool=const(True)
+                self.printing:bool=True
             else:
-                self.printing:bool=const(False)
+                self.printing:bool=False
 
             if "True" in str(settings.settings.get('sdcard_read ')):
-                self.logging:bool=const(True)
+                self.logging:bool=True
             else:
-                self.logging:bool=const(False)
+                self.logging:bool=False
 
             if "True" in str(settings.settings.get('brain_read ')):
-                self.brainscreen:bool=const(True)
+                self.brainscreen:bool=True
             else:
-                self.brainscreen:bool=const(False)
+                self.brainscreen:bool=False
 
             if "True" in str(settings.settings.get('controller_interface ')):
-                self.controller_interface=const(True)
+                self.controller_interface=True
             else:
-                self.controller_interface=const(False)
+                self.controller_interface=False
             
             if self.brainscreen:
                 brain.screen.set_font(FontType.MONO12)
             
             if "True" in str(settings.settings.get('auto_do_variables ')):
-                auto_do_variables:bool=const(True)
+                auto_do_variables:bool=True
             else:
-                auto_do_variables:bool=const(False)
+                auto_do_variables:bool=False
 
             if "True" in str(settings.settings.get('auto_do_control ')):
-                auto_do_control:bool=const(True)
+                auto_do_control:bool=True
             else:
-                auto_do_control:bool=const(False)
+                auto_do_control:bool=False
 
             if "True" in str(settings.settings.get('auto_do_three_wire ')):
-                auto_do_three_wire:bool=const(True)
+                auto_do_three_wire:bool=True
             else:
-                auto_do_three_wire:bool=const(False)
+                auto_do_three_wire:bool=False
 
             if "True" in str(settings.settings.get('auto_do_smart_port ')):
-                auto_do_smart_port:bool=const(True)
+                auto_do_smart_port:bool=True
             else:
-                auto_do_smart_port:bool=const(False)
+                auto_do_smart_port:bool=False
 
             if "True" in str(settings.settings.get('auto_do_motors ')):
-                auto_do_motors:bool=const(True)
+                auto_do_motors:bool=True
             else:
-                auto_do_motors:bool=const(False)
+                auto_do_motors:bool=False
 
             if "True" in str(settings.settings.get('auto_do_controller ')):
-                auto_do_controller:bool=const(True)
+                auto_do_controller:bool=True
             else:
-                auto_do_controller:bool=const(False)
+                auto_do_controller:bool=False
 
             self.archive.index_history()
             if brain.sdcard.filesize("Log.csv") > 100000:
@@ -1243,11 +1243,11 @@ try:
             try:
                 addedfuntion=brain.sdcard.loadfile("ACPv1/Config/Logstart.txt").decode(self.format)
                 added_bytes=compile(addedfuntion, '<string>' ,'exec', 0,  False, 2)
-                added_bytes_used=const(True)
+                added_bytes_used=True
             except AttributeError:
                 addedfuntion=""
                 added_bytes=compile("", '<string>' ,'exec', 0,  True, 2)
-                added_bytes_used=const(False)
+                added_bytes_used=False
             
             del addedfuntion
 
@@ -1258,7 +1258,7 @@ try:
 
             while True:
                 for _ in range(200):
-                    start:int=const(timer())
+                    start:int=timer()
 
                     if not self.robot_active:
                         if not auto_do_controller:
@@ -1524,7 +1524,7 @@ try:
             self.OldExcVals=[]
         
         def in_function_auto_start(self):
-            GlobalLogging=const(dir())
+            GlobalLogging=dir()
 
             for Item in GlobalLogging:
                 try:
@@ -1539,18 +1539,18 @@ try:
             try:
                 AddedFuntion=brain.sdcard.loadfile("ACPv1/Config/Logstart.txt").decode(log.format)
                 AddedBytes=compile(AddedFuntion, '<string>' ,'exec', 0,  False, 2)
-                AddedBytesUsed=const(True)
+                AddedBytesUsed=True
             except AttributeError:
                 AddedFuntion=""
                 AddedBytes=compile("", '<string>' ,'exec', 0,  True, 2)
-                AddedBytesUsed=const(False)
+                AddedBytesUsed=False
             
             del AddedFuntion
 
             collect()
 
             while True:
-                start:int=const(log_time.time())
+                start:int=log_time.time()
 
                 if AddedBytesUsed:
                     exec(AddedBytes)
@@ -1610,6 +1610,6 @@ except Exception as e:
     exeption_string=uio.StringIO(500)
     sys.print_exception(e, exeption_string)  # type: ignore
     print(exeption_string.getvalue())
-    brain.sdcard.appendfile("Error.txt", bytearray(b"<System ERROR> Python Runtime Error. \n %s "%(exeption_string.getvalue())))
+    brain.sdcard.appendfile("Error.txt", bytearray("<System ERROR> Python Runtime Error. \n %s "%(exeption_string.getvalue()), "utf-8"))
     
     del exeption_string, uio

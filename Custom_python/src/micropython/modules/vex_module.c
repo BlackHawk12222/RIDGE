@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include "py/runtime.h"
 #include "py/obj.h"
 #include "py/mphal.h"
@@ -150,6 +151,11 @@ typedef struct _mp_controller_obj_t{
     mp_obj_t axis4;
 } mp_controller_obj_t;
 
+typedef struct _mp_color_obj_t{
+    mp_obj_base_t base;
+    uint32_t value;
+} mp_color_obj_t;
+
 extern const mp_obj_type_t mp_motor_type;
 extern const mp_obj_type_t mp_motorgroup_type;
 extern const mp_obj_type_t mp_rotation_type;
@@ -168,6 +174,29 @@ extern const mp_obj_type_t mp_controller_screen_type;
 extern const mp_obj_type_t mp_controller_button_type;
 extern const mp_obj_type_t mp_controller_axis_type;
 extern const mp_obj_type_t mp_controller_type;
+extern const mp_obj_type_t mp_color_type;
+
+static mp_obj_t mp_color_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 3, 3, false);
+
+    int red = mp_obj_get_int(args[0]);
+    int green = mp_obj_get_int(args[1]);
+    int blue = mp_obj_get_int(args[2]);
+    if (red < 0 || red > 255 || green < 0 || green > 255 || blue < 0 || blue > 255) {
+        mp_raise_ValueError(MP_ERROR_TEXT("RGB values must be between 0 and 255"));
+    }
+
+    mp_color_obj_t *self = mp_obj_malloc(mp_color_obj_t, type);
+    self->value = ((uint32_t)red << 16) | ((uint32_t)green << 8) | (uint32_t)blue;
+    return MP_OBJ_FROM_PTR(self);
+}
+
+static int mp_color_get_value(mp_obj_t color_obj) {
+    if (mp_obj_is_type(color_obj, &mp_color_type)) {
+        return (int)((mp_color_obj_t *)MP_OBJ_TO_PTR(color_obj))->value;
+    }
+    return mp_obj_get_int(color_obj);
+}
 
 static mp_obj_t mp_motor_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 1, 3, false); // strict 3 arguments
@@ -825,19 +854,35 @@ MP_DEFINE_CONST_OBJ_TYPE(
 
 /* Defining class brain.screen for micropython module. */
 
-static mp_obj_t mp_brain_screen_print(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_vex_stringify(mp_obj_t value) {
+    vstr_t buffer;
+    mp_print_t print;
+    vstr_init_print(&buffer, 16, &print);
+    mp_obj_print_helper(&print, value, PRINT_STR);
+    return mp_obj_new_str_from_utf8_vstr(&buffer);
+}
+
+static mp_obj_t mp_brain_screen_print(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args) {
+    enum { ARG_text, ARG_sep, ARG_precision };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_text, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_sep, MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_precision, MP_ARG_INT, {.u_int = 2} },
+    };
+    mp_arg_val_t values[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args - 1, args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, values);
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-
-    const char* text = mp_obj_str_get_str(args[1]);
-
-    // Defining default values.
-    const char* sep = (n_args > 2) ? mp_obj_str_get_str(args[2])   : "";      // DEGREES macro value
-    int precision = (n_args > 3) ? mp_obj_get_float(args[3]) : 2;
+    mp_obj_t text_obj = mp_vex_stringify(values[ARG_text].u_obj);
+    const char *text = mp_obj_str_get_str(text_obj);
+    const char *sep = values[ARG_sep].u_obj == MP_OBJ_NULL
+        ? ""
+        : mp_obj_str_get_str(values[ARG_sep].u_obj);
+    int precision = values[ARG_precision].u_int;
 
     brain_screen_print(self -> cpp_handle, text, sep, precision);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_print_obj, 2, 4, mp_brain_screen_print);
+static MP_DEFINE_CONST_FUN_OBJ_KW(mp_brain_screen_print_obj, 1, mp_brain_screen_print);
 
 static mp_obj_t mp_brain_screen_set_cursor(mp_obj_t self_ptr, mp_obj_t row_t, mp_obj_t col_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
@@ -862,7 +907,7 @@ static mp_obj_t mp_brain_screen_clear_row(mp_obj_t self_ptr, mp_obj_t row_t, mp_
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
     int row = mp_obj_get_int(row_t);
-    int color = mp_obj_get_int(color_t);
+    int color = mp_color_get_value(color_t);
 
     brain_screen_clear_row(self -> cpp_handle, row, color);
     return mp_const_none;
@@ -889,23 +934,33 @@ static mp_obj_t mp_brain_screen_column(mp_obj_t self_ptr){
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_column_obj, mp_brain_screen_column);
 
-static mp_obj_t mp_brain_screen_print_at(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_brain_screen_print_at(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args) {
+    enum { ARG_text, ARG_x, ARG_y, ARG_sep, ARG_precision, ARG_opaque };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_text, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_x, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0} },
+        { MP_QSTR_y, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0} },
+        { MP_QSTR_sep, MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_precision, MP_ARG_INT, {.u_int = 2} },
+        { MP_QSTR_opaque, MP_ARG_BOOL, {.u_bool = true} },
+    };
+    mp_arg_val_t values[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args - 1, args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, values);
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-
-    const char* text = mp_obj_str_get_str(args[1]);
-
-    int x = mp_obj_get_int(args[2]);
-    int y = mp_obj_get_int(args[3]);
-
-    // Defining default values.
-    const char* sep = (n_args > 4) ? mp_obj_str_get_str(args[4])   : "";      // DEGREES macro value
-    int precision = (n_args > 5) ? mp_obj_get_float(args[5]) : 2;
-    bool opaque = (n_args > 6) ? mp_obj_is_true(args[6])   : true;
+    mp_obj_t text_obj = mp_vex_stringify(values[ARG_text].u_obj);
+    const char *text = mp_obj_str_get_str(text_obj);
+    int x = values[ARG_x].u_int;
+    int y = values[ARG_y].u_int;
+    const char *sep = values[ARG_sep].u_obj == MP_OBJ_NULL
+        ? " "
+        : mp_obj_str_get_str(values[ARG_sep].u_obj);
+    int precision = values[ARG_precision].u_int;
+    bool opaque = values[ARG_opaque].u_bool;
 
     brain_screen_print_at(self -> cpp_handle, text, x, y, sep, precision, opaque);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_print_at_obj, 4, 7, mp_brain_screen_print_at);
+static MP_DEFINE_CONST_FUN_OBJ_KW(mp_brain_screen_print_at_obj, 1, mp_brain_screen_print_at);
 
 static mp_obj_t mp_brain_screen_get_string_width(mp_obj_t self_ptr, mp_obj_t string_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
@@ -952,7 +1007,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_new_line_obj, mp_brain_screen_n
 static mp_obj_t mp_brain_screen_clear_screen(mp_obj_t self_ptr, mp_obj_t color_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
-    int color = mp_obj_get_int(color_t);
+    int color = mp_color_get_value(color_t);
 
     brain_screen_clear_screen(self -> cpp_handle, color);
     return mp_const_none;
@@ -982,7 +1037,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_pen_width_obj, mp_brain_scr
 static mp_obj_t mp_brain_screen_set_pen_color(mp_obj_t self_ptr, mp_obj_t color_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
-    int color = mp_obj_get_int(color_t);
+    int color = mp_color_get_value(color_t);
 
     brain_screen_set_pen_color(self -> cpp_handle, color);
     return mp_const_none;
@@ -992,7 +1047,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_pen_color_obj, mp_brain_scr
 static mp_obj_t mp_brain_screen_set_fill_color(mp_obj_t self_ptr, mp_obj_t color_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
-    int color = mp_obj_get_int(color_t);
+    int color = mp_color_get_value(color_t);
 
     brain_screen_set_fill_color(self -> cpp_handle, color);
     return mp_const_none;
@@ -1041,7 +1096,7 @@ static mp_obj_t mp_brain_screen_draw_rectangle(size_t n_args, const mp_obj_t *ar
     int y = mp_obj_get_int(args[2]);
     int width = mp_obj_get_int(args[3]);
     int height = mp_obj_get_int(args[4]);
-    int color = (n_args > 5) ? mp_obj_get_int(args[5]) : 0; // Default color is BLACK
+    int color = (n_args > 5) ? mp_color_get_value(args[5]) : 0; // Default color is BLACK
 
     brain_screen_draw_rectangle(self -> cpp_handle, x, y, width, height, color);
     return mp_const_none;
@@ -1053,7 +1108,7 @@ static mp_obj_t mp_brain_screen_draw_circle(size_t n_args, const mp_obj_t *args)
     int x = mp_obj_get_int(args[1]);
     int y = mp_obj_get_int(args[2]);
     int radius = mp_obj_get_int(args[3]);
-    int color = mp_obj_get_int(args[4]);
+    int color = mp_color_get_value(args[4]);
 
     brain_screen_draw_circle(self->cpp_handle, x, y, radius, color);
     return mp_const_none;
@@ -1184,7 +1239,8 @@ static mp_obj_t mp_brain_sdcard_loadfile(size_t n_args, const mp_obj_t *args){
 
     size_t result_size = 0;
     char* result = brain_sdcard_loadfile(self->cpp_handle, filename, buffer, buffer_size, &result_size);
-    mp_obj_t output = mp_obj_new_str(result, result_size);
+    const char* output_data = result_size == 0 ? "" : result;
+    mp_obj_t output = mp_obj_new_bytearray(result_size, output_data);
     if (buffer == NULL) {
         brain_sdcard_freefile(result);
     }
@@ -1196,9 +1252,16 @@ static mp_obj_t mp_brain_sdcard_savefile(size_t n_args, const mp_obj_t *args){
     mp_brain_sdcard_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
     const char* filename = mp_obj_str_get_str(args[1]);
-    const char* buffer = (n_args > 2 && args[2] != mp_const_none) ? mp_obj_str_get_str(args[2]) : NULL;
+    const char* buffer = NULL;
+    size_t buffer_size = 0;
+    if (n_args > 2 && args[2] != mp_const_none) {
+        mp_buffer_info_t buffer_info;
+        mp_get_buffer_raise(args[2], &buffer_info, MP_BUFFER_READ);
+        buffer = buffer_info.buf;
+        buffer_size = buffer_info.len;
+    }
 
-    brain_sdcard_savefile(self -> cpp_handle, filename, buffer);
+    brain_sdcard_savefile(self -> cpp_handle, filename, buffer, buffer_size);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_sdcard_savefile_obj, 2, 3, mp_brain_sdcard_savefile);
@@ -1207,9 +1270,10 @@ static mp_obj_t mp_brain_sdcard_appendfile(mp_obj_t self_ptr, mp_obj_t filename_
     mp_brain_sdcard_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
     const char* filename = mp_obj_str_get_str(filename_t);
-    const char* buffer = mp_obj_str_get_str(buffer_t);
+    mp_buffer_info_t buffer_info;
+    mp_get_buffer_raise(buffer_t, &buffer_info, MP_BUFFER_READ);
 
-    brain_sdcard_appendfile(self -> cpp_handle, filename, buffer);
+    brain_sdcard_appendfile(self -> cpp_handle, filename, buffer_info.buf, buffer_info.len);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_sdcard_appendfile_obj, mp_brain_sdcard_appendfile);
@@ -2284,6 +2348,21 @@ static const mp_rom_map_elem_t mp_angle_units_locals_dict_table[] = {
 static MP_DEFINE_CONST_DICT(mp_angle_units_locals_dict, mp_angle_units_locals_dict_table);
 MP_DEFINE_CONST_OBJ_TYPE(mp_angle_units_type, MP_QSTR_AngleUnits, MP_TYPE_FLAG_NONE, locals_dict, &mp_angle_units_locals_dict);
 
+static const mp_rom_map_elem_t mp_font_type_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_MONO12), MP_ROM_INT(40) },
+    { MP_ROM_QSTR(MP_QSTR_MONO15), MP_ROM_INT(41) },
+    { MP_ROM_QSTR(MP_QSTR_MONO20), MP_ROM_INT(42) },
+    { MP_ROM_QSTR(MP_QSTR_MONO30), MP_ROM_INT(43) },
+    { MP_ROM_QSTR(MP_QSTR_MONO40), MP_ROM_INT(44) },
+    { MP_ROM_QSTR(MP_QSTR_MONO60), MP_ROM_INT(45) },
+    { MP_ROM_QSTR(MP_QSTR_PROP20), MP_ROM_INT(46) },
+    { MP_ROM_QSTR(MP_QSTR_PROP30), MP_ROM_INT(47) },
+    { MP_ROM_QSTR(MP_QSTR_PROP40), MP_ROM_INT(48) },
+    { MP_ROM_QSTR(MP_QSTR_PROP60), MP_ROM_INT(49) },
+};
+static MP_DEFINE_CONST_DICT(mp_font_type_locals_dict, mp_font_type_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(mp_font_type, MP_QSTR_FontType, MP_TYPE_FLAG_NONE, locals_dict, &mp_font_type_locals_dict);
+
 static const mp_rom_map_elem_t mp_axis_type_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_XAXIS), MP_ROM_INT(MP_VEX_AXIS_X) },
     { MP_ROM_QSTR(MP_QSTR_YAXIS), MP_ROM_INT(MP_VEX_AXIS_Y) },
@@ -2318,6 +2397,14 @@ static const mp_rom_map_elem_t mp_object_size_type_locals_dict_table[] = {
 static MP_DEFINE_CONST_DICT(mp_object_size_type_locals_dict, mp_object_size_type_locals_dict_table);
 MP_DEFINE_CONST_OBJ_TYPE(mp_object_size_type, MP_QSTR_ObjectSizeType, MP_TYPE_FLAG_NONE, locals_dict, &mp_object_size_type_locals_dict);
 
+static const mp_rom_map_elem_t mp_GearSetting_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_RATIO_6_1),  MP_ROM_INT(8) },
+    { MP_ROM_QSTR(MP_QSTR_RATIO_18_1), MP_ROM_INT(18) },
+    { MP_ROM_QSTR(MP_QSTR_RATIO_36_1), MP_ROM_INT(36) },
+};
+static MP_DEFINE_CONST_DICT(mp_GearSetting_locals_dict, mp_GearSetting_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(mp_gear_setting_type, MP_QSTR_GearSetting, MP_TYPE_FLAG_NONE, locals_dict, &mp_GearSetting_locals_dict_table);
+
 static const mp_rom_map_elem_t mp_color_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_BLACK), MP_ROM_INT(0x000000) },
     { MP_ROM_QSTR(MP_QSTR_WHITE), MP_ROM_INT(0xFFFFFF) },
@@ -2330,7 +2417,13 @@ static const mp_rom_map_elem_t mp_color_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_CYAN), MP_ROM_INT(0x00FFFF) },
 };
 static MP_DEFINE_CONST_DICT(mp_color_locals_dict, mp_color_locals_dict_table);
-MP_DEFINE_CONST_OBJ_TYPE(mp_color_type, MP_QSTR_Color, MP_TYPE_FLAG_NONE, locals_dict, &mp_color_locals_dict);
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_color_type,
+    MP_QSTR_Color,
+    MP_TYPE_FLAG_NONE,
+    make_new, mp_color_make_new,
+    locals_dict, &mp_color_locals_dict
+);
 
 static const mp_rom_map_elem_t mp_distance_units_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_MM), MP_ROM_INT(MP_VEX_MM) },
@@ -2357,18 +2450,20 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_Ports), MP_ROM_PTR(&mp_ports_type) },
     { MP_ROM_QSTR(MP_QSTR_VelocityUnits), MP_ROM_PTR(&mp_velocity_units_type) },
     { MP_ROM_QSTR(MP_QSTR_AngleUnits), MP_ROM_PTR(&mp_angle_units_type) },
+    { MP_ROM_QSTR(MP_QSTR_FontType), MP_ROM_PTR(&mp_font_type) },
     { MP_ROM_QSTR(MP_QSTR_AxisType), MP_ROM_PTR(&mp_axis_type) },
     { MP_ROM_QSTR(MP_QSTR_TurnType), MP_ROM_PTR(&mp_turn_type) },
     { MP_ROM_QSTR(MP_QSTR_LEDStateType), MP_ROM_PTR(&mp_led_state_type) },
     { MP_ROM_QSTR(MP_QSTR_ObjectSizeType), MP_ROM_PTR(&mp_object_size_type) },
     { MP_ROM_QSTR(MP_QSTR_Color), MP_ROM_PTR(&mp_color_type) },
     { MP_ROM_QSTR(MP_QSTR_DistanceUnits), MP_ROM_PTR(&mp_distance_units_type) },
+    { MP_ROM_QSTR(MP_QSTR_GearSetting), MP_ROM_PTR(&mp_gear_setting_type) },
 
     // Bind Global Enum Constants directly to the module scope
     { MP_ROM_QSTR(MP_QSTR_RATIO_6_1),  MP_ROM_INT(8) },
     { MP_ROM_QSTR(MP_QSTR_RATIO_18_1), MP_ROM_INT(18) },
     { MP_ROM_QSTR(MP_QSTR_RATIO_36_1), MP_ROM_INT(36) },
-    { MP_ROM_QSTR(MP_QSTR_MASTER),     MP_ROM_INT(50) },
+    { MP_ROM_QSTR(MP_QSTR_PRIMARY),     MP_ROM_INT(50) },
     { MP_ROM_QSTR(MP_QSTR_PARTNER),    MP_ROM_INT(51) },
     { MP_ROM_QSTR(MP_QSTR_COAST),       MP_ROM_INT(0) },
     { MP_ROM_QSTR(MP_QSTR_BRAKE),       MP_ROM_INT(1) },
@@ -2411,6 +2506,8 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_FAHRENHEIT),  MP_ROM_INT(36) },
     { MP_ROM_QSTR(MP_QSTR_SECONDS),     MP_ROM_INT(37) },
     { MP_ROM_QSTR(MP_QSTR_MSEC),        MP_ROM_INT(38) },
+    { MP_ROM_QSTR(MP_QSTR_MASTER),        MP_ROM_INT(50) },
+    { MP_ROM_QSTR(MP_QSTR_PARTNER),        MP_ROM_INT(51) },
     { MP_ROM_QSTR(MP_QSTR_XAXIS),       MP_ROM_INT(MP_VEX_AXIS_X) },
     { MP_ROM_QSTR(MP_QSTR_YAXIS),       MP_ROM_INT(MP_VEX_AXIS_Y) },
     { MP_ROM_QSTR(MP_QSTR_ZAXIS),       MP_ROM_INT(MP_VEX_AXIS_Z) },

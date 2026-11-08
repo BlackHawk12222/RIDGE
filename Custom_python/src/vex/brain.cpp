@@ -2,10 +2,12 @@
 #include <vector>
 #include <sstream>
 #include <charconv>
+#include <array>
 #include <map>
 #include <functional>
 #include <fstream>
 #include <cstdio>
+#include <cerrno>
 #include "main.h"
 #include "vex/brain.hpp"
 
@@ -91,54 +93,139 @@ bool Screen::is_number(const std::string& str) {
     return ec == std::errc() && ptr == str.data() + str.size();
 }
 
-void Screen::print(std::string text, std::string sep, int precision) {
-    if (sep == "") {
-        if (is_number(text)){
-            double number=std::stod(text);
-            std::string output=std::format("{:.{}f}", number, precision);
-            if (Render){
-                BufferLen++;
-                YBuffer.push_back(ScreenY);
-                XBuffer.push_back(ScreenX);
-                StringBuffer.push_back(output);
-                return;
-            }
-            pros::screen::print(TextSize, ScreenX, ScreenY, "%s", output);
-        }else{
-            if (Render){
-                BufferLen++;
-                YBuffer.push_back(ScreenY);
-                XBuffer.push_back(ScreenX);
-                StringBuffer.push_back(text);
-                return;
-            }
-            pros::screen::print(TextSize, ScreenX, ScreenY, "%s", text.c_str());
+const lv_font_t* Screen::current_font() const {
+    // The generated mono files currently contain only the space glyph.
+    static const std::array<const lv_font_t*, 6> fallback_fonts = {
+        &lv_font_montserrat_12,
+        &lv_font_montserrat_16,
+        &lv_font_montserrat_20,
+        &lv_font_montserrat_30,
+        &lv_font_montserrat_40,
+        &lv_font_montserrat_48,
+    };
+    static const std::array<lv_font_t, 6> screen_fonts = [] {
+        std::array<lv_font_t, 6> fonts{};
+        for (size_t i = 0; i < fonts.size(); ++i) {
+            fonts[i] = *font_options[i];
+            fonts[i].fallback = fallback_fonts[i];
+            fonts[i].line_height = fallback_fonts[i]->line_height;
+            fonts[i].base_line = fallback_fonts[i]->base_line;
         }
-        
-    }else {
-        std::vector<std::string> TextList;
-        std::stringstream ss(text);
-        std::string line;
-        std::string output;
+        return fonts;
+    }();
 
-        if (std::getline(ss, line)) {
-            output += line; // Add first line without separator
-        }
-        
-        while (std::getline(ss, line)) {
-            output += sep + line;
-        }
-
-        if (Render){
-            BufferLen++;
-            YBuffer.push_back(ScreenY);
-            XBuffer.push_back(ScreenX);
-            StringBuffer.push_back(output);
-            return;
-        }
-
-        pros::screen::print(TextSize, ScreenX, ScreenY, "%s", output.c_str());
+    const int value = static_cast<int>(font);
+    if (value >= MONO12 && value <= MONO60) {
+        return &screen_fonts[value - MONO12];
     }
+
+    switch (font) {
+        case PROP20: return &lv_font_montserrat_20;
+        case PROP30: return &lv_font_montserrat_30;
+        case PROP40: return &lv_font_montserrat_40;
+        case PROP60: return &lv_font_montserrat_48;
+        default: mp_raise_ValueError(MP_ERROR_TEXT("Invalid screen font"));
+    }
+    return nullptr;
+}
+
+int Screen::font_height() const {
+    return current_font()->line_height;
+}
+
+int Screen::character_width() const {
+    switch (font) {
+        case MONO12: return 6;
+        case MONO15: return 7;
+        case MONO20:
+        case PROP20: return 10;
+        case MONO30:
+        case PROP30: return 15;
+        case MONO40:
+        case PROP40: return 20;
+        case MONO60:
+        case PROP60: return 30;
+        default: return 10;
+    }
+}
+
+std::string Screen::format_text(const std::string& text, const std::string& sep, int precision) {
+    if (sep.empty()) {
+        if (is_number(text)) {
+            return std::format("{:.{}f}", std::stod(text), precision);
+        }
+        return text;
+    }
+
+    std::stringstream stream(text);
+    std::string line;
+    std::string output;
+    if (std::getline(stream, line)) {
+        output = line;
+    }
+    while (std::getline(stream, line)) {
+        output += sep + line;
+    }
+    return output;
+}
+
+void Screen::draw_text(const std::string& text, int x, int y, bool opaque) {
+    lv_lock();
+    const std::pair<int, int> position{x, y};
+    auto label = TextLabels.find(position);
+    if (label == TextLabels.end()) {
+        lv_obj_t* object = lv_label_create(lv_screen_active());
+        if (object == nullptr) {
+            lv_unlock();
+            mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Unable to create screen text"));
+        }
+        label = TextLabels.emplace(position, object).first;
+    }
+
+    lv_obj_t* object = label->second;
+    lv_label_set_text(object, text.c_str());
+    lv_obj_set_style_text_font(object, current_font(), LV_PART_MAIN);
+    lv_obj_set_style_text_color(object, lv_color_hex(static_cast<uint32_t>(PenColor)), LV_PART_MAIN);
+    lv_obj_set_style_text_opa(object, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(object, lv_color_hex(BackgroundColor), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(object, opaque ? LV_OPA_COVER : LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(object, 0, LV_PART_MAIN);
+    lv_obj_set_style_border_width(object, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(object, 0, LV_PART_MAIN);
+    lv_obj_set_pos(object, x, y);
+    lv_unlock();
+}
+
+void Screen::delete_text_labels(int x, int y, int width, int height) {
+    lv_lock();
+    for (auto label = TextLabels.begin(); label != TextLabels.end();) {
+        lv_obj_t* object = label->second;
+        const int label_x = lv_obj_get_x(object);
+        const int label_y = lv_obj_get_y(object);
+        const int label_right = label_x + lv_obj_get_width(object);
+        const int label_bottom = label_y + lv_obj_get_height(object);
+        if (label_x < x + width && label_right > x && label_y < y + height && label_bottom > y) {
+            lv_obj_delete(object);
+            label = TextLabels.erase(label);
+        } else {
+            ++label;
+        }
+    }
+    lv_unlock();
+}
+
+void Screen::print(std::string text, std::string sep, int precision) {
+    std::string output = format_text(text, sep, precision);
+    const int x = ScreenX * character_width();
+    const int y = ScreenY * font_height();
+    if (Render) {
+        XBuffer.push_back(x);
+        YBuffer.push_back(y);
+        StringBuffer.push_back(std::move(output));
+        OpaqueBuffer.push_back(true);
+        return;
+    }
+    draw_text(output, x, y, true);
 }
 
 void Screen::set_cursor(int row, int col){
@@ -155,17 +242,11 @@ void Screen::clear_row(int row, Color color){
     if (row == -1){
         row=ScreenY;
     }
-    int TextHight;
+    int text_height = font_height();
     pros::screen::set_pen(color.ColorValue);
-    if (TextSize == pros::E_TEXT_SMALL){
-        TextHight=8;
-    }else if (TextSize == pros::E_TEXT_MEDIUM) {
-        TextHight=16;
-    }else if (TextSize == pros::E_TEXT_LARGE) {
-        TextHight=32;
-    }
-    pros::screen::draw_rect(0, row*TextHight, 480, (row*TextHight) + TextHight);
+    pros::screen::draw_rect(0, row * text_height, 480, (row * text_height) + text_height);
     pros::screen::set_pen(PenColor);
+    delete_text_labels(0, row * text_height, 480, text_height);
 }
 
 int Screen::row(){
@@ -177,192 +258,35 @@ int Screen::column(){
 }
 
 void Screen::print_at(std::string text, int x, int y, std::string sep, int precision, bool opaque){
-    if (sep == "") {
-        if (is_number(text)){
-            double number=std::stod(text);
-            std::string output=std::format("{:.{}f}", number, precision);
-            if (Render){
-                BufferLen++;
-                YBuffer.push_back(ScreenY);
-                XBuffer.push_back(ScreenX);
-                StringBuffer.push_back(output);
-                return;
-            }
-            pros::screen::print(TextSize, x, y, "%s", output);
-        }else{
-            if (Render){
-                BufferLen++;
-                YBuffer.push_back(ScreenY);
-                XBuffer.push_back(ScreenX);
-                StringBuffer.push_back(text);
-                return;
-            }
-            pros::screen::print(TextSize, x, y, "%s", text.c_str());
-        }
-        
-    }else {
-        std::vector<std::string> TextList;
-        std::stringstream ss(text);
-        std::string line;
-        std::string output;
-
-        if (std::getline(ss, line)) {
-            output += line; // Add first line without separator
-        }
-        
-        while (std::getline(ss, line)) {
-            output += sep + line;
-        }
-
-        if (Render){
-            BufferLen++;
-            YBuffer.push_back(ScreenY);
-            XBuffer.push_back(ScreenX);
-            StringBuffer.push_back(output);
-            return;
-        }
-
-        pros::screen::print(TextSize, x, y, "%s", output.c_str());
+    std::string output = format_text(text, sep, precision);
+    x += XOffset;
+    y += YOffset;
+    if (Render) {
+        XBuffer.push_back(x);
+        YBuffer.push_back(y);
+        StringBuffer.push_back(std::move(output));
+        OpaqueBuffer.push_back(opaque);
+        return;
     }
+    draw_text(output, x, y, opaque);
 }
 
 int Screen::get_string_width(std::string string){
-    int output = 0;
-    switch (font)
-    {
-    case MONO12:
-    {
-        output = 10;
-        break;
-    }
-    case MONO15:
-    {
-        output = 12;
-        break;
-    }
-    case MONO20:
-    {
-        output = 15;
-        break;
-    }
-    case MONO30:
-    {
-        output = 22;
-        break;
-    }
-    case MONO40:
-    {
-        output = 30;
-        break;
-    }
-    case MONO60:
-    {
-        output = 44;
-        break;
-    }
-    default:
-        break;
-    }
-
-    /*Due to compexity the PROP fonts cant be calcuated.*/
-
-    output *= string.size();
-    
-    return output;
+    lv_lock();
+    int width = lv_text_get_width(string.c_str(), static_cast<uint32_t>(string.size()), current_font(), 0);
+    lv_unlock();
+    return width;
 }
 
 int Screen::get_string_height(std::string string){
-    int output = 0;
-    switch(font){
-        case MONO12:
-        {
-            output = 12;
-            break;
-
-        }
-        case MONO15:
-        {
-            output = 15;
-            break;
-        }
-        case MONO20:
-        {
-            output = 20;
-            break;
-        }
-        case MONO30:
-        {
-            output = 30;
-            break;
-        }
-        case MONO40:
-        {
-            output = 40;
-            break;
-        }
-        case MONO60:
-        {
-            output = 60;
-            break;
-        }
-        case PROP20:
-        {
-            output = 20;
-            break;
-        }
-        case PROP30:
-        {
-            output = 30;
-            break;
-        }
-        case PROP40:
-        {
-            output = 40;
-            break;
-        }
-        case PROP60:
-        {
-            output = 60;
-            break;
-        }
-        default:
-        {
-            break;
-        }
-
-    }
-    return output;
+    (void)string;
+    return current_font()->line_height;
 }
 
 void Screen::clear_line(int line){
-    int X0=0;
-    int Y0=0;
-    int X1=472;
-    int Y1=0;
-
-    switch (TextSize){
-        case pros::E_TEXT_SMALL:
-        {
-            Y1=line * 8 + 8;
-            Y0=line * 8;
-
-            break;
-        }
-        case pros::E_TEXT_MEDIUM:
-        {
-            Y1=line * 16 + 16;
-            Y0=line * 16;
-            break;
-        }
-        case pros::E_TEXT_LARGE:
-        {
-            Y1=line * 32 + 32;
-            Y0=line * 32;
-            break;
-        }
-    }
-
-    pros::screen::erase_line(X0, Y0, X1, Y1);
+    const int y = line * font_height();
+    pros::screen::erase_line(0, y, 479, y + font_height());
+    delete_text_labels(0, y, 480, font_height());
 }
 
 void Screen::new_line(){
@@ -370,12 +294,20 @@ void Screen::new_line(){
 }
 
 void Screen::clear_screen(Color color){
+    lv_lock();
+    for (const auto& label : TextLabels) {
+        lv_obj_delete(label.second);
+    }
+    TextLabels.clear();
+    lv_unlock();
+    BackgroundColor = color.ColorValue;
     pros::screen::set_eraser(color.ColorValue);
     pros::screen::erase();
 }
 
 void Screen::set_font(Font font){
-    //in progress
+    this->font = font;
+    current_font();
 }
 
 void Screen::set_pen_width(int value){
@@ -383,6 +315,7 @@ void Screen::set_pen_width(int value){
 }
 
 void Screen::set_pen_color(Color color){
+    PenColor = static_cast<pros::Color>(color.ColorValue);
     pros::screen::set_pen(color.ColorValue);
 }
 
@@ -428,18 +361,14 @@ void Screen::draw_circle(int x, int y, int radius, Color color){
 
 void Screen::render(){
     if (Render == true){
-        for (int i = 0; BufferLen <= i; i++){
-            std::string text = StringBuffer[i];
-            int x = XBuffer[i];
-            int y = YBuffer[i];
-
-            pros::screen::print(TextSize, x, y, "%s", text.c_str());
+        for (size_t i = 0; i < StringBuffer.size(); ++i) {
+            draw_text(StringBuffer[i], XBuffer[i], YBuffer[i], OpaqueBuffer[i]);
         }
 
-        XBuffer = {};
-        YBuffer = {};
-        StringBuffer = {};
-        BufferLen = 0;
+        XBuffer.clear();
+        YBuffer.clear();
+        StringBuffer.clear();
+        OpaqueBuffer.clear();
     }
     Render = true;
 }
@@ -465,18 +394,20 @@ char* SdCard::loadfile(std::string filename, char* buffer, size_t buffer_size, s
 
     FILE* file = fopen(FilePath.c_str(), "rb");
     if (file == NULL){
-        mp_raise_OSError(5);
+        mp_raise_OSError(errno);
     }
 
     if (fseek(file, 0, SEEK_END) != 0){
+        int error = errno == 0 ? EIO : errno;
         fclose(file);
-        mp_raise_OSError(5);
+        mp_raise_OSError(error);
     }
 
     long size = ftell(file);
     if (size < 0 || fseek(file, 0, SEEK_SET) != 0){
+        int error = errno == 0 ? EIO : errno;
         fclose(file);
-        mp_raise_OSError(5);
+        mp_raise_OSError(error);
     }
 
     size_t file_size = static_cast<size_t>(size);
@@ -485,44 +416,60 @@ char* SdCard::loadfile(std::string filename, char* buffer, size_t buffer_size, s
         mp_raise_ValueError("buffer too small");
     }
 
-    char* output = (buffer == nullptr) ? new char[file_size + 1] : buffer;
+    char* output = (buffer == nullptr) ? new char[file_size == 0 ? 1 : file_size] : buffer;
     if (fread(output, 1, file_size, file) != file_size){
+        int error = errno == 0 ? EIO : errno;
         fclose(file);
         if (buffer == nullptr){
             delete[] output;
         }
-        mp_raise_OSError(5);
+        mp_raise_OSError(error);
     }
 
-    if (buffer == nullptr){
-        output[file_size] = '\0';
+    if (fclose(file) != 0){
+        int error = errno == 0 ? EIO : errno;
+        if (buffer == nullptr){
+            delete[] output;
+        }
+        mp_raise_OSError(error);
     }
-    fclose(file);
     *result_size = file_size;
     return output;
 }
 
-void SdCard::savefile(std::string filename, const char* buffer){
+void SdCard::savefile(std::string filename, const char* buffer, size_t buffer_size){
     std::string FilePath = "/usd/" + filename;
 
-    FILE* file = fopen(FilePath.c_str(), "w");
-    if (file != NULL) {
-        if (buffer != nullptr){
-            fwrite(buffer, 1, strlen(buffer), file);
-        }
+    FILE* file = fopen(FilePath.c_str(), "wb");
+    if (file == NULL) {
+        mp_raise_OSError(errno);
+    }
+
+    if (buffer_size > 0 && fwrite(buffer, 1, buffer_size, file) != buffer_size) {
+        int error = errno == 0 ? EIO : errno;
         fclose(file);
+        mp_raise_OSError(error);
+    }
+    if (fclose(file) != 0) {
+        mp_raise_OSError(errno == 0 ? EIO : errno);
     }
 }
 
-void SdCard::appendfile(std::string filename, const char* buffer){
+void SdCard::appendfile(std::string filename, const char* buffer, size_t buffer_size){
     std::string FilePath = "/usd/" + filename;
 
-    FILE* file = fopen(FilePath.c_str(), "a");
-    if (file != NULL) {
-        if (buffer != nullptr){
-            fwrite(buffer, 1, strlen(buffer), file);
-        }
+    FILE* file = fopen(FilePath.c_str(), "ab");
+    if (file == NULL) {
+        mp_raise_OSError(errno);
+    }
+
+    if (buffer_size > 0 && fwrite(buffer, 1, buffer_size, file) != buffer_size) {
+        int error = errno == 0 ? EIO : errno;
         fclose(file);
+        mp_raise_OSError(error);
+    }
+    if (fclose(file) != 0) {
+        mp_raise_OSError(errno == 0 ? EIO : errno);
     }
 }
 

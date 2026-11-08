@@ -118,8 +118,8 @@ void brain_screen_released(void* screen_ptr, c_callback_t callback, void* args);
 
 char* brain_sdcard_loadfile(void* sdcard_ptr, const char* filename, char* buffer, size_t buffer_size, size_t* result_size);
 void brain_sdcard_freefile(char* buffer);
-void brain_sdcard_savefile(void* sdcard_ptr, const char* filename, const char* buffer);
-void brain_sdcard_appendfile(void* sdcard_ptr, const char* filename, const char* buffer);
+void brain_sdcard_savefile(void* sdcard_ptr, const char* filename, const char* buffer, size_t buffer_size);
+void brain_sdcard_appendfile(void* sdcard_ptr, const char* filename, const char* buffer, size_t buffer_size);
 void brain_sdcard_draw_image_from_file(void* sdcard_ptr, const char* filename, int x, int y);
 bool brain_sdcard_is_inserted(void* sdcard_ptr);
 int brain_sdcard_filesize(void* sdcard_ptr, const char* filename);

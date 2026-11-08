@@ -431,12 +431,12 @@ void brain_sdcard_freefile(char* buffer){
     delete[] buffer;
 }
 
-void brain_sdcard_savefile(void* sdcard_ptr, const char* filename, const char* buffer){
-    static_cast<SdCard*>(sdcard_ptr) -> savefile(filename, buffer);
+void brain_sdcard_savefile(void* sdcard_ptr, const char* filename, const char* buffer, size_t buffer_size){
+    static_cast<SdCard*>(sdcard_ptr) -> savefile(filename, buffer, buffer_size);
 }
 
-void brain_sdcard_appendfile(void* sdcard_ptr, const char* filename, const char* buffer){
-    static_cast<SdCard*>(sdcard_ptr) -> appendfile(filename, buffer);
+void brain_sdcard_appendfile(void* sdcard_ptr, const char* filename, const char* buffer, size_t buffer_size){
+    static_cast<SdCard*>(sdcard_ptr) -> appendfile(filename, buffer, buffer_size);
 }
 
 void brain_sdcard_draw_image_from_file(void* sdcard_ptr, const char* filename, int x, int y){
