@@ -2,11 +2,12 @@
 #define VEX_H
 
 #ifdef __cplusplus
-extern "C"{
+extern "C"{  // Wrapper to make sure it is defined using C standerds and not C++
 #endif
 
 #include "py/runtime.h"
 #include "py/obj.h"
+#include <stddef.h>
 
 typedef void (*c_callback_t)(void* user_data);  // Used for callbacks.
 
@@ -68,7 +69,8 @@ void* vex_timer_create();
 void vex_timer_destroy(void* timer_ptr);
 void vex_timer_clear(void* timer_ptr);
 int vex_timer_time(void* timer_ptr, int units);
-void vex_timer_event(void* timer_ptr, mp_obj_t callback_func, int delay_ms);
+void vex_timer_event(void* timer_ptr, mp_obj_t callback_data, int delay_ms);
+mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data);
 
 /*DEFINE class Brain for c*/
 void* brain_create();
@@ -114,9 +116,10 @@ int brain_screen_y_position(void* screen_ptr);
 void brain_screen_pressed(void* screen_ptr, c_callback_t callback, void* args);
 void brain_screen_released(void* screen_ptr, c_callback_t callback, void* args);
 
-char* brain_sdcard_loadfile(void* sdcard_ptr, const char* filename, char* buffer);
-void brain_sdcard_savefile(void* sdcard_ptr, const char* filename, char* buffer);
-void brain_sdcard_appendfile(void* sdcard_ptr, const char* filename, char* buffer);
+char* brain_sdcard_loadfile(void* sdcard_ptr, const char* filename, char* buffer, size_t buffer_size, size_t* result_size);
+void brain_sdcard_freefile(char* buffer);
+void brain_sdcard_savefile(void* sdcard_ptr, const char* filename, const char* buffer);
+void brain_sdcard_appendfile(void* sdcard_ptr, const char* filename, const char* buffer);
 void brain_sdcard_draw_image_from_file(void* sdcard_ptr, const char* filename, int x, int y);
 bool brain_sdcard_is_inserted(void* sdcard_ptr);
 int brain_sdcard_filesize(void* sdcard_ptr, const char* filename);
@@ -165,11 +168,61 @@ void controller_axis_changed(void* axis_ptr, c_callback_t func, void *args);
 void controller_rumble_c(void* controller_ptr, const char* pattern);
 
 /*DEFINE class Inertial for C*/
-
-
+void* inertial_create(int port);
+void inertial_destroy(void* inertial_ptr);
+float inertial_heading(void* inertial_ptr, int units);
+float inertial_rotation(void* inertial_ptr, int units);
+float inertial_gyro_rate(void* inertial_ptr, int axis, int units);
+float inertial_orientation(void* inertial_ptr, int axis, int units);
+void inertial_set_heading(void* inertial_ptr, float value, int units);
+void inertial_set_rotation(void* inertial_ptr, float value, int units);
+void inertial_calibrate(void* inertial_ptr);
+void inertial_reset_heading(void* inertial_ptr);
+void inertial_reset_rotation(void* inertial_ptr);
+bool inertial_is_calibrating(void* inertial_ptr);
+void inertial_changed(void* inertial_ptr, c_callback_t callback, void* args);
+bool inertial_installed(void* inertial_ptr);
+float inertial_acceleration(void* inertial_ptr, int axis);
+void inertial_collision(void* inertial_ptr, c_callback_t callback, void* args);
+void inertial_set_turn_type(void* inertial_ptr, int turn_type);
+int inertial_get_turn_type(void* inertial_ptr);
 
 /*DEFINE class Rotation for C*/
+void* vex_rotation_create(int port, bool reversed);
+void vex_rotation_destroy(void* rotation_ptr);
+void vex_rotation_set_position(void* rotation_ptr, float value, int units);
+float vex_rotation_angle(void* rotation_ptr, int units);
+float vex_rotation_position(void* rotation_ptr, int units);
+float vex_rotation_velocity(void* rotation_ptr, int units);
+void vex_rotation_reset_position(void* rotation_ptr);
+void vex_rotation_set_reversed(void* rotation_ptr, bool value);
+void vex_rotation_changed(void* rotation_ptr, c_callback_t callback, void* args);
 
+/*DEFINE class Optical for C*/
+void* optical_create(int port);
+void optical_destroy(void* optical_ptr);
+void optical_set_light(void* optical_ptr, bool state);
+void optical_set_light_power(void* optical_ptr, int percent);
+bool optical_is_near_object(void* optical_ptr);
+int optical_color(void* optical_ptr);
+float optical_brightness(void* optical_ptr);
+float optical_hue(void* optical_ptr);
+void optical_object_detected(void* optical_ptr, c_callback_t callback, void* args);
+void optical_object_lost(void* optical_ptr, c_callback_t callback, void* args);
+
+/*DEFINE class Distance for C*/
+void* distance_create(int port);
+void distance_destroy(void* distance_ptr);
+float distance_object_distance(void* distance_ptr, int units);
+float distance_object_velocity(void* distance_ptr);
+int distance_object_size(void* distance_ptr);
+bool distance_is_object_detected(void* distance_ptr);
+void distance_changed(void* distance_ptr, c_callback_t callback, void* args);
+
+/*DEFINE class DigitalOut for C*/
+void* vex_digital_out_create(int port);
+void vex_digital_out_destroy(void* output_ptr);
+void vex_digital_out_set(void* output_ptr, bool value);
 
 
 #ifdef __cplusplus

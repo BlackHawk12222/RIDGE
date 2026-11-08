@@ -209,11 +209,11 @@ class SdCard{
         void draw_png(const std::string& filename, int x_offset, int y_offset);
     public:
 
-        char* loadfile(std::string filename, char* buffer = nullptr);
+        char* loadfile(std::string filename, char* buffer, size_t buffer_size, size_t* result_size);
 
-        void savefile(std::string filename, char* buffer = nullptr);
+        void savefile(std::string filename, const char* buffer = nullptr);
 
-        void appendfile(std::string filename, char* buffer);
+        void appendfile(std::string filename, const char* buffer);
 
         void draw_image_from_file(std::string filename, int x, int y);
 

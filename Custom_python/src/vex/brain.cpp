@@ -460,78 +460,69 @@ int Screen::y_position(){
     return status.y;
 }
 
-char* SdCard::loadfile(std::string filename, char* buffer){
+char* SdCard::loadfile(std::string filename, char* buffer, size_t buffer_size, size_t* result_size){
     std::string FilePath = "/usd/" + filename;
 
-    if (buffer == nullptr){
-        FILE* file = fopen(FilePath.c_str(), "r");
-        if (file == NULL){
-            mp_raise_OSError(5);
-        }
-
-        fseek(file, 0, SEEK_END);
-
-        long size = ftell(file);
-
-        char* NewBuffer = new char[size + 1];
-
-        NewBuffer[size] = '\0';
-
-        fread(NewBuffer, sizeof(NewBuffer), size, file);
-        fclose(file);
-
-        return NewBuffer;
-    }else{
-        FILE* file = fopen(FilePath.c_str(), "r");
-        if (file == NULL){
-            mp_raise_OSError(5);
-        }
-
-        fseek(file, 0, SEEK_END);
-
-        long size = ftell(file);
-
-        if (size >= sizeof(buffer)){
-            char* NewBuffer = new char[size + 1];
-
-            NewBuffer[size] = '\0';
-
-            fread(NewBuffer, sizeof(NewBuffer), size, file);
-            fclose(file);
-
-            return NewBuffer;
-        }else{
-            fread(buffer, sizeof(buffer), size, file);
-
-            buffer[size] = '\0';
-            fclose(file);
-
-            return buffer;
-        }
+    FILE* file = fopen(FilePath.c_str(), "rb");
+    if (file == NULL){
+        mp_raise_OSError(5);
     }
+
+    if (fseek(file, 0, SEEK_END) != 0){
+        fclose(file);
+        mp_raise_OSError(5);
+    }
+
+    long size = ftell(file);
+    if (size < 0 || fseek(file, 0, SEEK_SET) != 0){
+        fclose(file);
+        mp_raise_OSError(5);
+    }
+
+    size_t file_size = static_cast<size_t>(size);
+    if (buffer != nullptr && buffer_size < file_size){
+        fclose(file);
+        mp_raise_ValueError("buffer too small");
+    }
+
+    char* output = (buffer == nullptr) ? new char[file_size + 1] : buffer;
+    if (fread(output, 1, file_size, file) != file_size){
+        fclose(file);
+        if (buffer == nullptr){
+            delete[] output;
+        }
+        mp_raise_OSError(5);
+    }
+
+    if (buffer == nullptr){
+        output[file_size] = '\0';
+    }
+    fclose(file);
+    *result_size = file_size;
+    return output;
 }
 
-void SdCard::savefile(std::string filename, char* buffer){
+void SdCard::savefile(std::string filename, const char* buffer){
     std::string FilePath = "/usd/" + filename;
 
     FILE* file = fopen(FilePath.c_str(), "w");
     if (file != NULL) {
-        fprintf(file, buffer);
+        if (buffer != nullptr){
+            fwrite(buffer, 1, strlen(buffer), file);
+        }
         fclose(file);
-    }else{
-        
     }
 }
 
-void SdCard::appendfile(std::string filename, char* buffer){
+void SdCard::appendfile(std::string filename, const char* buffer){
     std::string FilePath = "/usd/" + filename;
 
     FILE* file = fopen(FilePath.c_str(), "a");
     if (file != NULL) {
-        fprintf(file, buffer);
+        if (buffer != nullptr){
+            fwrite(buffer, 1, strlen(buffer), file);
+        }
         fclose(file);
-    }else{
-        
     }
 }
 

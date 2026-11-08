@@ -4,7 +4,10 @@
 #include "vex/timer.hpp"
 #include "vex/controller.hpp"
 #include "vex/Inerital.hpp"
-#include "vex/Rotation.hpp"
+#include "vex/Sensors/Rotation.hpp"
+#include "vex/Sensors/Optical.hpp"
+#include "vex/Sensors/Distance.hpp"
+#include "vex/ThreeWireDevices/DigitalOut.hpp"
 
 extern "C"{
     #include "py/runtime.h"
@@ -228,13 +231,9 @@ extern "C" {
 }
 
 
-static mp_obj_t execute_scheduled_callback(mp_obj_t callback_func) {
-    mp_call_function_0(callback_func);
-    return mp_const_none;
-}
 struct TaskParams {
     int delay;
-    mp_obj_t callback;
+    mp_obj_t callback_data;
 };
 
 void timer_rtos_task(void* params) {
@@ -243,16 +242,15 @@ void timer_rtos_task(void* params) {
     pros::delay(p->delay); 
 
     // Inject the Python callback back into MicroPython's execution engine safely
-    mp_sched_schedule(MP_OBJ_FROM_PTR(execute_scheduled_callback), p->callback);
+    while (!mp_sched_schedule(MP_OBJ_FROM_PTR(mp_vex_callback_executor), p->callback_data)) {
+        pros::delay(1);
+    }
 
     delete p;
 }
 
-void vex_timer_event(void* timer_ptr, mp_obj_t callback_func, int delay_ms) {
-    mp_obj_list_append(mp_sys_path, callback_func); // Simple workaround to pin memory
-
-    // Package parameters for our tracking thread
-    TaskParams* params = new TaskParams{delay_ms, callback_func};
+void vex_timer_event(void* timer_ptr, mp_obj_t callback_data, int delay_ms) {
+    TaskParams* params = new TaskParams{delay_ms, callback_data};
 
     // Spin up an asynchronous background task on your microcontroller
     pros::Task task(timer_rtos_task, params, "PythonTimerTask");
@@ -425,36 +423,40 @@ void brain_screen_released(void* screen_ptr, c_callback_t callback, void* args) 
 }
 
 
-char* brain_sdcard_loadfile(void* brain_ptr, const char* filename, char* buffer){
-    return static_cast<Brain*>(brain_ptr) -> sdcard.loadfile(filename, buffer);
+char* brain_sdcard_loadfile(void* sdcard_ptr, const char* filename, char* buffer, size_t buffer_size, size_t* result_size){
+    return static_cast<SdCard*>(sdcard_ptr) -> loadfile(filename, buffer, buffer_size, result_size);
 }
 
-void brain_sdcard_savefile(void* brain_ptr, const char* filename, char* buffer){
-    static_cast<Brain*>(brain_ptr) -> sdcard.savefile(filename, buffer);
+void brain_sdcard_freefile(char* buffer){
+    delete[] buffer;
 }
 
-void brain_sdcard_appendfile(void* brain_ptr, const char* filename, char* buffer){
-    static_cast<Brain*>(brain_ptr) -> sdcard.appendfile(filename, buffer);
+void brain_sdcard_savefile(void* sdcard_ptr, const char* filename, const char* buffer){
+    static_cast<SdCard*>(sdcard_ptr) -> savefile(filename, buffer);
 }
 
-void brain_sdcard_draw_image_from_file(void* brain_ptr, const char* filename, int x, int y){
-    static_cast<Brain*>(brain_ptr) -> sdcard.draw_image_from_file(filename, x, y);
+void brain_sdcard_appendfile(void* sdcard_ptr, const char* filename, const char* buffer){
+    static_cast<SdCard*>(sdcard_ptr) -> appendfile(filename, buffer);
 }
 
-bool brain_sdcard_is_inserted(void* brain_ptr){
-    return static_cast<Brain*>(brain_ptr) -> sdcard.is_inserted();
+void brain_sdcard_draw_image_from_file(void* sdcard_ptr, const char* filename, int x, int y){
+    static_cast<SdCard*>(sdcard_ptr) -> draw_image_from_file(filename, x, y);
 }
 
-int brain_sdcard_filesize(void* brain_ptr, const char* filename){
-    return static_cast<Brain*>(brain_ptr) -> sdcard.filesize(filename);
+bool brain_sdcard_is_inserted(void* sdcard_ptr){
+    return static_cast<SdCard*>(sdcard_ptr) -> is_inserted();
 }
 
-int brain_sdcard_size(void* brain_ptr, const char* filename){
-    return static_cast<Brain*>(brain_ptr) -> sdcard.size(filename);
+int brain_sdcard_filesize(void* sdcard_ptr, const char* filename){
+    return static_cast<SdCard*>(sdcard_ptr) -> filesize(filename);
 }
 
-bool brain_sdcard_exists(void* brain_ptr, const char* filename){
-    return static_cast<Brain*>(brain_ptr) -> sdcard.exists(filename);
+int brain_sdcard_size(void* sdcard_ptr, const char* filename){
+    return static_cast<SdCard*>(sdcard_ptr) -> size(filename);
+}
+
+bool brain_sdcard_exists(void* sdcard_ptr, const char* filename){
+    return static_cast<SdCard*>(sdcard_ptr) -> exists(filename);
 }
 
 /*DEFINE class Controller in C*/
@@ -596,4 +598,221 @@ void controller_axis_changed(void* axis_ptr, c_callback_t func, void *args){
 
 void controller_rumble_c(void* controller_ptr, const char* pattern){
     static_cast<Controller*>(controller_ptr)->rumble(pattern);
+}
+
+/*DEFINE class Inertial for C*/
+void* inertial_create(int port){
+    return static_cast<void*>(new Inertial(static_cast<Ports>(port)));
+}
+
+void inertial_destroy(void* inertial_ptr){
+    delete static_cast<Inertial*>(inertial_ptr);
+}
+
+float inertial_heading(void* inertial_ptr, int units){
+    return static_cast<Inertial*>(inertial_ptr)->heading(static_cast<AngleUnits>(units));
+}
+
+float inertial_rotation(void* inertial_ptr, int units){
+    return static_cast<Inertial*>(inertial_ptr)->rotation(static_cast<AngleUnits>(units));
+}
+
+float inertial_gyro_rate(void* inertial_ptr, int axis, int units){
+    return static_cast<Inertial*>(inertial_ptr)->gyro_rate(static_cast<AxisType>(axis), static_cast<VelocityUnits>(units));
+}
+
+float inertial_orientation(void* inertial_ptr, int axis, int units){
+    return static_cast<Inertial*>(inertial_ptr)->orientation(static_cast<AxisType>(axis), static_cast<AngleUnits>(units));
+}
+
+void inertial_set_heading(void* inertial_ptr, float value, int units){
+    static_cast<Inertial*>(inertial_ptr)->set_heading(value, static_cast<AngleUnits>(units));
+}
+
+void inertial_set_rotation(void* inertial_ptr, float value, int units){
+    static_cast<Inertial*>(inertial_ptr)->set_rotation(value, static_cast<AngleUnits>(units));
+}
+
+void inertial_calibrate(void* inertial_ptr){
+    static_cast<Inertial*>(inertial_ptr)->calibrate();
+}
+
+void inertial_reset_heading(void* inertial_ptr){
+    static_cast<Inertial*>(inertial_ptr)->reset_heading();
+}
+
+void inertial_reset_rotation(void* inertial_ptr){
+    static_cast<Inertial*>(inertial_ptr)->reset_rotation();
+}
+
+bool inertial_is_calibrating(void* inertial_ptr){
+    return static_cast<Inertial*>(inertial_ptr)->is_calibrating();
+}
+
+void inertial_changed(void* inertial_ptr, c_callback_t callback, void* args){
+    static_cast<Inertial*>(inertial_ptr)->changed([callback, args](){
+        if (callback){
+            callback(args);
+        }
+    });
+}
+
+bool inertial_installed(void* inertial_ptr){
+    return static_cast<Inertial*>(inertial_ptr)->installed();
+}
+
+float inertial_acceleration(void* inertial_ptr, int axis){
+    return static_cast<Inertial*>(inertial_ptr)->acceleration(static_cast<AxisType>(axis));
+}
+
+void inertial_collision(void* inertial_ptr, c_callback_t callback, void* args){
+    static_cast<Inertial*>(inertial_ptr)->collision([callback, args](){
+        if (callback){
+            callback(args);
+        }
+    });
+}
+
+void inertial_set_turn_type(void* inertial_ptr, int turn_type){
+    static_cast<Inertial*>(inertial_ptr)->set_turn_type(static_cast<TurnType>(turn_type));
+}
+
+int inertial_get_turn_type(void* inertial_ptr){
+    return static_cast<int>(static_cast<Inertial*>(inertial_ptr)->get_turn_type());
+}
+
+/*DEFINE class Rotation for C*/
+void* vex_rotation_create(int port, bool reversed){
+    return static_cast<void*>(new Rotation(static_cast<Ports>(port), reversed));
+}
+
+void vex_rotation_destroy(void* rotation_ptr){
+    delete static_cast<Rotation*>(rotation_ptr);
+}
+
+void vex_rotation_set_position(void* rotation_ptr, float value, int units){
+    static_cast<Rotation*>(rotation_ptr)->set_position(value, static_cast<AngleUnits>(units));
+}
+
+float vex_rotation_angle(void* rotation_ptr, int units){
+    return static_cast<Rotation*>(rotation_ptr)->angle(static_cast<AngleUnits>(units));
+}
+
+float vex_rotation_position(void* rotation_ptr, int units){
+    return static_cast<Rotation*>(rotation_ptr)->position(static_cast<AngleUnits>(units));
+}
+
+float vex_rotation_velocity(void* rotation_ptr, int units){
+    return static_cast<Rotation*>(rotation_ptr)->velocity(static_cast<VelocityUnits>(units));
+}
+
+void vex_rotation_reset_position(void* rotation_ptr){
+    static_cast<Rotation*>(rotation_ptr)->reset_position();
+}
+
+void vex_rotation_set_reversed(void* rotation_ptr, bool value){
+    static_cast<Rotation*>(rotation_ptr)->set_reversed(value);
+}
+
+void vex_rotation_changed(void* rotation_ptr, c_callback_t callback, void* args){
+    static_cast<Rotation*>(rotation_ptr)->changed([callback, args](){
+        if (callback){
+            callback(args);
+        }
+    });
+}
+
+/*DEFINE class Optical for C*/
+void* optical_create(int port){
+    return static_cast<void*>(new Optical(static_cast<Ports>(port)));
+}
+
+void optical_destroy(void* optical_ptr){
+    delete static_cast<Optical*>(optical_ptr);
+}
+
+void optical_set_light(void* optical_ptr, bool state){
+    static_cast<Optical*>(optical_ptr)->set_light(state);
+}
+
+void optical_set_light_power(void* optical_ptr, int percent){
+    static_cast<Optical*>(optical_ptr)->set_light_power(percent);
+}
+
+bool optical_is_near_object(void* optical_ptr){
+    return static_cast<Optical*>(optical_ptr)->is_near_object();
+}
+
+int optical_color(void* optical_ptr){
+    return static_cast<int>(static_cast<Optical*>(optical_ptr)->color());
+}
+
+float optical_brightness(void* optical_ptr){
+    return static_cast<Optical*>(optical_ptr)->brightness();
+}
+
+float optical_hue(void* optical_ptr){
+    return static_cast<Optical*>(optical_ptr)->hue();
+}
+
+void optical_object_detected(void* optical_ptr, c_callback_t callback, void* args){
+    static_cast<Optical*>(optical_ptr)->object_detected([callback, args](){
+        if (callback){
+            callback(args);
+        }
+    });
+}
+
+void optical_object_lost(void* optical_ptr, c_callback_t callback, void* args){
+    static_cast<Optical*>(optical_ptr)->object_lost([callback, args](){
+        if (callback){
+            callback(args);
+        }
+    });
+}
+
+/*DEFINE class Distance for C*/
+void* distance_create(int port){
+    return static_cast<void*>(new Distance(static_cast<Ports>(port)));
+}
+
+void distance_destroy(void* distance_ptr){
+    delete static_cast<Distance*>(distance_ptr);
+}
+
+float distance_object_distance(void* distance_ptr, int units){
+    return static_cast<Distance*>(distance_ptr)->object_distance(static_cast<DistanceUnits>(units));
+}
+
+float distance_object_velocity(void* distance_ptr){
+    return static_cast<Distance*>(distance_ptr)->object_velocity();
+}
+
+int distance_object_size(void* distance_ptr){
+    return static_cast<int>(static_cast<Distance*>(distance_ptr)->object_size());
+}
+
+bool distance_is_object_detected(void* distance_ptr){
+    return static_cast<Distance*>(distance_ptr)->is_object_detected();
+}
+
+void distance_changed(void* distance_ptr, c_callback_t callback, void* args){
+    static_cast<Distance*>(distance_ptr)->changed([callback, args](){
+        if (callback){
+            callback(args);
+        }
+    });
+}
+
+/*DEFINE class DigitalOut for C*/
+void* vex_digital_out_create(int port){
+    return static_cast<void*>(new DigitalOut(port));
+}
+
+void vex_digital_out_destroy(void* output_ptr){
+    delete static_cast<DigitalOut*>(output_ptr);
+}
+
+void vex_digital_out_set(void* output_ptr, bool value){
+    static_cast<DigitalOut*>(output_ptr)->set(value);
 }

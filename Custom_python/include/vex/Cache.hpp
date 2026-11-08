@@ -1,7 +1,6 @@
 #include <vector>
 #include <optional>
 #include <cstdint>
-#include <new>
 #include "main.h"
 
 struct alignas(32) CacheEntry{

@@ -110,6 +110,8 @@ MP_QSTR_OBJECTS := $(filter $(BINDIR)/micropython/%,$(COBJ)) \
                    $(BINDIR)/mp_port.c.o \
                    $(BINDIR)/modpros.c.o
 
+$(CXXOBJ): $(MP_QSTR_HEADER) $(MP_MODULE_HEADER) $(MP_ROOT_POINTER_HEADER)
+
 quick: $(MP_QSTR_HEADER) $(MP_MODULE_HEADER) $(MP_ROOT_POINTER_HEADER)
 
 $(MP_QSTR_OBJECTS): $(MP_QSTR_HEADER) $(MP_MODULE_HEADER) $(MP_ROOT_POINTER_HEADER)
