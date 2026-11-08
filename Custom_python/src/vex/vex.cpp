@@ -2,16 +2,55 @@
 #include "vex/motors.hpp"
 #include "vex/brain.hpp"
 #include "vex/timer.hpp"
+#include "vex/Thread.hpp"
 #include "vex/controller.hpp"
 #include "vex/Inerital.hpp"
 #include "vex/Sensors/Rotation.hpp"
 #include "vex/Sensors/Optical.hpp"
 #include "vex/Sensors/Distance.hpp"
+#include "vex/Sensors/Gps.hpp"
 #include "vex/ThreeWireDevices/DigitalOut.hpp"
+#include "vex/ThreeWireDevices/ThreeWireDevice.hpp"
+#include "vex/ThreeWireDevices/Accelerometer.hpp"
+#include "vex/ThreeWireDevices/AddressableLed.hpp"
+#include "vex/ThreeWireDevices/AnalogIn.hpp"
+#include "vex/ThreeWireDevices/Bumper.hpp"
+#include "vex/ThreeWireDevices/DigitalIn.hpp"
+#include "vex/ThreeWireDevices/Encoder.hpp"
+#include "vex/ThreeWireDevices/Gyro.hpp"
+#include "vex/ThreeWireDevices/Led.hpp"
+#include "vex/ThreeWireDevices/Light.hpp"
+#include "vex/ThreeWireDevices/Limit.hpp"
+#include "vex/ThreeWireDevices/Line.hpp"
+#include "vex/ThreeWireDevices/ObjectDetector.hpp"
+#include "vex/ThreeWireDevices/Potentiometer.hpp"
+#include "vex/ThreeWireDevices/PotentiometerV2.hpp"
+#include "vex/ThreeWireDevices/Pwm.hpp"
+#include "vex/ThreeWireDevices/Sonar.hpp"
 
 extern "C"{
     #include "py/runtime.h"
     #include "py/obj.h"
+}
+
+void* vex_thread_create(c_callback_t callback, void* user_data){
+    try {
+        return new Thread(callback, user_data);
+    } catch (const std::bad_alloc&) {
+        return nullptr;
+    }
+}
+
+void vex_thread_destroy(void* thread_ptr){
+    delete static_cast<Thread*>(thread_ptr);
+}
+
+void vex_thread_stop(void* thread_ptr){
+    static_cast<Thread*>(thread_ptr)->stop();
+}
+
+bool vex_thread_is_stopped(void* thread_ptr){
+    return static_cast<Thread*>(thread_ptr)->is_stopped();
 }
 
 /* DEFINE class Motor for C */
@@ -804,6 +843,52 @@ void distance_changed(void* distance_ptr, c_callback_t callback, void* args){
     });
 }
 
+/*DEFINE class Gps for C*/
+void* vex_gps_create(int port){
+    return static_cast<void*>(new Gps(port));
+}
+
+void vex_gps_set_origin(void* gps_ptr, double x, double y, int units){
+    static_cast<Gps*>(gps_ptr)->set_origin(x, y, static_cast<DistanceUnits>(units));
+}
+
+void vex_gps_set_location(void* gps_ptr, double x, double y, int distance_units, double heading, int heading_units){
+    static_cast<Gps*>(gps_ptr)->set_location(x, y, static_cast<DistanceUnits>(distance_units),
+                                             heading, static_cast<AngleUnits>(heading_units));
+}
+
+double vex_gps_x_position(void* gps_ptr, int units){
+    return static_cast<Gps*>(gps_ptr)->x_position(static_cast<DistanceUnits>(units));
+}
+
+double vex_gps_y_position(void* gps_ptr, int units){
+    return static_cast<Gps*>(gps_ptr)->y_position(static_cast<DistanceUnits>(units));
+}
+
+double vex_gps_heading(void* gps_ptr){
+    return static_cast<Gps*>(gps_ptr)->heading();
+}
+
+double vex_gps_acceleration(void* gps_ptr, int axis){
+    return static_cast<Gps*>(gps_ptr)->acceleration(static_cast<AxisType>(axis));
+}
+
+double vex_gps_gyro_rate(void* gps_ptr, int axis, int units){
+    return static_cast<Gps*>(gps_ptr)->gyro_rate(static_cast<AxisType>(axis), static_cast<VelocityUnits>(units));
+}
+
+double vex_gps_orientation(void* gps_ptr, int axis, int units){
+    return static_cast<Gps*>(gps_ptr)->orientation(static_cast<AxisType>(axis), static_cast<AngleUnits>(units));
+}
+
+void vex_gps_changed(void* gps_ptr, c_callback_t callback, void* args){
+    static_cast<Gps*>(gps_ptr)->changed([callback, args](){
+        if (callback){
+            callback(args);
+        }
+    });
+}
+
 /*DEFINE class DigitalOut for C*/
 void* vex_digital_out_create(int port){
     return static_cast<void*>(new DigitalOut(port));
@@ -815,4 +900,138 @@ void vex_digital_out_destroy(void* output_ptr){
 
 void vex_digital_out_set(void* output_ptr, bool value){
     static_cast<DigitalOut*>(output_ptr)->set(value);
+}
+
+void* vex_three_wire_create(int kind, int port, int option){
+    switch (kind){
+        case VEX_THREE_WIRE_ANALOG_IN: return new AnalogIn(port);
+        case VEX_THREE_WIRE_DIGITAL_IN: return new DigitalIn(port);
+        case VEX_THREE_WIRE_DIGITAL_OUT: return new DigitalOut(port);
+        case VEX_THREE_WIRE_BUMPER: return new Bumper(port);
+        case VEX_THREE_WIRE_ENCODER: return new Encoder(port);
+        case VEX_THREE_WIRE_GYRO: return new Gyro(port);
+        case VEX_THREE_WIRE_LED_INDICATOR: return new Led(port);
+        case VEX_THREE_WIRE_LIGHT: return new Light(port);
+        case VEX_THREE_WIRE_LIMIT: return new Limit(port);
+        case VEX_THREE_WIRE_LINE: return new Line(port);
+        case VEX_THREE_WIRE_OBJECT_SENSOR: return new ObjectDetector(port, option != 0);
+        case VEX_THREE_WIRE_POTENTIOMETER: return option ? static_cast<void*>(new PotentiometerV2(port)) : static_cast<void*>(new Potentiometer(port));
+        case VEX_THREE_WIRE_PWM: return new Pwm(port);
+        case VEX_THREE_WIRE_RANGE_FINDER: return new Sonar(port);
+        case VEX_THREE_WIRE_ACCELEROMETER: return new Accelerometer(port);
+        case VEX_THREE_WIRE_ADDRESSABLE_LED: return new AddressableLed(port);
+        default: return nullptr;
+    }
+}
+
+void vex_three_wire_destroy(void* device_ptr){
+    delete static_cast<ThreeWireDevice*>(device_ptr);
+}
+
+int vex_three_wire_value(void* device_ptr, int units){
+    return static_cast<ThreeWireDevice*>(device_ptr)->value(units);
+}
+
+float vex_three_wire_pwm_value(void* device_ptr){
+    return static_cast<ThreeWireDevice*>(device_ptr)->pwm_value();
+}
+
+bool vex_three_wire_pressing(void* device_ptr){
+    return static_cast<ThreeWireDevice*>(device_ptr)->pressing();
+}
+
+float vex_three_wire_acceleration(void* device_ptr){
+    return static_cast<ThreeWireDevice*>(device_ptr)->acceleration();
+}
+
+float vex_three_wire_brightness(void* device_ptr){
+    return static_cast<ThreeWireDevice*>(device_ptr)->brightness();
+}
+
+int vex_three_wire_reflectivity(void* device_ptr){
+    return static_cast<ThreeWireDevice*>(device_ptr)->reflectivity();
+}
+
+bool vex_three_wire_is_object_detected(void* device_ptr){
+    return static_cast<ThreeWireDevice*>(device_ptr)->is_object_detected();
+}
+
+void vex_three_wire_set_threshold(void* device_ptr, int threshold){
+    static_cast<ThreeWireDevice*>(device_ptr)->set_threshold(threshold);
+}
+
+float vex_three_wire_angle(void* device_ptr, int units){
+    return static_cast<ThreeWireDevice*>(device_ptr)->angle(units);
+}
+
+float vex_three_wire_heading(void* device_ptr, int units){
+    return static_cast<ThreeWireDevice*>(device_ptr)->heading(units);
+}
+
+float vex_three_wire_rotation(void* device_ptr, int units){
+    return static_cast<ThreeWireDevice*>(device_ptr)->rotation(units);
+}
+
+void vex_three_wire_set_heading(void* device_ptr, float value, int units){
+    static_cast<ThreeWireDevice*>(device_ptr)->set_heading(value, units);
+}
+
+void vex_three_wire_set_rotation(void* device_ptr, float value, int units){
+    static_cast<ThreeWireDevice*>(device_ptr)->set_rotation(value, units);
+}
+
+void vex_three_wire_calibrate(void* device_ptr){
+    static_cast<ThreeWireDevice*>(device_ptr)->calibrate();
+}
+
+void vex_three_wire_set_position(void* device_ptr, float value, int units){
+    static_cast<ThreeWireDevice*>(device_ptr)->set_position(value, units);
+}
+
+void vex_three_wire_reset_position(void* device_ptr){
+    static_cast<ThreeWireDevice*>(device_ptr)->reset_position();
+}
+
+float vex_three_wire_position(void* device_ptr, int units){
+    return static_cast<ThreeWireDevice*>(device_ptr)->position(units);
+}
+
+float vex_three_wire_velocity(void* device_ptr, int units){
+    return static_cast<ThreeWireDevice*>(device_ptr)->velocity(units);
+}
+
+bool vex_three_wire_found_object(void* device_ptr){
+    return static_cast<ThreeWireDevice*>(device_ptr)->found_object();
+}
+
+float vex_three_wire_distance(void* device_ptr, int units){
+    return static_cast<ThreeWireDevice*>(device_ptr)->distance(units);
+}
+
+void vex_three_wire_set(void* device_ptr, bool state){
+    static_cast<ThreeWireDevice*>(device_ptr)->set(state);
+}
+
+void vex_three_wire_set_state(void* device_ptr, float value){
+    static_cast<ThreeWireDevice*>(device_ptr)->set_state(value);
+}
+
+void vex_three_wire_on(void* device_ptr){
+    static_cast<ThreeWireDevice*>(device_ptr)->on();
+}
+
+void vex_three_wire_off(void* device_ptr){
+    static_cast<ThreeWireDevice*>(device_ptr)->off();
+}
+
+int vex_three_wire_set_colors(void* device_ptr, const uint32_t* colors, size_t count, size_t offset){
+    return static_cast<ThreeWireDevice*>(device_ptr)->set_colors(colors, count, offset);
+}
+
+int vex_three_wire_clear(void* device_ptr){
+    return static_cast<ThreeWireDevice*>(device_ptr)->clear();
+}
+
+void vex_three_wire_watch(void* device_ptr, int event, c_callback_t callback, void* user_data){
+    static_cast<ThreeWireDevice*>(device_ptr)->watch(event, callback, user_data);
 }

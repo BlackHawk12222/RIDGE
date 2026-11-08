@@ -1,16 +1,11 @@
 #ifndef DIGITAL_OUT_HPP
 #define DIGITAL_OUT_HPP
 
-#include "pros/adi.hpp"
+#include "vex/ThreeWireDevices/ThreeWireDevice.hpp"
 
-class DigitalOut{
-    private:
-        pros::adi::DigitalOut* Output = nullptr;
-
-    public:
-        explicit DigitalOut(int port);
-
-        void set(bool value);
+class DigitalOut : public ThreeWireDevice {
+public:
+    explicit DigitalOut(int port);
 };
 
 #endif // DIGITAL_OUT_HPP

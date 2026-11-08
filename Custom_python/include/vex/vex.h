@@ -72,6 +72,12 @@ int vex_timer_time(void* timer_ptr, int units);
 void vex_timer_event(void* timer_ptr, mp_obj_t callback_data, int delay_ms);
 mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data);
 
+/* DEFINE class Thread for C */
+void* vex_thread_create(c_callback_t callback, void* user_data);
+void vex_thread_destroy(void* thread_ptr);
+void vex_thread_stop(void* thread_ptr);
+bool vex_thread_is_stopped(void* thread_ptr);
+
 /*DEFINE class Brain for c*/
 void* brain_create();
 void brain_destroy(void* brain_ptr);
@@ -219,10 +225,71 @@ int distance_object_size(void* distance_ptr);
 bool distance_is_object_detected(void* distance_ptr);
 void distance_changed(void* distance_ptr, c_callback_t callback, void* args);
 
+/*DEFINE class Gps for C*/
+void* vex_gps_create(int port);
+void vex_gps_set_origin(void* gps_ptr, double x, double y, int units);
+void vex_gps_set_location(void* gps_ptr, double x, double y, int distance_units, double heading, int heading_units);
+double vex_gps_x_position(void* gps_ptr, int units);
+double vex_gps_y_position(void* gps_ptr, int units);
+double vex_gps_heading(void* gps_ptr);
+double vex_gps_acceleration(void* gps_ptr, int axis);
+double vex_gps_gyro_rate(void* gps_ptr, int axis, int units);
+double vex_gps_orientation(void* gps_ptr, int axis, int units);
+void vex_gps_changed(void* gps_ptr, c_callback_t callback, void* args);
+
 /*DEFINE class DigitalOut for C*/
 void* vex_digital_out_create(int port);
 void vex_digital_out_destroy(void* output_ptr);
 void vex_digital_out_set(void* output_ptr, bool value);
+
+enum vex_three_wire_kind {
+    VEX_THREE_WIRE_ANALOG_IN,
+    VEX_THREE_WIRE_DIGITAL_IN,
+    VEX_THREE_WIRE_DIGITAL_OUT,
+    VEX_THREE_WIRE_BUMPER,
+    VEX_THREE_WIRE_ENCODER,
+    VEX_THREE_WIRE_GYRO,
+    VEX_THREE_WIRE_LED_INDICATOR,
+    VEX_THREE_WIRE_LIGHT,
+    VEX_THREE_WIRE_LIMIT,
+    VEX_THREE_WIRE_LINE,
+    VEX_THREE_WIRE_OBJECT_SENSOR,
+    VEX_THREE_WIRE_POTENTIOMETER,
+    VEX_THREE_WIRE_PWM,
+    VEX_THREE_WIRE_RANGE_FINDER,
+    VEX_THREE_WIRE_ACCELEROMETER,
+    VEX_THREE_WIRE_ADDRESSABLE_LED
+};
+
+void* vex_three_wire_create(int kind, int port, int option);
+void vex_three_wire_destroy(void* device_ptr);
+int vex_three_wire_value(void* device_ptr, int units);
+float vex_three_wire_pwm_value(void* device_ptr);
+bool vex_three_wire_pressing(void* device_ptr);
+float vex_three_wire_acceleration(void* device_ptr);
+float vex_three_wire_brightness(void* device_ptr);
+int vex_three_wire_reflectivity(void* device_ptr);
+bool vex_three_wire_is_object_detected(void* device_ptr);
+void vex_three_wire_set_threshold(void* device_ptr, int threshold);
+float vex_three_wire_angle(void* device_ptr, int units);
+float vex_three_wire_heading(void* device_ptr, int units);
+float vex_three_wire_rotation(void* device_ptr, int units);
+void vex_three_wire_set_heading(void* device_ptr, float value, int units);
+void vex_three_wire_set_rotation(void* device_ptr, float value, int units);
+void vex_three_wire_calibrate(void* device_ptr);
+void vex_three_wire_set_position(void* device_ptr, float value, int units);
+void vex_three_wire_reset_position(void* device_ptr);
+float vex_three_wire_position(void* device_ptr, int units);
+float vex_three_wire_velocity(void* device_ptr, int units);
+bool vex_three_wire_found_object(void* device_ptr);
+float vex_three_wire_distance(void* device_ptr, int units);
+void vex_three_wire_set(void* device_ptr, bool state);
+void vex_three_wire_set_state(void* device_ptr, float value);
+void vex_three_wire_on(void* device_ptr);
+void vex_three_wire_off(void* device_ptr);
+int vex_three_wire_set_colors(void* device_ptr, const uint32_t* colors, size_t count, size_t offset);
+int vex_three_wire_clear(void* device_ptr);
+void vex_three_wire_watch(void* device_ptr, int event, c_callback_t callback, void* user_data);
 
 
 #ifdef __cplusplus

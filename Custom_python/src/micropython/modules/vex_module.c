@@ -6,12 +6,23 @@
 
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_callback_roots);
 
+typedef struct _mp_vex_thread_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_vex_thread_obj_t;
+
 mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data) {
     size_t count;
     mp_obj_t *items;
     mp_obj_get_array(callback_data, &count, &items);
     if (mp_obj_is_true(items[3])) {
         mp_obj_list_remove(MP_STATE_VM(vex_callback_roots), callback_data);
+    }
+    if (count > 4) {
+        mp_vex_thread_obj_t *thread = MP_OBJ_TO_PTR(items[4]);
+        if (thread->cpp_handle == NULL || vex_thread_is_stopped(thread->cpp_handle)) {
+            return mp_const_none;
+        }
     }
     if (mp_obj_is_true(items[2])) {
         return mp_call_function_0(items[0]);
@@ -70,10 +81,20 @@ typedef struct _mp_distance_obj_t{
     void *cpp_handle;
 } mp_distance_obj_t;
 
+typedef struct _mp_gps_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_gps_obj_t;
+
 typedef struct _mp_digital_out_obj_t{
     mp_obj_base_t base;
     void *cpp_handle;
 } mp_digital_out_obj_t;
+
+typedef struct _mp_three_wire_device_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_three_wire_device_obj_t;
 
 typedef struct _mp_three_wire_port_obj_t{
     mp_obj_base_t base;
@@ -163,6 +184,22 @@ extern const mp_obj_type_t mp_inertial_type;
 extern const mp_obj_type_t mp_optical_type;
 extern const mp_obj_type_t mp_distance_type;
 extern const mp_obj_type_t mp_digital_out_type;
+extern const mp_obj_type_t mp_analog_in_type;
+extern const mp_obj_type_t mp_bumper_type;
+extern const mp_obj_type_t mp_digital_in_type;
+extern const mp_obj_type_t mp_encoder_type;
+extern const mp_obj_type_t mp_gyro_type;
+extern const mp_obj_type_t mp_led_type;
+extern const mp_obj_type_t mp_light_type;
+extern const mp_obj_type_t mp_limit_type;
+extern const mp_obj_type_t mp_line_type;
+extern const mp_obj_type_t mp_object_sensor_type;
+extern const mp_obj_type_t mp_potentiometer_type;
+extern const mp_obj_type_t mp_potentiometer_v2_type;
+extern const mp_obj_type_t mp_pwm_type;
+extern const mp_obj_type_t mp_sonar_type;
+extern const mp_obj_type_t mp_accelerometer_type;
+extern const mp_obj_type_t mp_addressable_led_type;
 extern const mp_obj_type_t mp_three_wire_port_type;
 extern const mp_obj_type_t mp_three_wire_ports_type;
 extern const mp_obj_type_t mp_timer_type;
@@ -791,6 +828,67 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_TYPE_FLAG_NONE,
     make_new, mp_timer_make_new,
     locals_dict, &mp_timer_locals_dict
+);
+
+static mp_obj_t mp_vex_thread_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 1, 1, false);
+    if (!mp_obj_is_callable(args[0])) {
+        mp_raise_TypeError("thread callback must be callable");
+    }
+
+    mp_vex_thread_obj_t *self = mp_obj_malloc_with_finaliser(mp_vex_thread_obj_t, type);
+    self->cpp_handle = NULL;
+    mp_obj_t callback_items[] = {
+        args[0],
+        mp_const_none,
+        mp_const_true,
+        mp_const_true,
+        MP_OBJ_FROM_PTR(self),
+    };
+    mp_obj_t callback_data = mp_obj_new_list(5, callback_items);
+    if (MP_STATE_VM(vex_callback_roots) == MP_OBJ_NULL) {
+        MP_STATE_VM(vex_callback_roots) = mp_obj_new_list(0, NULL);
+    }
+    mp_obj_list_append(MP_STATE_VM(vex_callback_roots), callback_data);
+    self->cpp_handle = vex_thread_create(mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
+    if (self->cpp_handle == NULL) {
+        mp_obj_list_remove(MP_STATE_VM(vex_callback_roots), callback_data);
+        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("could not create thread"));
+    }
+    return MP_OBJ_FROM_PTR(self);
+}
+
+static mp_obj_t mp_vex_thread_stop(mp_obj_t self_ptr) {
+    mp_vex_thread_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    if (self->cpp_handle != NULL) {
+        vex_thread_stop(self->cpp_handle);
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_thread_stop_obj, mp_vex_thread_stop);
+
+static mp_obj_t mp_vex_thread_del(mp_obj_t self_ptr) {
+    mp_vex_thread_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    if (self->cpp_handle != NULL) {
+        vex_thread_destroy(self->cpp_handle);
+        self->cpp_handle = NULL;
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_thread_del_obj, mp_vex_thread_del);
+
+static const mp_rom_map_elem_t mp_vex_thread_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_stop), MP_ROM_PTR(&mp_vex_thread_stop_obj) },
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&mp_vex_thread_del_obj) },
+};
+static MP_DEFINE_CONST_DICT(mp_vex_thread_locals_dict, mp_vex_thread_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_vex_thread_type,
+    MP_QSTR_Thread,
+    MP_TYPE_FLAG_NONE,
+    make_new, mp_vex_thread_make_new,
+    locals_dict, &mp_vex_thread_locals_dict
 );
 
 /* Defining class brain.battery for micropython module. */
@@ -1463,7 +1561,10 @@ enum {
     MP_VEX_RIGHT = 58,
     MP_VEX_LEFT = 59,
     MP_VEX_MM = 40,
-    MP_VEX_INCHES = 41
+    MP_VEX_INCHES = 41,
+    MP_VEX_ANALOG_EIGHTBIT = 42,
+    MP_VEX_ANALOG_TENBIT = 43,
+    MP_VEX_ANALOG_TWELVEBIT = 44
 };
 
 static void mp_three_wire_ports_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest){
@@ -1529,6 +1630,402 @@ MP_DEFINE_CONST_OBJ_TYPE(
     make_new, mp_digital_out_make_new,
     locals_dict, &mp_digital_out_locals_dict
 );
+
+static void mp_vex_check_angle_units(int units);
+static void mp_vex_check_velocity_units(int units, bool allow_percent);
+
+static mp_obj_t mp_three_wire_make_new_kind(const mp_obj_type_t *type, size_t n_args, size_t n_kw,
+                                             const mp_obj_t *args, int kind, int extra, int option){
+    mp_arg_check_num(n_args, n_kw, 1 + extra, 1 + extra, false);
+    if (mp_obj_get_type(args[0]) != &mp_three_wire_port_type){
+        mp_raise_TypeError("port must be a Brain three_wire_port");
+    }
+    mp_three_wire_port_obj_t *port = MP_OBJ_TO_PTR(args[0]);
+    mp_three_wire_device_obj_t *self = mp_obj_malloc(mp_three_wire_device_obj_t, type);
+    int config = option;
+    if (extra){
+        config = mp_obj_get_int(args[1]);
+    }
+    self->cpp_handle = vex_three_wire_create(kind, port->port, config);
+    return MP_OBJ_FROM_PTR(self);
+}
+
+#define MP_THREE_WIRE_MAKE_NEW(name, kind, extra, option) \
+static mp_obj_t name(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args){ \
+    return mp_three_wire_make_new_kind(type, n_args, n_kw, args, kind, extra, option); \
+}
+
+MP_THREE_WIRE_MAKE_NEW(mp_analog_in_make_new, VEX_THREE_WIRE_ANALOG_IN, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_bumper_make_new, VEX_THREE_WIRE_BUMPER, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_digital_in_make_new, VEX_THREE_WIRE_DIGITAL_IN, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_encoder_make_new, VEX_THREE_WIRE_ENCODER, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_gyro_make_new, VEX_THREE_WIRE_GYRO, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_led_make_new, VEX_THREE_WIRE_LED_INDICATOR, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_light_make_new, VEX_THREE_WIRE_LIGHT, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_limit_make_new, VEX_THREE_WIRE_LIMIT, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_line_make_new, VEX_THREE_WIRE_LINE, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_potentiometer_make_new, VEX_THREE_WIRE_POTENTIOMETER, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_potentiometer_v2_make_new, VEX_THREE_WIRE_POTENTIOMETER, 0, 1)
+MP_THREE_WIRE_MAKE_NEW(mp_pwm_make_new, VEX_THREE_WIRE_PWM, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_sonar_make_new, VEX_THREE_WIRE_RANGE_FINDER, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_accelerometer_make_new, VEX_THREE_WIRE_ACCELEROMETER, 0, 0)
+MP_THREE_WIRE_MAKE_NEW(mp_addressable_led_make_new, VEX_THREE_WIRE_ADDRESSABLE_LED, 0, 0)
+
+static mp_obj_t mp_object_sensor_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args){
+    mp_arg_check_num(n_args, n_kw, 1, 2, false);
+    if (mp_obj_get_type(args[0]) != &mp_three_wire_port_type){
+        mp_raise_TypeError("port must be a Brain three_wire_port");
+    }
+    mp_three_wire_port_obj_t *port = MP_OBJ_TO_PTR(args[0]);
+    mp_three_wire_device_obj_t *self = mp_obj_malloc(mp_three_wire_device_obj_t, type);
+    self->cpp_handle = vex_three_wire_create(VEX_THREE_WIRE_OBJECT_SENSOR, port->port,
+                                              n_args > 1 && mp_obj_is_true(args[1]));
+    return MP_OBJ_FROM_PTR(self);
+}
+
+static mp_obj_t mp_three_wire_value(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_ANALOG_TWELVEBIT;
+    if (units != MP_VEX_PERCENT && units != MP_VEX_ANALOG_EIGHTBIT &&
+        units != MP_VEX_ANALOG_TENBIT && units != MP_VEX_ANALOG_TWELVEBIT){
+        mp_raise_ValueError("invalid analog units");
+    }
+    return mp_obj_new_int(vex_three_wire_value(self->cpp_handle, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_value_obj, 1, 2, mp_three_wire_value);
+
+static mp_obj_t mp_three_wire_digital_value(mp_obj_t self_ptr){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_int(vex_three_wire_value(self->cpp_handle, MP_VEX_ANALOG_TWELVEBIT));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_digital_value_obj, mp_three_wire_digital_value);
+
+static mp_obj_t mp_three_wire_pwm_value(mp_obj_t self_ptr){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_float(vex_three_wire_pwm_value(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_pwm_value_obj, mp_three_wire_pwm_value);
+
+static mp_obj_t mp_three_wire_watch(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t callback_args, int event, bool args_provided){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_obj_t callback_data = mp_vex_callback_data(callback, callback_args, !args_provided, false);
+    vex_three_wire_watch(self->cpp_handle, event, mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
+    return mp_const_none;
+}
+
+#define MP_THREE_WIRE_CALLBACK(name, event) \
+static mp_obj_t name(size_t n_args, const mp_obj_t *args){ \
+    return mp_three_wire_watch(args[0], args[1], n_args > 2 ? args[2] : mp_const_none, event, n_args > 2); \
+} \
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(name##_obj, 2, 3, name);
+
+MP_THREE_WIRE_CALLBACK(mp_three_wire_changed, 0)
+MP_THREE_WIRE_CALLBACK(mp_three_wire_high, 1)
+MP_THREE_WIRE_CALLBACK(mp_three_wire_low, 2)
+MP_THREE_WIRE_CALLBACK(mp_three_wire_pressed, 3)
+MP_THREE_WIRE_CALLBACK(mp_three_wire_released, 4)
+MP_THREE_WIRE_CALLBACK(mp_three_wire_light_changed, 5)
+MP_THREE_WIRE_CALLBACK(mp_three_wire_pot_changed, 6)
+MP_THREE_WIRE_CALLBACK(mp_three_wire_object_detected, 7)
+MP_THREE_WIRE_CALLBACK(mp_three_wire_object_lost, 8)
+MP_THREE_WIRE_CALLBACK(mp_three_wire_object_changed, 9)
+MP_THREE_WIRE_CALLBACK(mp_three_wire_accelerometer_changed, 10)
+
+static mp_obj_t mp_three_wire_pressing(mp_obj_t self_ptr){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_bool(vex_three_wire_pressing(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_pressing_obj, mp_three_wire_pressing);
+
+static mp_obj_t mp_three_wire_acceleration(mp_obj_t self_ptr){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_float(vex_three_wire_acceleration(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_acceleration_obj, mp_three_wire_acceleration);
+
+static mp_obj_t mp_three_wire_brightness(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    if (n_args > 1 && mp_obj_get_int(args[1]) != MP_VEX_PERCENT){
+        mp_raise_ValueError("units must be PERCENT");
+    }
+    return mp_obj_new_float(vex_three_wire_brightness(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_brightness_obj, 1, 2, mp_three_wire_brightness);
+
+static mp_obj_t mp_three_wire_reflectivity(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    if (n_args > 1 && mp_obj_get_int(args[1]) != MP_VEX_PERCENT){
+        mp_raise_ValueError("units must be PERCENT");
+    }
+    return mp_obj_new_int(vex_three_wire_reflectivity(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_reflectivity_obj, 1, 2, mp_three_wire_reflectivity);
+
+static mp_obj_t mp_three_wire_object_reflectivity(mp_obj_t self_ptr){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_int(vex_three_wire_reflectivity(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_object_reflectivity_obj, mp_three_wire_object_reflectivity);
+
+static mp_obj_t mp_three_wire_is_object_detected(mp_obj_t self_ptr){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_bool(vex_three_wire_is_object_detected(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_is_object_detected_obj, mp_three_wire_is_object_detected);
+
+static mp_obj_t mp_three_wire_set_threshold(mp_obj_t self_ptr, mp_obj_t value_obj){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    int threshold = mp_obj_get_int(value_obj);
+    if (threshold < 0 || threshold > 100){
+        mp_raise_ValueError("threshold must be from 0 to 100");
+    }
+    vex_three_wire_set_threshold(self->cpp_handle, threshold);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_three_wire_set_threshold_obj, mp_three_wire_set_threshold);
+
+static mp_obj_t mp_three_wire_angle(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
+    if (units != MP_VEX_DEGREES && units != MP_VEX_PERCENT){
+        mp_raise_ValueError("units must be DEGREES or PERCENT");
+    }
+    return mp_obj_new_float(vex_three_wire_angle(self->cpp_handle, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_angle_obj, 1, 2, mp_three_wire_angle);
+
+static mp_obj_t mp_three_wire_heading(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
+    if (units != MP_VEX_DEGREES) mp_raise_ValueError("units must be DEGREES");
+    return mp_obj_new_float(vex_three_wire_heading(self->cpp_handle, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_heading_obj, 1, 2, mp_three_wire_heading);
+
+static mp_obj_t mp_three_wire_rotation(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
+    if (units != MP_VEX_DEGREES) mp_raise_ValueError("units must be DEGREES");
+    return mp_obj_new_float(vex_three_wire_rotation(self->cpp_handle, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_rotation_obj, 1, 2, mp_three_wire_rotation);
+
+static mp_obj_t mp_three_wire_set_heading(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    float value = mp_obj_get_float(args[1]);
+    int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
+    if (units != MP_VEX_DEGREES) mp_raise_ValueError("units must be DEGREES");
+    vex_three_wire_set_heading(self->cpp_handle, value, units);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_set_heading_obj, 2, 3, mp_three_wire_set_heading);
+
+static mp_obj_t mp_three_wire_set_rotation(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    float value = mp_obj_get_float(args[1]);
+    int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
+    if (units != MP_VEX_DEGREES) mp_raise_ValueError("units must be DEGREES");
+    vex_three_wire_set_rotation(self->cpp_handle, value, units);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_set_rotation_obj, 2, 3, mp_three_wire_set_rotation);
+
+static mp_obj_t mp_three_wire_calibrate(mp_obj_t self_ptr){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    vex_three_wire_calibrate(self->cpp_handle);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_calibrate_obj, mp_three_wire_calibrate);
+
+static mp_obj_t mp_three_wire_set_position(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    float value = mp_obj_get_float(args[1]);
+    int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
+    mp_vex_check_angle_units(units);
+    vex_three_wire_set_position(self->cpp_handle, value, units);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_set_position_obj, 2, 3, mp_three_wire_set_position);
+
+static mp_obj_t mp_three_wire_reset_position(mp_obj_t self_ptr){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    vex_three_wire_reset_position(self->cpp_handle);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_reset_position_obj, mp_three_wire_reset_position);
+
+static mp_obj_t mp_three_wire_position(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
+    mp_vex_check_angle_units(units);
+    return mp_obj_new_float(vex_three_wire_position(self->cpp_handle, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_position_obj, 1, 2, mp_three_wire_position);
+
+static mp_obj_t mp_three_wire_velocity(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_RPM;
+    mp_vex_check_velocity_units(units, false);
+    return mp_obj_new_float(vex_three_wire_velocity(self->cpp_handle, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_velocity_obj, 1, 2, mp_three_wire_velocity);
+
+static mp_obj_t mp_three_wire_found_object(mp_obj_t self_ptr){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_bool(vex_three_wire_found_object(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_found_object_obj, mp_three_wire_found_object);
+
+static mp_obj_t mp_three_wire_distance(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_arg_check_num(n_args, 0, 2, 2, false);
+    int units = mp_obj_get_int(args[1]);
+    if (units != MP_VEX_MM && units != MP_VEX_INCHES){
+        mp_raise_ValueError("units must be MM or INCHES");
+    }
+    return mp_obj_new_float(vex_three_wire_distance(self->cpp_handle, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_distance_obj, 2, 2, mp_three_wire_distance);
+
+static mp_obj_t mp_three_wire_set(mp_obj_t self_ptr, mp_obj_t value_obj){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    vex_three_wire_set(self->cpp_handle, mp_obj_is_true(value_obj));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_three_wire_set_obj, mp_three_wire_set);
+
+static mp_obj_t mp_three_wire_set_state(mp_obj_t self_ptr, mp_obj_t value_obj){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    float value = mp_obj_get_float(value_obj);
+    if (value < -100.0f || value > 100.0f || value != value){
+        mp_raise_ValueError("PWM value must be from -100 to 100");
+    }
+    vex_three_wire_set_state(self->cpp_handle, value);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_three_wire_set_state_obj, mp_three_wire_set_state);
+
+static mp_obj_t mp_three_wire_on(mp_obj_t self_ptr){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    vex_three_wire_on(self->cpp_handle);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_on_obj, mp_three_wire_on);
+
+static mp_obj_t mp_three_wire_off(mp_obj_t self_ptr){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    vex_three_wire_off(self->cpp_handle);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_off_obj, mp_three_wire_off);
+
+static mp_obj_t mp_three_wire_set_colors(size_t n_args, const mp_obj_t *args){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    size_t count;
+    mp_obj_t *items;
+    mp_obj_get_array(args[1], &count, &items);
+    mp_int_t offset_arg = n_args > 2 ? mp_obj_get_int(args[2]) : 0;
+    if (offset_arg < 0){
+        mp_raise_ValueError("offset must be non-negative");
+    }
+    const size_t offset = offset_arg;
+    uint32_t *colors = m_new(uint32_t, count);
+    for (size_t i = 0; i < count; ++i){
+        if (mp_obj_get_type(items[i]) == &mp_color_type){
+            colors[i] = ((mp_color_obj_t *)MP_OBJ_TO_PTR(items[i]))->value;
+        } else {
+            colors[i] = mp_obj_get_int(items[i]);
+        }
+    }
+    vex_three_wire_set_colors(self->cpp_handle, colors, count, offset);
+    m_del(uint32_t, colors, count);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_set_colors_obj, 2, 3, mp_three_wire_set_colors);
+
+static mp_obj_t mp_three_wire_clear(mp_obj_t self_ptr){
+    mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    vex_three_wire_clear(self->cpp_handle);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_clear_obj, mp_three_wire_clear);
+
+#define MP_THREE_WIRE_DICT(name, ...) \
+static const mp_rom_map_elem_t name##_table[] = { __VA_ARGS__ }; \
+static MP_DEFINE_CONST_DICT(name, name##_table)
+
+MP_THREE_WIRE_DICT(mp_analog_in_locals,
+    { MP_ROM_QSTR(MP_QSTR_value), MP_ROM_PTR(&mp_three_wire_value_obj) },
+    { MP_ROM_QSTR(MP_QSTR_changed), MP_ROM_PTR(&mp_three_wire_changed_obj) });
+MP_THREE_WIRE_DICT(mp_digital_in_locals,
+    { MP_ROM_QSTR(MP_QSTR_value), MP_ROM_PTR(&mp_three_wire_digital_value_obj) },
+    { MP_ROM_QSTR(MP_QSTR_high), MP_ROM_PTR(&mp_three_wire_high_obj) },
+    { MP_ROM_QSTR(MP_QSTR_low), MP_ROM_PTR(&mp_three_wire_low_obj) });
+MP_THREE_WIRE_DICT(mp_switch_locals,
+    { MP_ROM_QSTR(MP_QSTR_pressing), MP_ROM_PTR(&mp_three_wire_pressing_obj) },
+    { MP_ROM_QSTR(MP_QSTR_pressed), MP_ROM_PTR(&mp_three_wire_pressed_obj) },
+    { MP_ROM_QSTR(MP_QSTR_released), MP_ROM_PTR(&mp_three_wire_released_obj) });
+MP_THREE_WIRE_DICT(mp_encoder_locals,
+    { MP_ROM_QSTR(MP_QSTR_set_position), MP_ROM_PTR(&mp_three_wire_set_position_obj) },
+    { MP_ROM_QSTR(MP_QSTR_reset_position), MP_ROM_PTR(&mp_three_wire_reset_position_obj) },
+    { MP_ROM_QSTR(MP_QSTR_position), MP_ROM_PTR(&mp_three_wire_position_obj) },
+    { MP_ROM_QSTR(MP_QSTR_velocity), MP_ROM_PTR(&mp_three_wire_velocity_obj) });
+MP_THREE_WIRE_DICT(mp_gyro_locals,
+    { MP_ROM_QSTR(MP_QSTR_calibrate), MP_ROM_PTR(&mp_three_wire_calibrate_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_heading), MP_ROM_PTR(&mp_three_wire_set_heading_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_rotation), MP_ROM_PTR(&mp_three_wire_set_rotation_obj) },
+    { MP_ROM_QSTR(MP_QSTR_heading), MP_ROM_PTR(&mp_three_wire_heading_obj) },
+    { MP_ROM_QSTR(MP_QSTR_rotation), MP_ROM_PTR(&mp_three_wire_rotation_obj) });
+MP_THREE_WIRE_DICT(mp_led_locals,
+    { MP_ROM_QSTR(MP_QSTR_on), MP_ROM_PTR(&mp_three_wire_on_obj) },
+    { MP_ROM_QSTR(MP_QSTR_off), MP_ROM_PTR(&mp_three_wire_off_obj) });
+MP_THREE_WIRE_DICT(mp_light_locals,
+    { MP_ROM_QSTR(MP_QSTR_brightness), MP_ROM_PTR(&mp_three_wire_brightness_obj) },
+    { MP_ROM_QSTR(MP_QSTR_changed), MP_ROM_PTR(&mp_three_wire_light_changed_obj) });
+MP_THREE_WIRE_DICT(mp_line_locals, { MP_ROM_QSTR(MP_QSTR_reflectivity), MP_ROM_PTR(&mp_three_wire_reflectivity_obj) });
+MP_THREE_WIRE_DICT(mp_object_sensor_locals,
+    { MP_ROM_QSTR(MP_QSTR_reflectivity), MP_ROM_PTR(&mp_three_wire_object_reflectivity_obj) },
+    { MP_ROM_QSTR(MP_QSTR_is_object_detected), MP_ROM_PTR(&mp_three_wire_is_object_detected_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_threshold), MP_ROM_PTR(&mp_three_wire_set_threshold_obj) },
+    { MP_ROM_QSTR(MP_QSTR_object_detected), MP_ROM_PTR(&mp_three_wire_object_detected_obj) },
+    { MP_ROM_QSTR(MP_QSTR_object_lost), MP_ROM_PTR(&mp_three_wire_object_lost_obj) },
+    { MP_ROM_QSTR(MP_QSTR_changed), MP_ROM_PTR(&mp_three_wire_object_changed_obj) });
+MP_THREE_WIRE_DICT(mp_potentiometer_locals,
+    { MP_ROM_QSTR(MP_QSTR_angle), MP_ROM_PTR(&mp_three_wire_angle_obj) },
+    { MP_ROM_QSTR(MP_QSTR_changed), MP_ROM_PTR(&mp_three_wire_pot_changed_obj) });
+MP_THREE_WIRE_DICT(mp_pwm_locals,
+    { MP_ROM_QSTR(MP_QSTR_value), MP_ROM_PTR(&mp_three_wire_pwm_value_obj) },
+    { MP_ROM_QSTR(MP_QSTR_state), MP_ROM_PTR(&mp_three_wire_set_state_obj) });
+MP_THREE_WIRE_DICT(mp_sonar_locals,
+    { MP_ROM_QSTR(MP_QSTR_found_object), MP_ROM_PTR(&mp_three_wire_found_object_obj) },
+    { MP_ROM_QSTR(MP_QSTR_distance), MP_ROM_PTR(&mp_three_wire_distance_obj) });
+MP_THREE_WIRE_DICT(mp_accelerometer_locals,
+    { MP_ROM_QSTR(MP_QSTR_acceleration), MP_ROM_PTR(&mp_three_wire_acceleration_obj) },
+    { MP_ROM_QSTR(MP_QSTR_changed), MP_ROM_PTR(&mp_three_wire_accelerometer_changed_obj) });
+MP_THREE_WIRE_DICT(mp_addressable_led_locals,
+    { MP_ROM_QSTR(MP_QSTR_set), MP_ROM_PTR(&mp_three_wire_set_colors_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&mp_three_wire_clear_obj) },
+);
+
+#define MP_DEFINE_THREE_WIRE_TYPE(type_name, qstr_name, constructor, locals) \
+MP_DEFINE_CONST_OBJ_TYPE(type_name, qstr_name, MP_TYPE_FLAG_NONE, make_new, constructor, locals_dict, &locals)
+
+MP_DEFINE_THREE_WIRE_TYPE(mp_analog_in_type, MP_QSTR_AnalogIn, mp_analog_in_make_new, mp_analog_in_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_bumper_type, MP_QSTR_Bumper, mp_bumper_make_new, mp_switch_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_digital_in_type, MP_QSTR_DigitalIn, mp_digital_in_make_new, mp_digital_in_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_encoder_type, MP_QSTR_Encoder, mp_encoder_make_new, mp_encoder_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_gyro_type, MP_QSTR_Gyro, mp_gyro_make_new, mp_gyro_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_led_type, MP_QSTR_Led, mp_led_make_new, mp_led_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_light_type, MP_QSTR_Light, mp_light_make_new, mp_light_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_limit_type, MP_QSTR_Limit, mp_limit_make_new, mp_switch_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_line_type, MP_QSTR_Line, mp_line_make_new, mp_line_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_object_sensor_type, MP_QSTR_ObjectDetector, mp_object_sensor_make_new, mp_object_sensor_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_potentiometer_type, MP_QSTR_Potentiometer, mp_potentiometer_make_new, mp_potentiometer_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_potentiometer_v2_type, MP_QSTR_PotentiometerV2, mp_potentiometer_v2_make_new, mp_potentiometer_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_pwm_type, MP_QSTR_Pwm, mp_pwm_make_new, mp_pwm_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_sonar_type, MP_QSTR_Sonar, mp_sonar_make_new, mp_sonar_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_accelerometer_type, MP_QSTR_Accelerometer, mp_accelerometer_make_new, mp_accelerometer_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_addressable_led_type, MP_QSTR_AddressableLed, mp_addressable_led_make_new, mp_addressable_led_locals);
 
 static void mp_vex_check_angle_units(int units){
     if (units != MP_VEX_DEGREES && units != MP_VEX_TURNS){
@@ -1957,6 +2454,132 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_TYPE_FLAG_NONE,
     make_new, mp_distance_make_new,
     locals_dict, &mp_distance_locals_dict
+);
+
+static mp_obj_t mp_gps_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args){
+    mp_arg_check_num(n_args, n_kw, 1, 1, false);
+    mp_gps_obj_t *self = mp_obj_malloc(mp_gps_obj_t, type);
+    self->cpp_handle = vex_gps_create(mp_obj_get_int(args[0]));
+    return MP_OBJ_FROM_PTR(self);
+}
+
+static void mp_gps_check_distance_units(int units){
+    if (units != MP_VEX_MM && units != MP_VEX_INCHES){
+        mp_raise_ValueError("units must be MM or INCHES");
+    }
+}
+
+static mp_obj_t mp_gps_set_origin(size_t n_args, const mp_obj_t *args){
+    mp_gps_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    const int units = mp_obj_get_int(args[3]);
+    mp_gps_check_distance_units(units);
+    vex_gps_set_origin(self->cpp_handle, mp_obj_get_float(args[1]), mp_obj_get_float(args[2]), units);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_gps_set_origin_obj, 4, 4, mp_gps_set_origin);
+
+static mp_obj_t mp_gps_set_location(size_t n_args, const mp_obj_t *args){
+    mp_gps_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    const int distance_units = mp_obj_get_int(args[3]);
+    const int heading_units = mp_obj_get_int(args[5]);
+    mp_gps_check_distance_units(distance_units);
+    if (heading_units != MP_VEX_DEGREES){
+        mp_raise_ValueError("heading_units must be DEGREES");
+    }
+    vex_gps_set_location(self->cpp_handle, mp_obj_get_float(args[1]), mp_obj_get_float(args[2]),
+                         distance_units, mp_obj_get_float(args[4]), heading_units);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_gps_set_location_obj, 6, 6, mp_gps_set_location);
+
+static mp_obj_t mp_gps_x_position(mp_obj_t self_ptr, mp_obj_t units_obj){
+    mp_gps_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    const int units = mp_obj_get_int(units_obj);
+    mp_gps_check_distance_units(units);
+    return mp_obj_new_float(vex_gps_x_position(self->cpp_handle, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_gps_x_position_obj, mp_gps_x_position);
+
+static mp_obj_t mp_gps_y_position(mp_obj_t self_ptr, mp_obj_t units_obj){
+    mp_gps_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    const int units = mp_obj_get_int(units_obj);
+    mp_gps_check_distance_units(units);
+    return mp_obj_new_float(vex_gps_y_position(self->cpp_handle, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_gps_y_position_obj, mp_gps_y_position);
+
+static mp_obj_t mp_gps_heading(mp_obj_t self_ptr){
+    mp_gps_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_float(vex_gps_heading(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_gps_heading_obj, mp_gps_heading);
+
+static mp_obj_t mp_gps_acceleration(mp_obj_t self_ptr, mp_obj_t axis_obj){
+    mp_gps_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    const int axis = mp_obj_get_int(axis_obj);
+    if (axis != MP_VEX_AXIS_X && axis != MP_VEX_AXIS_Y && axis != MP_VEX_AXIS_Z){
+        mp_raise_ValueError("axis must be XAXIS, YAXIS, or ZAXIS");
+    }
+    return mp_obj_new_float(vex_gps_acceleration(self->cpp_handle, axis));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_gps_acceleration_obj, mp_gps_acceleration);
+
+static mp_obj_t mp_gps_gyro_rate(mp_obj_t self_ptr, mp_obj_t axis_obj, mp_obj_t units_obj){
+    mp_gps_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    const int axis = mp_obj_get_int(axis_obj);
+    const int units = mp_obj_get_int(units_obj);
+    if (axis != MP_VEX_AXIS_X && axis != MP_VEX_AXIS_Y && axis != MP_VEX_AXIS_Z){
+        mp_raise_ValueError("axis must be XAXIS, YAXIS, or ZAXIS");
+    }
+    if (units != MP_VEX_DPS && units != MP_VEX_RPM){
+        mp_raise_ValueError("units must be DPS or RPM");
+    }
+    return mp_obj_new_float(vex_gps_gyro_rate(self->cpp_handle, axis, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_gps_gyro_rate_obj, mp_gps_gyro_rate);
+
+static mp_obj_t mp_gps_orientation(mp_obj_t self_ptr, mp_obj_t axis_obj, mp_obj_t units_obj){
+    mp_gps_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    const int axis = mp_obj_get_int(axis_obj);
+    const int units = mp_obj_get_int(units_obj);
+    if (axis != MP_VEX_PITCH && axis != MP_VEX_ROLL && axis != MP_VEX_YAW){
+        mp_raise_ValueError("axis must be PITCH, ROLL, or YAW");
+    }
+    if (units != MP_VEX_DEGREES){
+        mp_raise_ValueError("units must be DEGREES");
+    }
+    return mp_obj_new_float(vex_gps_orientation(self->cpp_handle, axis, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_gps_orientation_obj, mp_gps_orientation);
+
+static mp_obj_t mp_gps_changed(size_t n_args, const mp_obj_t *args){
+    mp_gps_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_obj_t callback_args = n_args > 2 ? args[2] : mp_const_none;
+    mp_obj_t callback_data = mp_vex_callback_data(args[1], callback_args, n_args == 2, false);
+    vex_gps_changed(self->cpp_handle, mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_gps_changed_obj, 2, 3, mp_gps_changed);
+
+static const mp_rom_map_elem_t mp_gps_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_set_origin), MP_ROM_PTR(&mp_gps_set_origin_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_location), MP_ROM_PTR(&mp_gps_set_location_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x_position), MP_ROM_PTR(&mp_gps_x_position_obj) },
+    { MP_ROM_QSTR(MP_QSTR_y_position), MP_ROM_PTR(&mp_gps_y_position_obj) },
+    { MP_ROM_QSTR(MP_QSTR_heading), MP_ROM_PTR(&mp_gps_heading_obj) },
+    { MP_ROM_QSTR(MP_QSTR_acceleration), MP_ROM_PTR(&mp_gps_acceleration_obj) },
+    { MP_ROM_QSTR(MP_QSTR_gyro_rate), MP_ROM_PTR(&mp_gps_gyro_rate_obj) },
+    { MP_ROM_QSTR(MP_QSTR_orientation), MP_ROM_PTR(&mp_gps_orientation_obj) },
+    { MP_ROM_QSTR(MP_QSTR_changed), MP_ROM_PTR(&mp_gps_changed_obj) },
+};
+static MP_DEFINE_CONST_DICT(mp_gps_locals_dict, mp_gps_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_gps_type,
+    MP_QSTR_Gps,
+    MP_TYPE_FLAG_NONE,
+    make_new, mp_gps_make_new,
+    locals_dict, &mp_gps_locals_dict
 );
 
 static mp_obj_t mp_controller_button_pressing(mp_obj_t self_ptr){
@@ -2432,6 +3055,15 @@ static const mp_rom_map_elem_t mp_distance_units_locals_dict_table[] = {
 static MP_DEFINE_CONST_DICT(mp_distance_units_locals_dict, mp_distance_units_locals_dict_table);
 MP_DEFINE_CONST_OBJ_TYPE(mp_distance_units_type, MP_QSTR_DistanceUnits, MP_TYPE_FLAG_NONE, locals_dict, &mp_distance_units_locals_dict);
 
+static const mp_rom_map_elem_t mp_analog_units_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_PERCENT), MP_ROM_INT(MP_VEX_PERCENT) },
+    { MP_ROM_QSTR(MP_QSTR_EIGHTBIT), MP_ROM_INT(MP_VEX_ANALOG_EIGHTBIT) },
+    { MP_ROM_QSTR(MP_QSTR_TENBIT), MP_ROM_INT(MP_VEX_ANALOG_TENBIT) },
+    { MP_ROM_QSTR(MP_QSTR_TWELVEBIT), MP_ROM_INT(MP_VEX_ANALOG_TWELVEBIT) },
+};
+static MP_DEFINE_CONST_DICT(mp_analog_units_locals_dict, mp_analog_units_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(mp_analog_units_type, MP_QSTR_AnalogUnits, MP_TYPE_FLAG_NONE, locals_dict, &mp_analog_units_locals_dict);
+
 // This dictionary holds everything inside the top-level namespace: 'import vex'
 static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),    MP_ROM_QSTR(MP_QSTR_vex) },
@@ -2440,13 +3072,31 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_Motor), MP_ROM_PTR(&mp_motor_type) },
     { MP_ROM_QSTR(MP_QSTR_MotorGroup), MP_ROM_PTR(&mp_motorgroup_type) },
     { MP_ROM_QSTR(MP_QSTR_Timer), MP_ROM_PTR(&mp_timer_type) },
+    { MP_ROM_QSTR(MP_QSTR_Thread), MP_ROM_PTR(&mp_vex_thread_type) },
     { MP_ROM_QSTR(MP_QSTR_Brain), MP_ROM_PTR(&mp_brain_type) },
     { MP_ROM_QSTR(MP_QSTR_Controller), MP_ROM_PTR(&mp_controller_type) },
     { MP_ROM_QSTR(MP_QSTR_Rotation), MP_ROM_PTR(&mp_rotation_type) },
     { MP_ROM_QSTR(MP_QSTR_Inertial), MP_ROM_PTR(&mp_inertial_type) },
     { MP_ROM_QSTR(MP_QSTR_Optical), MP_ROM_PTR(&mp_optical_type) },
     { MP_ROM_QSTR(MP_QSTR_Distance), MP_ROM_PTR(&mp_distance_type) },
+    { MP_ROM_QSTR(MP_QSTR_Gps), MP_ROM_PTR(&mp_gps_type) },
     { MP_ROM_QSTR(MP_QSTR_DigitalOut), MP_ROM_PTR(&mp_digital_out_type) },
+    { MP_ROM_QSTR(MP_QSTR_AnalogIn), MP_ROM_PTR(&mp_analog_in_type) },
+    { MP_ROM_QSTR(MP_QSTR_Bumper), MP_ROM_PTR(&mp_bumper_type) },
+    { MP_ROM_QSTR(MP_QSTR_DigitalIn), MP_ROM_PTR(&mp_digital_in_type) },
+    { MP_ROM_QSTR(MP_QSTR_Encoder), MP_ROM_PTR(&mp_encoder_type) },
+    { MP_ROM_QSTR(MP_QSTR_Gyro), MP_ROM_PTR(&mp_gyro_type) },
+    { MP_ROM_QSTR(MP_QSTR_Led), MP_ROM_PTR(&mp_led_type) },
+    { MP_ROM_QSTR(MP_QSTR_Light), MP_ROM_PTR(&mp_light_type) },
+    { MP_ROM_QSTR(MP_QSTR_Limit), MP_ROM_PTR(&mp_limit_type) },
+    { MP_ROM_QSTR(MP_QSTR_Line), MP_ROM_PTR(&mp_line_type) },
+    { MP_ROM_QSTR(MP_QSTR_ObjectDetector), MP_ROM_PTR(&mp_object_sensor_type) },
+    { MP_ROM_QSTR(MP_QSTR_Potentiometer), MP_ROM_PTR(&mp_potentiometer_type) },
+    { MP_ROM_QSTR(MP_QSTR_PotentiometerV2), MP_ROM_PTR(&mp_potentiometer_v2_type) },
+    { MP_ROM_QSTR(MP_QSTR_Pwm), MP_ROM_PTR(&mp_pwm_type) },
+    { MP_ROM_QSTR(MP_QSTR_Sonar), MP_ROM_PTR(&mp_sonar_type) },
+    { MP_ROM_QSTR(MP_QSTR_Accelerometer), MP_ROM_PTR(&mp_accelerometer_type) },
+    { MP_ROM_QSTR(MP_QSTR_AddressableLed), MP_ROM_PTR(&mp_addressable_led_type) },
     { MP_ROM_QSTR(MP_QSTR_Ports), MP_ROM_PTR(&mp_ports_type) },
     { MP_ROM_QSTR(MP_QSTR_VelocityUnits), MP_ROM_PTR(&mp_velocity_units_type) },
     { MP_ROM_QSTR(MP_QSTR_AngleUnits), MP_ROM_PTR(&mp_angle_units_type) },
@@ -2457,6 +3107,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ObjectSizeType), MP_ROM_PTR(&mp_object_size_type) },
     { MP_ROM_QSTR(MP_QSTR_Color), MP_ROM_PTR(&mp_color_type) },
     { MP_ROM_QSTR(MP_QSTR_DistanceUnits), MP_ROM_PTR(&mp_distance_units_type) },
+    { MP_ROM_QSTR(MP_QSTR_AnalogUnits), MP_ROM_PTR(&mp_analog_units_type) },
     { MP_ROM_QSTR(MP_QSTR_GearSetting), MP_ROM_PTR(&mp_gear_setting_type) },
 
     // Bind Global Enum Constants directly to the module scope
