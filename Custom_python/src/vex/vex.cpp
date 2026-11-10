@@ -1,5 +1,7 @@
 #include "vex/vex.h"
 #include "vex/motors.hpp"
+#include "vex/Drivetrain.hpp"
+#include "vex/VexLink.hpp"
 #include "vex/brain.hpp"
 #include "vex/timer.hpp"
 #include "vex/Thread.hpp"
@@ -29,6 +31,8 @@
 #include "vex/ThreeWireDevices/Sonar.hpp"
 
 extern "C"{
+    #include <cstring>
+    #include <vector>
     #include "py/runtime.h"
     #include "py/obj.h"
 }
@@ -62,6 +66,10 @@ void* motor_create(int port, int gears, bool reversed){
 
 void motor_destroy(void* motor_ptr){
     delete static_cast<Motor*>(motor_ptr);
+}
+
+int motor_get_port(void* motor_ptr){
+    return static_cast<Motor*>(motor_ptr)->port();
 }
 
 void motor_spin(void* motor_ptr, int direction, float velocity, int units){
@@ -245,6 +253,188 @@ int motor_group_get_timeout(void* motor_ptr){
 
 int motor_group_count(void* motor_ptr){
     return static_cast<MotorGroup*>(motor_ptr)->count();
+}
+
+/* DEFINE class Drivetrain for C */
+void* drivetrain_create(const int8_t* left_ports, int left_count,
+                        const int8_t* right_ports, int right_count,
+                        float wheel_travel, float track_width, float wheel_base,
+                        int units, float external_gear_ratio){
+    std::vector<std::int8_t> left(left_ports, left_ports + left_count);
+    std::vector<std::int8_t> right(right_ports, right_ports + right_count);
+    return new Drivetrain(left, right, wheel_travel, track_width, wheel_base,
+                          static_cast<DistanceUnits>(units), external_gear_ratio);
+}
+
+void drivetrain_destroy(void* drivetrain_ptr){
+    delete static_cast<Drivetrain*>(drivetrain_ptr);
+}
+
+void drivetrain_drive(void* drivetrain_ptr, int direction, float velocity, int units){
+    static_cast<Drivetrain*>(drivetrain_ptr)->drive(
+        static_cast<Direction>(direction), velocity, static_cast<VelocityUnits>(units));
+}
+
+void drivetrain_drive_for(void* drivetrain_ptr, int direction, float distance, int units,
+                          float velocity, int velocity_units, bool wait){
+    static_cast<Drivetrain*>(drivetrain_ptr)->drive_for(
+        static_cast<Direction>(direction), distance, static_cast<DistanceUnits>(units),
+        velocity, static_cast<VelocityUnits>(velocity_units), wait);
+}
+
+void drivetrain_turn(void* drivetrain_ptr, int direction, float velocity, int units){
+    static_cast<Drivetrain*>(drivetrain_ptr)->turn(
+        static_cast<TurnType>(direction), velocity, static_cast<VelocityUnits>(units));
+}
+
+void drivetrain_turn_for(void* drivetrain_ptr, int direction, float angle, int units,
+                         float velocity, int velocity_units, bool wait){
+    static_cast<Drivetrain*>(drivetrain_ptr)->turn_for(
+        static_cast<TurnType>(direction), angle, static_cast<AngleUnits>(units),
+        velocity, static_cast<VelocityUnits>(velocity_units), wait);
+}
+
+void drivetrain_turn_to_heading(void* drivetrain_ptr, float heading, int units,
+                                float velocity, int velocity_units, bool wait){
+    static_cast<Drivetrain*>(drivetrain_ptr)->turn_to_heading(
+        heading, static_cast<AngleUnits>(units), velocity,
+        static_cast<VelocityUnits>(velocity_units), wait);
+}
+
+void drivetrain_turn_to_rotation(void* drivetrain_ptr, float rotation, int units,
+                                 float velocity, int velocity_units, bool wait){
+    static_cast<Drivetrain*>(drivetrain_ptr)->turn_to_rotation(
+        rotation, static_cast<AngleUnits>(units), velocity,
+        static_cast<VelocityUnits>(velocity_units), wait);
+}
+
+void drivetrain_stop(void* drivetrain_ptr, int mode){
+    static_cast<Drivetrain*>(drivetrain_ptr)->stop(static_cast<BrakeMode>(mode));
+}
+
+void drivetrain_set_drive_velocity(void* drivetrain_ptr, float velocity, int units){
+    static_cast<Drivetrain*>(drivetrain_ptr)->set_drive_velocity(
+        velocity, static_cast<VelocityUnits>(units));
+}
+
+void drivetrain_set_turn_velocity(void* drivetrain_ptr, float velocity, int units){
+    static_cast<Drivetrain*>(drivetrain_ptr)->set_turn_velocity(
+        velocity, static_cast<VelocityUnits>(units));
+}
+
+void drivetrain_set_stopping(void* drivetrain_ptr, int mode){
+    static_cast<Drivetrain*>(drivetrain_ptr)->set_stopping(static_cast<BrakeMode>(mode));
+}
+
+void drivetrain_set_timeout(void* drivetrain_ptr, float value, int units){
+    static_cast<Drivetrain*>(drivetrain_ptr)->set_timeout(value, static_cast<TimeUnits>(units));
+}
+
+void drivetrain_set_heading(void* drivetrain_ptr, float heading, int units){
+    static_cast<Drivetrain*>(drivetrain_ptr)->set_heading(heading, static_cast<AngleUnits>(units));
+}
+
+void drivetrain_set_rotation(void* drivetrain_ptr, float rotation, int units){
+    static_cast<Drivetrain*>(drivetrain_ptr)->set_rotation(rotation, static_cast<AngleUnits>(units));
+}
+
+bool drivetrain_is_done(void* drivetrain_ptr){
+    return static_cast<Drivetrain*>(drivetrain_ptr)->is_done();
+}
+
+bool drivetrain_is_moving(void* drivetrain_ptr){
+    return static_cast<Drivetrain*>(drivetrain_ptr)->is_moving();
+}
+
+float drivetrain_heading(void* drivetrain_ptr, int units){
+    return static_cast<Drivetrain*>(drivetrain_ptr)->heading(static_cast<AngleUnits>(units));
+}
+
+float drivetrain_rotation(void* drivetrain_ptr, int units){
+    return static_cast<Drivetrain*>(drivetrain_ptr)->rotation(static_cast<AngleUnits>(units));
+}
+
+float drivetrain_velocity(void* drivetrain_ptr, int units){
+    return static_cast<Drivetrain*>(drivetrain_ptr)->velocity(static_cast<VelocityUnits>(units));
+}
+
+int drivetrain_get_timeout(void* drivetrain_ptr){
+    return static_cast<Drivetrain*>(drivetrain_ptr)->get_timeout();
+}
+
+/* DEFINE classes MessageLink and SerialLink for C */
+void* message_link_create(int port, const char* name, int type, bool wired){
+    return new MessageLink(static_cast<Ports>(port), name, static_cast<VexLinkType>(type), wired);
+}
+
+void message_link_destroy(void* link_ptr){
+    delete static_cast<MessageLink*>(link_ptr);
+}
+
+bool message_link_is_linked(void* link_ptr){
+    return static_cast<MessageLink*>(link_ptr)->is_linked();
+}
+
+void message_link_send(void* link_ptr, const char* message, int integer_input, float float_input){
+    static_cast<MessageLink*>(link_ptr)->send(message, integer_input, float_input);
+}
+
+int message_link_receive(void* link_ptr, int timeout, char* buffer, size_t capacity,
+                         int* integer_output, float* float_output){
+    MessageLink* link = static_cast<MessageLink*>(link_ptr);
+    char* message = link->receive(timeout);
+    if (message == nullptr) {
+        return -1;
+    }
+    const size_t length = std::strlen(message);
+    if (capacity <= length) {
+        return -2;
+    }
+    std::memcpy(buffer, message, length + 1);
+    if (integer_output != nullptr) {
+        *integer_output = link->last_integer();
+    }
+    if (float_output != nullptr) {
+        *float_output = link->last_float();
+    }
+    return static_cast<int>(length);
+}
+
+void* serial_link_create(int port, const char* name, int type, bool wired){
+    return new SerialLink(static_cast<Ports>(port), name, static_cast<VexLinkType>(type), wired);
+}
+
+void serial_link_destroy(void* link_ptr){
+    delete static_cast<SerialLink*>(link_ptr);
+}
+
+bool serial_link_is_linked(void* link_ptr){
+    return static_cast<SerialLink*>(link_ptr)->is_linked();
+}
+
+void serial_link_send(void* link_ptr, const char* message, int integer_input, float float_input){
+    static_cast<SerialLink*>(link_ptr)->send(message, integer_input, float_input);
+}
+
+int serial_link_receive(void* link_ptr, int timeout, char* buffer, size_t capacity,
+                        int* integer_output, float* float_output){
+    SerialLink* link = static_cast<SerialLink*>(link_ptr);
+    char* message = link->receive(timeout);
+    if (message == nullptr) {
+        return -1;
+    }
+    const size_t length = std::strlen(message);
+    if (capacity <= length) {
+        return -2;
+    }
+    std::memcpy(buffer, message, length + 1);
+    if (integer_output != nullptr) {
+        *integer_output = link->last_integer();
+    }
+    if (float_output != nullptr) {
+        *float_output = link->last_float();
+    }
+    return static_cast<int>(length);
 }
 
 /*DEFINE class Timer for C*/

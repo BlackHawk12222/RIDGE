@@ -8,12 +8,15 @@ extern "C"{  // Wrapper to make sure it is defined using C standerds and not C++
 #include "py/runtime.h"
 #include "py/obj.h"
 #include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 typedef void (*c_callback_t)(void* user_data);  // Used for callbacks.
 
 /* DEFINE class Motor for C */
 void* motor_create(int port, int gears, bool reversed);
 void motor_destroy(void* motor_ptr);
+int motor_get_port(void* motor_ptr);
 
 void motor_spin(void* motor_ptr, int direction, float velocity, int units);
 void motor_spin_for(void* motor_ptr, int direction, int angle, int units, float velocity, int units_v, bool wait);
@@ -63,6 +66,50 @@ float motor_group_efficiency(void* motor_ptr, int units);
 int motor_group_temperature(void* motor_ptr, int units);
 int motor_group_get_timeout(void* motor_ptr);
 int motor_group_count(void* motor_ptr);
+
+/* DEFINE class Drivetrain for C */
+void* drivetrain_create(const int8_t* left_ports, int left_count,
+                        const int8_t* right_ports, int right_count,
+                        float wheel_travel, float track_width, float wheel_base,
+                        int units, float external_gear_ratio);
+void drivetrain_destroy(void* drivetrain_ptr);
+void drivetrain_drive(void* drivetrain_ptr, int direction, float velocity, int units);
+void drivetrain_drive_for(void* drivetrain_ptr, int direction, float distance, int units,
+                          float velocity, int velocity_units, bool wait);
+void drivetrain_turn(void* drivetrain_ptr, int direction, float velocity, int units);
+void drivetrain_turn_for(void* drivetrain_ptr, int direction, float angle, int units,
+                         float velocity, int velocity_units, bool wait);
+void drivetrain_turn_to_heading(void* drivetrain_ptr, float heading, int units,
+                                float velocity, int velocity_units, bool wait);
+void drivetrain_turn_to_rotation(void* drivetrain_ptr, float rotation, int units,
+                                 float velocity, int velocity_units, bool wait);
+void drivetrain_stop(void* drivetrain_ptr, int mode);
+void drivetrain_set_drive_velocity(void* drivetrain_ptr, float velocity, int units);
+void drivetrain_set_turn_velocity(void* drivetrain_ptr, float velocity, int units);
+void drivetrain_set_stopping(void* drivetrain_ptr, int mode);
+void drivetrain_set_timeout(void* drivetrain_ptr, float value, int units);
+void drivetrain_set_heading(void* drivetrain_ptr, float heading, int units);
+void drivetrain_set_rotation(void* drivetrain_ptr, float rotation, int units);
+bool drivetrain_is_done(void* drivetrain_ptr);
+bool drivetrain_is_moving(void* drivetrain_ptr);
+float drivetrain_heading(void* drivetrain_ptr, int units);
+float drivetrain_rotation(void* drivetrain_ptr, int units);
+float drivetrain_velocity(void* drivetrain_ptr, int units);
+int drivetrain_get_timeout(void* drivetrain_ptr);
+
+/* DEFINE classes MessageLink and SerialLink for C */
+void* message_link_create(int port, const char* name, int type, bool wired);
+void message_link_destroy(void* link_ptr);
+bool message_link_is_linked(void* link_ptr);
+void message_link_send(void* link_ptr, const char* message, int integer_input, float float_input);
+int message_link_receive(void* link_ptr, int timeout, char* buffer, size_t capacity,
+                         int* integer_output, float* float_output);
+void* serial_link_create(int port, const char* name, int type, bool wired);
+void serial_link_destroy(void* link_ptr);
+bool serial_link_is_linked(void* link_ptr);
+void serial_link_send(void* link_ptr, const char* message, int integer_input, float float_input);
+int serial_link_receive(void* link_ptr, int timeout, char* buffer, size_t capacity,
+                        int* integer_output, float* float_output);
 
 /*DEFINE class Timer for C*/
 void* vex_timer_create();

@@ -143,6 +143,10 @@ class Motor {
         int temperature(TemperatureUnits units);
 
         int get_timeout();
+
+        int port() const {
+            return IsReversed ? -static_cast<int>(PortNum) : static_cast<int>(PortNum);
+        }
 };
 
 class MotorGroup{ 

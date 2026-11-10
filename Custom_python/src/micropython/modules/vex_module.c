@@ -61,6 +61,21 @@ typedef struct _mp_motorgroup_obj_t{
     void *cpp_handle;
 } mp_motorgroup_obj_t;
 
+typedef struct _mp_drivetrain_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_drivetrain_obj_t;
+
+typedef struct _mp_message_link_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_message_link_obj_t;
+
+typedef struct _mp_serial_link_obj_t{
+    mp_obj_base_t base;
+    void *cpp_handle;
+} mp_serial_link_obj_t;
+
 typedef struct _mp_rotation_obj_t{
     mp_obj_base_t base;
     void *cpp_handle;
@@ -776,6 +791,362 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &mp_motorgroup_locals_dict
 );
 
+static size_t mp_drivetrain_motor_ports(mp_obj_t motors_obj, int8_t *ports) {
+    size_t count = 0;
+    if (mp_obj_is_type(motors_obj, &mp_motor_type)) {
+        mp_motor_obj_t *motor = MP_OBJ_TO_PTR(motors_obj);
+        ports[0] = (int8_t)motor_get_port(motor->cpp_handle);
+        return 1;
+    }
+
+    mp_obj_t *items;
+    mp_obj_get_array(motors_obj, &count, &items);
+    if (count == 0 || count > 22) {
+        mp_raise_ValueError("each drivetrain side requires 1 to 22 motors");
+    }
+    for (size_t i = 0; i < count; ++i) {
+        if (!mp_obj_is_type(items[i], &mp_motor_type)) {
+            mp_raise_TypeError("drivetrain motor lists must contain Motor objects");
+        }
+        mp_motor_obj_t *motor = MP_OBJ_TO_PTR(items[i]);
+        ports[i] = (int8_t)motor_get_port(motor->cpp_handle);
+    }
+    return count;
+}
+
+static mp_obj_t mp_drivetrain_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 2, 7, false);
+
+    int8_t left_ports[22];
+    int8_t right_ports[22];
+    size_t left_count = mp_drivetrain_motor_ports(args[0], left_ports);
+    size_t right_count = mp_drivetrain_motor_ports(args[1], right_ports);
+    float wheel_travel = n_args > 2 ? mp_obj_get_float(args[2]) : 300.0f;
+    float track_width = n_args > 3 ? mp_obj_get_float(args[3]) : 320.0f;
+    float wheel_base = n_args > 4 ? mp_obj_get_float(args[4]) : 320.0f;
+    int units = n_args > 5 ? mp_obj_get_int(args[5]) : 40;
+    float gear_ratio = n_args > 6 ? mp_obj_get_float(args[6]) : 1.0f;
+    if (wheel_travel <= 0.0f || track_width <= 0.0f || wheel_base <= 0.0f || gear_ratio <= 0.0f) {
+        mp_raise_ValueError("drivetrain dimensions and gear ratio must be positive");
+    }
+
+    mp_drivetrain_obj_t *self = mp_obj_malloc(mp_drivetrain_obj_t, type);
+    self->cpp_handle = drivetrain_create(left_ports, (int)left_count, right_ports, (int)right_count,
+                                         wheel_travel, track_width, wheel_base, units, gear_ratio);
+    return MP_OBJ_FROM_PTR(self);
+}
+
+static mp_obj_t mp_drivetrain_drive(size_t n_args, const mp_obj_t *args) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int direction = mp_obj_get_int(args[1]);
+    float velocity = n_args > 2 ? mp_obj_get_float(args[2]) : -1.0f;
+    int units = n_args > 3 ? mp_obj_get_int(args[3]) : 23;
+    drivetrain_drive(self->cpp_handle, direction, velocity, units);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_drive_obj, 2, 4, mp_drivetrain_drive);
+
+static mp_obj_t mp_drivetrain_drive_for(size_t n_args, const mp_obj_t *args) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int direction = mp_obj_get_int(args[1]);
+    float distance = mp_obj_get_float(args[2]);
+    int units = n_args > 3 ? mp_obj_get_int(args[3]) : 40;
+    float velocity = n_args > 4 ? mp_obj_get_float(args[4]) : -1.0f;
+    int velocity_units = n_args > 5 ? mp_obj_get_int(args[5]) : 23;
+    bool wait = n_args > 6 ? mp_obj_is_true(args[6]) : true;
+    drivetrain_drive_for(self->cpp_handle, direction, distance, units, velocity, velocity_units, wait);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_drive_for_obj, 3, 7, mp_drivetrain_drive_for);
+
+static mp_obj_t mp_drivetrain_turn(size_t n_args, const mp_obj_t *args) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int direction = mp_obj_get_int(args[1]);
+    float velocity = n_args > 2 ? mp_obj_get_float(args[2]) : -1.0f;
+    int units = n_args > 3 ? mp_obj_get_int(args[3]) : 23;
+    drivetrain_turn(self->cpp_handle, direction, velocity, units);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_obj, 2, 4, mp_drivetrain_turn);
+
+static mp_obj_t mp_drivetrain_turn_for(size_t n_args, const mp_obj_t *args) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int direction = mp_obj_get_int(args[1]);
+    float angle = mp_obj_get_float(args[2]);
+    int units = n_args > 3 ? mp_obj_get_int(args[3]) : 29;
+    float velocity = n_args > 4 ? mp_obj_get_float(args[4]) : -1.0f;
+    int velocity_units = n_args > 5 ? mp_obj_get_int(args[5]) : 23;
+    bool wait = n_args > 6 ? mp_obj_is_true(args[6]) : true;
+    drivetrain_turn_for(self->cpp_handle, direction, angle, units, velocity, velocity_units, wait);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_for_obj, 3, 7, mp_drivetrain_turn_for);
+
+static mp_obj_t mp_drivetrain_turn_to_heading(size_t n_args, const mp_obj_t *args) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    float heading = mp_obj_get_float(args[1]);
+    int units = n_args > 2 ? mp_obj_get_int(args[2]) : 29;
+    float velocity = n_args > 3 ? mp_obj_get_float(args[3]) : -1.0f;
+    int velocity_units = n_args > 4 ? mp_obj_get_int(args[4]) : 23;
+    bool wait = n_args > 5 ? mp_obj_is_true(args[5]) : true;
+    drivetrain_turn_to_heading(self->cpp_handle, heading, units, velocity, velocity_units, wait);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_to_heading_obj, 2, 6, mp_drivetrain_turn_to_heading);
+
+static mp_obj_t mp_drivetrain_turn_to_rotation(size_t n_args, const mp_obj_t *args) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    float rotation = mp_obj_get_float(args[1]);
+    int units = n_args > 2 ? mp_obj_get_int(args[2]) : 29;
+    float velocity = n_args > 3 ? mp_obj_get_float(args[3]) : -1.0f;
+    int velocity_units = n_args > 4 ? mp_obj_get_int(args[4]) : 23;
+    bool wait = n_args > 5 ? mp_obj_is_true(args[5]) : true;
+    drivetrain_turn_to_rotation(self->cpp_handle, rotation, units, velocity, velocity_units, wait);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_to_rotation_obj, 2, 6, mp_drivetrain_turn_to_rotation);
+
+static mp_obj_t mp_drivetrain_stop(size_t n_args, const mp_obj_t *args) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int mode = n_args > 1 ? mp_obj_get_int(args[1]) : -1;
+    drivetrain_stop(self->cpp_handle, mode);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_stop_obj, 1, 2, mp_drivetrain_stop);
+
+static mp_obj_t mp_drivetrain_set_drive_velocity(mp_obj_t self_ptr, mp_obj_t velocity_obj, mp_obj_t units_obj) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    drivetrain_set_drive_velocity(self->cpp_handle, mp_obj_get_float(velocity_obj), mp_obj_get_int(units_obj));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_drive_velocity_obj, mp_drivetrain_set_drive_velocity);
+
+static mp_obj_t mp_drivetrain_set_turn_velocity(mp_obj_t self_ptr, mp_obj_t velocity_obj, mp_obj_t units_obj) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    drivetrain_set_turn_velocity(self->cpp_handle, mp_obj_get_float(velocity_obj), mp_obj_get_int(units_obj));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_turn_velocity_obj, mp_drivetrain_set_turn_velocity);
+
+static mp_obj_t mp_drivetrain_set_stopping(mp_obj_t self_ptr, mp_obj_t mode_obj) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    drivetrain_set_stopping(self->cpp_handle, mp_obj_get_int(mode_obj));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_drivetrain_set_stopping_obj, mp_drivetrain_set_stopping);
+
+static mp_obj_t mp_drivetrain_set_timeout(mp_obj_t self_ptr, mp_obj_t value_obj, mp_obj_t units_obj) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    drivetrain_set_timeout(self->cpp_handle, mp_obj_get_float(value_obj), mp_obj_get_int(units_obj));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_timeout_obj, mp_drivetrain_set_timeout);
+
+static mp_obj_t mp_drivetrain_set_heading(mp_obj_t self_ptr, mp_obj_t value_obj, mp_obj_t units_obj) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    drivetrain_set_heading(self->cpp_handle, mp_obj_get_float(value_obj), mp_obj_get_int(units_obj));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_heading_obj, mp_drivetrain_set_heading);
+
+static mp_obj_t mp_drivetrain_set_rotation(mp_obj_t self_ptr, mp_obj_t value_obj, mp_obj_t units_obj) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    drivetrain_set_rotation(self->cpp_handle, mp_obj_get_float(value_obj), mp_obj_get_int(units_obj));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_rotation_obj, mp_drivetrain_set_rotation);
+
+static mp_obj_t mp_drivetrain_is_done(mp_obj_t self_ptr) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_bool(drivetrain_is_done(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_drivetrain_is_done_obj, mp_drivetrain_is_done);
+
+static mp_obj_t mp_drivetrain_is_moving(mp_obj_t self_ptr) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_bool(drivetrain_is_moving(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_drivetrain_is_moving_obj, mp_drivetrain_is_moving);
+
+static mp_obj_t mp_drivetrain_heading(size_t n_args, const mp_obj_t *args) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int units = n_args > 1 ? mp_obj_get_int(args[1]) : 29;
+    return mp_obj_new_float(drivetrain_heading(self->cpp_handle, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_heading_obj, 1, 2, mp_drivetrain_heading);
+
+static mp_obj_t mp_drivetrain_rotation(size_t n_args, const mp_obj_t *args) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int units = n_args > 1 ? mp_obj_get_int(args[1]) : 29;
+    return mp_obj_new_float(drivetrain_rotation(self->cpp_handle, units));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_rotation_obj, 1, 2, mp_drivetrain_rotation);
+
+static mp_obj_t mp_drivetrain_velocity(mp_obj_t self_ptr, mp_obj_t units_obj) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_float(drivetrain_velocity(self->cpp_handle, mp_obj_get_int(units_obj)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_drivetrain_velocity_obj, mp_drivetrain_velocity);
+
+static mp_obj_t mp_drivetrain_get_timeout(mp_obj_t self_ptr) {
+    mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_int(drivetrain_get_timeout(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_drivetrain_get_timeout_obj, mp_drivetrain_get_timeout);
+
+static const mp_rom_map_elem_t mp_drivetrain_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_drive), MP_ROM_PTR(&mp_drivetrain_drive_obj) },
+    { MP_ROM_QSTR(MP_QSTR_drive_for), MP_ROM_PTR(&mp_drivetrain_drive_for_obj) },
+    { MP_ROM_QSTR(MP_QSTR_turn), MP_ROM_PTR(&mp_drivetrain_turn_obj) },
+    { MP_ROM_QSTR(MP_QSTR_turn_for), MP_ROM_PTR(&mp_drivetrain_turn_for_obj) },
+    { MP_ROM_QSTR(MP_QSTR_turn_to_heading), MP_ROM_PTR(&mp_drivetrain_turn_to_heading_obj) },
+    { MP_ROM_QSTR(MP_QSTR_turn_to_rotation), MP_ROM_PTR(&mp_drivetrain_turn_to_rotation_obj) },
+    { MP_ROM_QSTR(MP_QSTR_stop), MP_ROM_PTR(&mp_drivetrain_stop_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_drive_velocity), MP_ROM_PTR(&mp_drivetrain_set_drive_velocity_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_turn_velocity), MP_ROM_PTR(&mp_drivetrain_set_turn_velocity_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_stopping), MP_ROM_PTR(&mp_drivetrain_set_stopping_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_timeout), MP_ROM_PTR(&mp_drivetrain_set_timeout_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_heading), MP_ROM_PTR(&mp_drivetrain_set_heading_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_rotation), MP_ROM_PTR(&mp_drivetrain_set_rotation_obj) },
+    { MP_ROM_QSTR(MP_QSTR_is_done), MP_ROM_PTR(&mp_drivetrain_is_done_obj) },
+    { MP_ROM_QSTR(MP_QSTR_is_moving), MP_ROM_PTR(&mp_drivetrain_is_moving_obj) },
+    { MP_ROM_QSTR(MP_QSTR_heading), MP_ROM_PTR(&mp_drivetrain_heading_obj) },
+    { MP_ROM_QSTR(MP_QSTR_rotation), MP_ROM_PTR(&mp_drivetrain_rotation_obj) },
+    { MP_ROM_QSTR(MP_QSTR_velocity), MP_ROM_PTR(&mp_drivetrain_velocity_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_timeout), MP_ROM_PTR(&mp_drivetrain_get_timeout_obj) },
+};
+static MP_DEFINE_CONST_DICT(mp_drivetrain_locals_dict, mp_drivetrain_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_drivetrain_type,
+    MP_QSTR_Drivetrain,
+    MP_TYPE_FLAG_NONE,
+    make_new, mp_drivetrain_make_new,
+    locals_dict, &mp_drivetrain_locals_dict
+);
+
+static mp_obj_t mp_message_link_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 3, 4, false);
+    mp_message_link_obj_t *self = mp_obj_malloc(mp_message_link_obj_t, type);
+    self->cpp_handle = message_link_create(
+        mp_obj_get_int(args[0]), mp_obj_str_get_str(args[1]), mp_obj_get_int(args[2]),
+        n_args > 3 ? mp_obj_is_true(args[3]) : true);
+    return MP_OBJ_FROM_PTR(self);
+}
+
+static mp_obj_t mp_message_link_is_linked(mp_obj_t self_ptr) {
+    mp_message_link_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_bool(message_link_is_linked(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_message_link_is_linked_obj, mp_message_link_is_linked);
+
+static mp_obj_t mp_message_link_send(size_t n_args, const mp_obj_t *args) {
+    mp_message_link_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    const char *message = mp_obj_str_get_str(args[1]);
+    int integer_input = n_args > 2 ? mp_obj_get_int(args[2]) : 0;
+    float float_input = n_args > 3 ? mp_obj_get_float(args[3]) : 0.0f;
+    message_link_send(self->cpp_handle, message, integer_input, float_input);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_message_link_send_obj, 2, 4, mp_message_link_send);
+
+static mp_obj_t mp_message_link_receive(size_t n_args, const mp_obj_t *args) {
+    mp_message_link_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int timeout = n_args > 1 ? mp_obj_get_int(args[1]) : 0;
+    char buffer[241];
+    int integer_output = 0;
+    float float_output = 0.0f;
+    int length = message_link_receive(self->cpp_handle, timeout, buffer, sizeof(buffer),
+                                      &integer_output, &float_output);
+    if (length == -1) {
+        return mp_const_none;
+    }
+    if (length < 0) {
+        mp_raise_ValueError("received VexLink message exceeds buffer capacity");
+    }
+    mp_obj_t values[] = {
+        mp_obj_new_str(buffer, (size_t)length),
+        mp_obj_new_int(integer_output),
+        mp_obj_new_float(float_output),
+    };
+    return mp_obj_new_tuple(3, values);
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_message_link_receive_obj, 1, 2, mp_message_link_receive);
+
+static const mp_rom_map_elem_t mp_message_link_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_is_linked), MP_ROM_PTR(&mp_message_link_is_linked_obj) },
+    { MP_ROM_QSTR(MP_QSTR_send), MP_ROM_PTR(&mp_message_link_send_obj) },
+    { MP_ROM_QSTR(MP_QSTR_receive), MP_ROM_PTR(&mp_message_link_receive_obj) },
+};
+static MP_DEFINE_CONST_DICT(mp_message_link_locals_dict, mp_message_link_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_message_link_type,
+    MP_QSTR_MessageLink,
+    MP_TYPE_FLAG_NONE,
+    make_new, mp_message_link_make_new,
+    locals_dict, &mp_message_link_locals_dict
+);
+
+static mp_obj_t mp_serial_link_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 3, 4, false);
+    mp_serial_link_obj_t *self = mp_obj_malloc(mp_serial_link_obj_t, type);
+    self->cpp_handle = serial_link_create(
+        mp_obj_get_int(args[0]), mp_obj_str_get_str(args[1]), mp_obj_get_int(args[2]),
+        n_args > 3 ? mp_obj_is_true(args[3]) : true);
+    return MP_OBJ_FROM_PTR(self);
+}
+
+static mp_obj_t mp_serial_link_is_linked(mp_obj_t self_ptr) {
+    mp_serial_link_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_bool(serial_link_is_linked(self->cpp_handle));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_serial_link_is_linked_obj, mp_serial_link_is_linked);
+
+static mp_obj_t mp_serial_link_send(size_t n_args, const mp_obj_t *args) {
+    mp_serial_link_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    const char *message = mp_obj_str_get_str(args[1]);
+    int integer_input = n_args > 2 ? mp_obj_get_int(args[2]) : 0;
+    float float_input = n_args > 3 ? mp_obj_get_float(args[3]) : 0.0f;
+    serial_link_send(self->cpp_handle, message, integer_input, float_input);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_serial_link_send_obj, 2, 4, mp_serial_link_send);
+
+static mp_obj_t mp_serial_link_receive(size_t n_args, const mp_obj_t *args) {
+    mp_serial_link_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int timeout = n_args > 1 ? mp_obj_get_int(args[1]) : 0;
+    char buffer[241];
+    int integer_output = 0;
+    float float_output = 0.0f;
+    int length = serial_link_receive(self->cpp_handle, timeout, buffer, sizeof(buffer),
+                                     &integer_output, &float_output);
+    if (length == -1) {
+        return mp_const_none;
+    }
+    if (length < 0) {
+        mp_raise_ValueError("received VexLink message exceeds buffer capacity");
+    }
+    mp_obj_t values[] = {
+        mp_obj_new_str(buffer, (size_t)length),
+        mp_obj_new_int(integer_output),
+        mp_obj_new_float(float_output),
+    };
+    return mp_obj_new_tuple(3, values);
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_serial_link_receive_obj, 1, 2, mp_serial_link_receive);
+
+static const mp_rom_map_elem_t mp_serial_link_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_is_linked), MP_ROM_PTR(&mp_serial_link_is_linked_obj) },
+    { MP_ROM_QSTR(MP_QSTR_send), MP_ROM_PTR(&mp_serial_link_send_obj) },
+    { MP_ROM_QSTR(MP_QSTR_receive), MP_ROM_PTR(&mp_serial_link_receive_obj) },
+};
+static MP_DEFINE_CONST_DICT(mp_serial_link_locals_dict, mp_serial_link_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_serial_link_type,
+    MP_QSTR_SerialLink,
+    MP_TYPE_FLAG_NONE,
+    make_new, mp_serial_link_make_new,
+    locals_dict, &mp_serial_link_locals_dict
+);
 
 static mp_obj_t mp_timer_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 0, false); // strict 0 arguments
@@ -3051,6 +3422,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
 static const mp_rom_map_elem_t mp_distance_units_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_MM), MP_ROM_INT(MP_VEX_MM) },
     { MP_ROM_QSTR(MP_QSTR_INCHES), MP_ROM_INT(MP_VEX_INCHES) },
+    { MP_ROM_QSTR(MP_QSTR_CM), MP_ROM_INT(42) },
 };
 static MP_DEFINE_CONST_DICT(mp_distance_units_locals_dict, mp_distance_units_locals_dict_table);
 MP_DEFINE_CONST_OBJ_TYPE(mp_distance_units_type, MP_QSTR_DistanceUnits, MP_TYPE_FLAG_NONE, locals_dict, &mp_distance_units_locals_dict);
@@ -3071,6 +3443,9 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     // Bind Classes into the module namespace
     { MP_ROM_QSTR(MP_QSTR_Motor), MP_ROM_PTR(&mp_motor_type) },
     { MP_ROM_QSTR(MP_QSTR_MotorGroup), MP_ROM_PTR(&mp_motorgroup_type) },
+    { MP_ROM_QSTR(MP_QSTR_Drivetrain), MP_ROM_PTR(&mp_drivetrain_type) },
+    { MP_ROM_QSTR(MP_QSTR_MessageLink), MP_ROM_PTR(&mp_message_link_type) },
+    { MP_ROM_QSTR(MP_QSTR_SerialLink), MP_ROM_PTR(&mp_serial_link_type) },
     { MP_ROM_QSTR(MP_QSTR_Timer), MP_ROM_PTR(&mp_timer_type) },
     { MP_ROM_QSTR(MP_QSTR_Thread), MP_ROM_PTR(&mp_vex_thread_type) },
     { MP_ROM_QSTR(MP_QSTR_Brain), MP_ROM_PTR(&mp_brain_type) },
@@ -3159,6 +3534,8 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_MSEC),        MP_ROM_INT(38) },
     { MP_ROM_QSTR(MP_QSTR_MASTER),        MP_ROM_INT(50) },
     { MP_ROM_QSTR(MP_QSTR_PARTNER),        MP_ROM_INT(51) },
+    { MP_ROM_QSTR(MP_QSTR_MANAGER),        MP_ROM_INT(100) },
+    { MP_ROM_QSTR(MP_QSTR_WORKER),         MP_ROM_INT(101) },
     { MP_ROM_QSTR(MP_QSTR_XAXIS),       MP_ROM_INT(MP_VEX_AXIS_X) },
     { MP_ROM_QSTR(MP_QSTR_YAXIS),       MP_ROM_INT(MP_VEX_AXIS_Y) },
     { MP_ROM_QSTR(MP_QSTR_ZAXIS),       MP_ROM_INT(MP_VEX_AXIS_Z) },
@@ -3175,6 +3552,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_LARGE),       MP_ROM_INT(3) },
     { MP_ROM_QSTR(MP_QSTR_MM),          MP_ROM_INT(MP_VEX_MM) },
     { MP_ROM_QSTR(MP_QSTR_INCHES),      MP_ROM_INT(MP_VEX_INCHES) },
+    { MP_ROM_QSTR(MP_QSTR_CM),          MP_ROM_INT(42) },
     { MP_ROM_QSTR(MP_QSTR_BLACK),       MP_ROM_INT(0x000000) },
     { MP_ROM_QSTR(MP_QSTR_WHITE),       MP_ROM_INT(0xFFFFFF) },
     { MP_ROM_QSTR(MP_QSTR_RED),         MP_ROM_INT(0xFF0000) },

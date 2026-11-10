@@ -15,7 +15,8 @@ enum class ObjectSize : int {
 
 enum DistanceUnits {
     MM = 40,
-    INCHES = 41
+    INCHES = 41,
+    CM = 42
 };
 
 class Distance{
