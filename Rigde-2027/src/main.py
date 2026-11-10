@@ -229,32 +229,15 @@ X_assist_Current = 0
 xScale = 0
 X_diff_scaled = 0
 LiftVelocity = 0
+setUp = False
 UseACP = False
 Loading = False
-ClawIsLimited = False
-GrabberIsOn = False
-GrabberIsReleased = False
-
+liftUp = False
+RunAuto = False
 
 #BEGIN CODE HERE ###############################################################
 
 #MISC CODE(custom printing, velocity setting etc.)
-def toggle_claw_limits():
-    global ClawIsLimited
-
-    if ClawIsLimited:
-        Claw.set_max_torque(2.5, CurrentUnits.AMP)
-        ClawIsLimited = False
-    else:
-        Claw.set_max_torque(0.5, CurrentUnits.AMP)
-        ClawIsLimited = True
-
-def grabber_set(value: bool):
-    global GrabberIsOn
-
-    grabber.set(value)
-    GrabberIsOn = value
-
 class robot():
     def __init__(self):
         self.liftRaised = False
@@ -269,59 +252,53 @@ class robot():
     def TankDrive(self,buffer=5):
         #tank drive code for when ACP is not being used
         while True:
-            if not self.liftRaised:
-                left_drive_smart.set_velocity(self.proportional(controller_1.axis3.position()), PERCENT)
-                right_drive_smart.set_velocity(self.proportional(controller_1.axis2.position()), PERCENT)
-            else:
-                left_drive_smart.set_velocity(controller_1.axis3.position()/2, PERCENT)
-                right_drive_smart.set_velocity(controller_1.axis2.position()/2, PERCENT)
-            if math.fabs(controller_1.axis3.position()) < buffer:
-                left_drive_smart.set_velocity(0,PERCENT)
-            if math.fabs(controller_1.axis2.position()) < buffer:
-                right_drive_smart.set_velocity(0,PERCENT)
+            if comp.is_driver_control() and not RunAuto:
+                if not self.liftRaised:
+                    left_drive_smart.set_velocity(self.proportional(controller_1.axis3.position()), PERCENT)
+                    right_drive_smart.set_velocity(self.proportional(controller_1.axis2.position()), PERCENT)
+                else:
+                    left_drive_smart.set_velocity(controller_1.axis3.position()/2, PERCENT)
+                    right_drive_smart.set_velocity(controller_1.axis2.position()/2, PERCENT)
+                if math.fabs(controller_1.axis3.position()) < buffer:
+                    left_drive_smart.set_velocity(0,PERCENT)
+                if math.fabs(controller_1.axis2.position()) < buffer:
+                    right_drive_smart.set_velocity(0,PERCENT)
 
-            left_drive_smart.spin(FORWARD)
-            right_drive_smart.spin(FORWARD)
+                left_drive_smart.spin(FORWARD)
+                right_drive_smart.spin(FORWARD)
             wait(5, MSEC)
 
 
     def autoload(self):
-        global Loading, GrabberIsReleased
+        global Loading, liftUp
         #loads and lifts a cup and pin stack in the intake
         while True:
             if controller_1.buttonA.pressing():
                 Loading = True
+                liftUp = True
                 liftGroup.set_velocity(100,PERCENT)
                 Claw.set_velocity(100,PERCENT)
                 if self.liftRaised:
                     self.liftRaised = False
-                    grabber_set(False)
-                    GrabberIsReleased = False
+                    grabber.set(False)
                     liftGroup.spin_to_position(0,DEGREES,100,PERCENT,False)
-                    if not ClawIsLimited:
-                        toggle_claw_limits()
-                    Claw.spin_to_position(-40,DEGREES)
+                    Claw.spin_to_position(0,DEGREES)
                     while not liftGroup.position()<10:
                         wait(5,MSEC)
                 else:
                     self.liftRaised = True
+                    liftUp = False
                     controller_1.screen.print("running")
-                    grabber_set(False)
-                    GrabberIsReleased = False
+                    grabber.set(False)
                     liftGroup.spin_to_position(0,DEGREES)
-                    if not ClawIsLimited:
-                        toggle_claw_limits()
-                    Claw.spin_to_position(-40,DEGREES)
+                    Claw.spin_to_position(0,DEGREES)
                     while math.fabs(liftGroup.position(DEGREES))>10 and math.fabs(Claw.position(DEGREES))>10:
                         wait(5,MSEC)
                     Intake.spin(FORWARD)
                     wait(0.5,SECONDS)
-                    grabber_set(True)
-                    GrabberIsReleased = False
+                    grabber.set(True)
                     wait(100,MSEC)
-                    liftGroup.spin_to_position(600,DEGREES,100,PERCENT,False)
-                    if ClawIsLimited:
-                        toggle_claw_limits()
+                    liftGroup.spin_to_position(700,DEGREES,100,PERCENT,False)
                     Claw.spin_to_position(195,DEGREES)
                     wait(500,MSEC)
                     liftGroup.stop()
@@ -414,21 +391,14 @@ class MotorTicks:
             self.Uprelease = True
 
     def grabberTick(self):
-        global GrabberIsReleased
         if controller_1.buttonX.pressing():
             if self.Xrelease:
                 self.Xrelease = False
                 Claw.set_velocity(100,PERCENT)
-                if not self.clawOpen and GrabberIsReleased:
-                    grabber_set(True)
-                    Claw.spin_to_position(0,DEGREES)
-                    self.clawOpen = True
-                    GrabberIsReleased = True
-                else:
-                    grabber_set(False)
-                    wait(50, MSEC)
-                    Claw.spin_to_position(300,DEGREES)
-                    self.clawOpen = False
+                grabber.set(False)
+                wait(0.1,SECONDS)
+                Claw.spin_to_position(300,DEGREES)
+                self.clawOpen = False
         else:
             self.Xrelease = True
 
@@ -506,9 +476,8 @@ def AIM_drive(mm,driveVelocity,err=0):
 def Check_for_bar():
     #checks if an object (the control bar) is close enough. If it is, check to see if it's our own color, and activate the spin command
     check_dist()
-    if Dist < 140 and (ColorSensor.color() == Color.BLUE or ColorSensor.color() == Color.RED or ColorSensor.color() == Color.YELLOW) and ColorSensor.is_near_object():
+    if Dist < 240:
         check_color_redundancy()
-        controller_1.screen.print("1")
     spin_motor()
 
 
@@ -526,7 +495,6 @@ def check_color_redundancy():
     global Color_Flips
     Color_Flips = 1
     if ColorSensor.color() == Color.BLUE and MyColor == "blue" or ColorSensor.color() == Color.RED and MyColor == "red":
-        controller_1.screen.print("0")
         Color_Flips = 0
 
 
@@ -534,11 +502,10 @@ def check_color_redundancy():
 def spin_motor():
     #spins Bar_Switcher if Color_fips is 1(spin motor). Continues to do so until distance is too far away(robot has moved away) or color is correct.
     while Color_Flips == 1:
-        controller_1.screen.print("2")
         Bar_Switcher.spin_for(FORWARD, 100, DEGREES)
-        wait(0.1, SECONDS)
+        wait(0.15, SECONDS)
         check_dist()
-        if Dist < 150:
+        if Dist < 240:
             check_color_redundancy()
     Bar_Switcher.stop()
 
@@ -786,7 +753,9 @@ def vs_setup():
 
 def prog_setup():
     #calibration, scanning, and setup code to run when the program starts
-    global SETUP_progression, Avoidance_Distance, Obstacle_Points, PosX, PosY, Last_forward, Last_sideways
+    global SETUP_progression, Avoidance_Distance, Obstacle_Points, PosX, PosY, Last_forward, Last_sideways, setUp
+
+    setUp = True
     
     #start CC(controller connectivity) display
     CC_display.broadcast()
@@ -806,10 +775,6 @@ def prog_setup():
     Avoidance_Distance = 100
     
     SETUP_progression = SETUP_progression + 1
-
-    # Sensor setup.
-    Horizontal_AID.set_position(0,DEGREES)
-    Horzontal_rotation.set_position(0,DEGREES)
     
     #initalize variables
     PosX = 0
@@ -826,6 +791,7 @@ def prog_setup():
     
     #refer to bootAnim(); presents starting menu: side and color selection, followed by the actual animation
     bootAnim()
+    setUp = False
 
     #reset the fill color so as not to interfere with text drawing
     brain.screen.set_fill_color(Color.TRANSPARENT)
@@ -834,7 +800,8 @@ def prog_setup():
     screen = display(brain)
     mc=MC()
     #main loop; eventually motor and sensor stats will be here, as well as data bars
-    
+    Horizontal_AID.set_position(0,DEGREES)
+    Horzontal_rotation.set_position(0,DEGREES)
     Yodom.set_position(0,DEGREES)
     while True:
         ODOM_loop()
@@ -913,7 +880,7 @@ def draw_button(draw_button_x, draw_button_y, draw_button_width, draw_button_hei
 
 def bootAnim():
     #User interface and setup complete animation code
-    global button_pressed, Auto_Side, MyColor, v, sizeDrawRound, AnimProgress, screen_precision, console_precision, UseACP
+    global button_pressed, Auto_Side, MyColor, v, sizeDrawRound, AnimProgress, screen_precision, console_precision, UseACP, RunAuto
     
     #print out side selection menu
     while True:
@@ -1014,6 +981,36 @@ def bootAnim():
             
             brain.screen.render()
             wait(5, MSEC)
+    if not comp.is_field_control():
+        while brain.screen.pressing():
+            wait(5, MSEC)
+        while True:
+            #draw color selection buttons. Refer to side selection button drawing for how this works.
+            brain.screen.clear_screen()
+            brain.screen.set_cursor(1, 1)
+
+            brain.screen.print("Run auto?")
+            
+            brain.screen.set_pen_color(Color.GREEN)
+            brain.screen.set_fill_color(Color.TRANSPARENT)
+            
+            draw_button(100, 100, 100, 100)
+            
+            if button_pressed == 1:
+                RunAuto = True
+                break
+            
+            brain.screen.set_pen_color(Color.RED)
+            brain.screen.set_fill_color(Color.TRANSPARENT)
+            
+            draw_button(210, 100, 100, 100)
+            
+            if button_pressed == 1:
+                RunAuto = False
+                break
+            
+            brain.screen.render()
+            wait(5, MSEC)
     #clear the screen after side and color selection are compelte
     brain.screen.clear_screen()
     brain.screen.render()
@@ -1087,10 +1084,7 @@ def liftTick_callback():
     MT = MotorTicks()
     liftGroup.set_velocity(100,PERCENT)
     liftGroup.set_stopping(HOLD)
-    if not ClawIsLimited:
-        toggle_claw_limits()
-    Claw.spin_to_position(-40,DEGREES)
-    grabber_set(False)
+    Claw.spin_to_position(-20,DEGREES)
     while True:
         MT.lift_tick()
         MT.intake_tick()
@@ -1122,22 +1116,43 @@ brain.screen.print("Debug for APF finished.")
 brain.screen.next_row()
 
 #Activate auto program; currently, this actually runs in ACPv1
-def aton():
-    pass
+def auto():
+    drivetrain.drive(FORWARD,10,PERCENT)
+    wait(1,SECONDS)
+    drivetrain.set_drive_velocity(100,PERCENT)
+    drivetrain.drive_for(REVERSE, 500, MM)
+    drivetrain.turn_for(RIGHT,90,DEGREES)
+
+def driver():
+    claw  = Thread(K56721.autoload)
+    drive = Thread(lambda: K56721.TankDrive(2))
+    color_switching()
+
 
 #PROGRAM RUN VVVVVVVVVVVVVVVVVVV
 
 K56721 = robot()
 
+grabber.set(True)
+
 PROG = Thread( prog_setup )
 VS = Thread( vs_setup )
 
 
-if brain.sdcard.is_inserted() and UseACP:
-    comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
-else:
-    claw  = Thread(K56721.autoload)
-    drive = Thread(lambda: K56721.TankDrive(2))
+comp = Competition(driver,auto)
 
-
-color_switching()
+if comp.is_driver_control():
+    if brain.sdcard.is_inserted() and UseACP:
+        comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
+    else:
+        wait(1,SECONDS)
+        while not setUp:
+            wait(5,MSEC)
+            controller_1.screen.print(".")
+        if RunAuto:
+            controller_1.screen.print("auto")
+            auto()
+            RunAut0 = False
+        claw  = Thread(K56721.autoload)
+        drive = Thread(lambda: K56721.TankDrive(2))
+        color_switching()
