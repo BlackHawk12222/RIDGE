@@ -30,11 +30,32 @@
 #include "vex/ThreeWireDevices/Pwm.hpp"
 #include "vex/ThreeWireDevices/Sonar.hpp"
 
+#include <exception>
+
 extern "C"{
     #include <cstring>
     #include <vector>
     #include "py/runtime.h"
     #include "py/obj.h"
+    #include "py/mpthread.h"
+}
+
+template <typename Function>
+static void run_drivetrain_call(bool wait, Function function) {
+    if (wait) {
+        MP_THREAD_GIL_EXIT();
+    }
+    try {
+        function();
+    } catch (const std::exception&) {
+        if (wait) {
+            MP_THREAD_GIL_ENTER();
+        }
+        mp_raise_ValueError(MP_ERROR_TEXT("invalid drivetrain argument"));
+    }
+    if (wait) {
+        MP_THREAD_GIL_ENTER();
+    }
 }
 
 void* vex_thread_create(c_callback_t callback, void* user_data){
@@ -277,9 +298,11 @@ void drivetrain_drive(void* drivetrain_ptr, int direction, float velocity, int u
 
 void drivetrain_drive_for(void* drivetrain_ptr, int direction, float distance, int units,
                           float velocity, int velocity_units, bool wait){
-    static_cast<Drivetrain*>(drivetrain_ptr)->drive_for(
-        static_cast<Direction>(direction), distance, static_cast<DistanceUnits>(units),
-        velocity, static_cast<VelocityUnits>(velocity_units), wait);
+    run_drivetrain_call(wait, [=]() {
+        static_cast<Drivetrain*>(drivetrain_ptr)->drive_for(
+            static_cast<Direction>(direction), distance, static_cast<DistanceUnits>(units),
+            velocity, static_cast<VelocityUnits>(velocity_units), wait);
+    });
 }
 
 void drivetrain_turn(void* drivetrain_ptr, int direction, float velocity, int units){
@@ -289,23 +312,29 @@ void drivetrain_turn(void* drivetrain_ptr, int direction, float velocity, int un
 
 void drivetrain_turn_for(void* drivetrain_ptr, int direction, float angle, int units,
                          float velocity, int velocity_units, bool wait){
-    static_cast<Drivetrain*>(drivetrain_ptr)->turn_for(
-        static_cast<TurnType>(direction), angle, static_cast<AngleUnits>(units),
-        velocity, static_cast<VelocityUnits>(velocity_units), wait);
+    run_drivetrain_call(wait, [=]() {
+        static_cast<Drivetrain*>(drivetrain_ptr)->turn_for(
+            static_cast<TurnType>(direction), angle, static_cast<AngleUnits>(units),
+            velocity, static_cast<VelocityUnits>(velocity_units), wait);
+    });
 }
 
 void drivetrain_turn_to_heading(void* drivetrain_ptr, float heading, int units,
                                 float velocity, int velocity_units, bool wait){
-    static_cast<Drivetrain*>(drivetrain_ptr)->turn_to_heading(
-        heading, static_cast<AngleUnits>(units), velocity,
-        static_cast<VelocityUnits>(velocity_units), wait);
+    run_drivetrain_call(wait, [=]() {
+        static_cast<Drivetrain*>(drivetrain_ptr)->turn_to_heading(
+            heading, static_cast<AngleUnits>(units), velocity,
+            static_cast<VelocityUnits>(velocity_units), wait);
+    });
 }
 
 void drivetrain_turn_to_rotation(void* drivetrain_ptr, float rotation, int units,
                                  float velocity, int velocity_units, bool wait){
-    static_cast<Drivetrain*>(drivetrain_ptr)->turn_to_rotation(
-        rotation, static_cast<AngleUnits>(units), velocity,
-        static_cast<VelocityUnits>(velocity_units), wait);
+    run_drivetrain_call(wait, [=]() {
+        static_cast<Drivetrain*>(drivetrain_ptr)->turn_to_rotation(
+            rotation, static_cast<AngleUnits>(units), velocity,
+            static_cast<VelocityUnits>(velocity_units), wait);
+    });
 }
 
 void drivetrain_stop(void* drivetrain_ptr, int mode){

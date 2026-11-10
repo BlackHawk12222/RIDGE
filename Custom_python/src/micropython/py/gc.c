@@ -31,6 +31,9 @@
 
 #include "py/gc.h"
 #include "py/runtime.h"
+#if MICROPY_PY_THREAD && MICROPY_PY_THREAD_GIL
+#include "py/mpthread.h"
+#endif
 
 #if MICROPY_DEBUG_VALGRIND
 #include <valgrind/memcheck.h>
@@ -472,6 +475,10 @@ void gc_collect_start(void) {
     size_t root_start = offsetof(mp_state_ctx_t, thread.dict_locals);
     size_t root_end = offsetof(mp_state_ctx_t, vm.qstr_last_chunk);
     gc_collect_root(ptrs + root_start / sizeof(void *), (root_end - root_start) / sizeof(void *));
+
+    #if MICROPY_PY_THREAD && MICROPY_PY_THREAD_GIL
+    mp_thread_gc_others();
+    #endif
 
     #if MICROPY_ENABLE_PYSTACK
     // Trace root pointers from the Python stack.

@@ -1,39 +1,146 @@
 #include <stdint.h>
+#include "py/builtin.h"
 #include "py/runtime.h"
 #include "py/obj.h"
+#include "py/objtuple.h"
 #include "py/mphal.h"
+#include "py/mpthread.h"
 #include "vex/vex.h"
 
+#define MP_VEX_CALL_BLOCKING(wait, ...) \
+    do { \
+        if (wait) { \
+            nlr_buf_t nlr; \
+            if (nlr_push(&nlr) == 0) { \
+                MP_THREAD_GIL_EXIT(); \
+                __VA_ARGS__; \
+                MP_THREAD_GIL_ENTER(); \
+                nlr_pop(); \
+            } else { \
+                MP_THREAD_GIL_ENTER(); \
+                nlr_raise(nlr.ret_val); \
+            } \
+        } else { \
+            __VA_ARGS__; \
+        } \
+    } while (0)
+
+static mp_obj_t mp_vex_wait(size_t n_args, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, 0, 1, 2, false);
+    double duration = mp_obj_get_float(args[0]);
+    int units = n_args == 2 ? mp_obj_get_int(args[1]) : VEX_TIME_UNITS_SECONDS;
+    MP_THREAD_GIL_EXIT();
+    bool valid = vex_logic_wait(duration, units);
+    MP_THREAD_GIL_ENTER();
+    if (!valid) {
+        mp_raise_ValueError(MP_ERROR_TEXT("invalid wait duration or time units"));
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_vex_wait_obj, 1, 2, mp_vex_wait);
+
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_callback_roots);
+MP_REGISTER_ROOT_POINTER(mp_obj_t vex_competition_callbacks);
+MP_REGISTER_ROOT_POINTER(mp_obj_t vex_pending_competition_event);
 
 typedef struct _mp_vex_thread_obj_t{
     mp_obj_base_t base;
-    void *cpp_handle;
+    mp_uint_t thread_id;
+    bool stopped;
+    bool done;
 } mp_vex_thread_obj_t;
 
 mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data) {
     size_t count;
     mp_obj_t *items;
     mp_obj_get_array(callback_data, &count, &items);
+    mp_vex_thread_obj_t *thread = NULL;
     if (mp_obj_is_true(items[3])) {
         mp_obj_list_remove(MP_STATE_VM(vex_callback_roots), callback_data);
     }
     if (count > 4) {
-        mp_vex_thread_obj_t *thread = MP_OBJ_TO_PTR(items[4]);
-        if (thread->cpp_handle == NULL || vex_thread_is_stopped(thread->cpp_handle)) {
+        thread = MP_OBJ_TO_PTR(items[4]);
+        if (thread->stopped) {
+            thread->done = true;
             return mp_const_none;
         }
     }
-    if (mp_obj_is_true(items[2])) {
-        return mp_call_function_0(items[0]);
+
+    nlr_buf_t nlr;
+    mp_obj_t result;
+    if (nlr_push(&nlr) == 0) {
+        if (mp_obj_is_true(items[2])) {
+            result = mp_call_function_0(items[0]);
+        } else if (mp_obj_is_type(items[1], &mp_type_tuple) || mp_obj_is_type(items[1], &mp_type_list)) {
+            size_t arg_count;
+            mp_obj_t *callback_args;
+            mp_obj_get_array(items[1], &arg_count, &callback_args);
+            result = mp_call_function_n_kw(items[0], arg_count, 0, callback_args);
+        } else {
+            result = mp_call_function_1(items[0], items[1]);
+        }
+        nlr_pop();
+    } else {
+        if (thread != NULL) {
+            thread->done = true;
+        }
+        nlr_raise(nlr.ret_val);
     }
-    return mp_call_function_1(items[0], items[1]);
+
+    if (thread != NULL) {
+        thread->done = true;
+    }
+    return result;
 }
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_callback_executor_obj, mp_vex_callback_executor);
 
 static void mp_vex_callback_trampoline(void *callback_data) {
-    while (!mp_sched_schedule(MP_OBJ_FROM_PTR(mp_vex_callback_executor), MP_OBJ_FROM_PTR(callback_data))) {
+    while (!mp_sched_schedule(MP_OBJ_FROM_PTR(&mp_vex_callback_executor_obj), MP_OBJ_FROM_PTR(callback_data))) {
         mp_hal_delay_ms(1);
     }
+}
+
+static void *mp_vex_thread_entry(void *thread_data) {
+    mp_obj_t callback_data = MP_OBJ_FROM_PTR(thread_data);
+    size_t count;
+    mp_obj_t *items;
+    mp_obj_get_array(callback_data, &count, &items);
+    mp_vex_thread_obj_t *thread = MP_OBJ_TO_PTR(items[4]);
+    mp_state_thread_t thread_state;
+    mp_thread_init_state(&thread_state, 0, MP_OBJ_TO_PTR(items[5]), MP_OBJ_TO_PTR(items[6]));
+
+    #if MICROPY_ENABLE_PYSTACK
+    mp_obj_t mini_pystack[128];
+    mp_pystack_init(mini_pystack, &mini_pystack[128]);
+    #endif
+
+    MP_THREAD_GIL_ENTER();
+    mp_thread_start();
+    if (!thread->stopped) {
+        nlr_buf_t nlr;
+        if (nlr_push(&nlr) == 0) {
+            if (mp_obj_is_true(items[2])) {
+                mp_call_function_0(items[0]);
+            } else if (mp_obj_is_type(items[1], &mp_type_tuple) || mp_obj_is_type(items[1], &mp_type_list)) {
+                size_t arg_count;
+                mp_obj_t *callback_args;
+                mp_obj_get_array(items[1], &arg_count, &callback_args);
+                mp_call_function_n_kw(items[0], arg_count, 0, callback_args);
+            } else {
+                mp_call_function_1(items[0], items[1]);
+            }
+            nlr_pop();
+        } else {
+            mp_printf(&mp_plat_print, "Unhandled exception in vex.Thread callback:\n");
+            mp_obj_print_exception(&mp_plat_print, nlr.ret_val);
+        }
+    }
+
+    thread->done = true;
+    mp_obj_list_remove(MP_STATE_VM(vex_callback_roots), callback_data);
+    mp_thread_finish();
+    MP_THREAD_GIL_EXIT();
+    return NULL;
 }
 
 static mp_obj_t mp_vex_callback_data(mp_obj_t callback, mp_obj_t args, bool no_args, bool one_shot) {
@@ -50,6 +157,191 @@ static mp_obj_t mp_vex_callback_data(mp_obj_t callback, mp_obj_t args, bool no_a
     mp_obj_list_append(MP_STATE_VM(vex_callback_roots), callback_data);
     return callback_data;
 }
+
+static mp_obj_t mp_vex_competition_dispatch(mp_obj_t event_obj) {
+    int event = mp_obj_get_int(event_obj);
+    if (MP_STATE_VM(vex_competition_callbacks) == MP_OBJ_NULL) {
+        MP_STATE_VM(vex_pending_competition_event) = event_obj;
+        return mp_const_none;
+    }
+
+    size_t callback_index;
+    switch (event) {
+        case VEX_COMPETITION_DRIVER_CONTROL:
+            callback_index = 0;
+            break;
+        case VEX_COMPETITION_AUTONOMOUS:
+            callback_index = 1;
+            break;
+        case VEX_COMPETITION_PRE_AUTON:
+            callback_index = 2;
+            break;
+        case VEX_COMPETITION_DISABLED:
+            callback_index = 3;
+            break;
+        default:
+            return mp_const_none;
+    }
+
+    mp_obj_tuple_t *callbacks = MP_OBJ_TO_PTR(MP_STATE_VM(vex_competition_callbacks));
+    mp_obj_t callback = callbacks->items[callback_index];
+    if (callback == mp_const_none) {
+        MP_STATE_VM(vex_pending_competition_event) = event_obj;
+        return mp_const_none;
+    }
+
+    mp_obj_t callback_data = mp_vex_callback_data(callback, mp_const_none, true, true);
+    while (!mp_sched_schedule(MP_OBJ_FROM_PTR(&mp_vex_callback_executor_obj), callback_data)) {
+        mp_hal_delay_ms(1);
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_competition_dispatch_obj, mp_vex_competition_dispatch);
+
+void vex_competition_callback(int event) {
+    mp_obj_t event_obj = MP_OBJ_NEW_SMALL_INT(event);
+    while (!mp_sched_schedule(MP_OBJ_FROM_PTR(&mp_vex_competition_dispatch_obj), event_obj)) {
+        mp_hal_delay_ms(1);
+    }
+}
+
+typedef struct _mp_vex_competition_obj_t {
+    mp_obj_base_t base;
+} mp_vex_competition_obj_t;
+
+static void mp_vex_competition_set_callback(size_t index, mp_obj_t callback) {
+    if (callback != mp_const_none && !mp_obj_is_callable(callback)) {
+        mp_raise_TypeError(MP_ERROR_TEXT("competition callback must be callable or None"));
+    }
+
+    mp_obj_t callbacks[4] = {mp_const_none, mp_const_none, mp_const_none, mp_const_none};
+    if (MP_STATE_VM(vex_competition_callbacks) != MP_OBJ_NULL) {
+        mp_obj_tuple_t *current = MP_OBJ_TO_PTR(MP_STATE_VM(vex_competition_callbacks));
+        for (size_t i = 0; i < MP_ARRAY_SIZE(callbacks); ++i) {
+            callbacks[i] = current->items[i];
+        }
+    }
+    callbacks[index] = callback;
+    MP_STATE_VM(vex_competition_callbacks) = mp_obj_new_tuple(MP_ARRAY_SIZE(callbacks), callbacks);
+
+    if (MP_STATE_VM(vex_pending_competition_event) != MP_OBJ_NULL) {
+        mp_obj_t pending_event = MP_STATE_VM(vex_pending_competition_event);
+        MP_STATE_VM(vex_pending_competition_event) = MP_OBJ_NULL;
+        mp_vex_competition_dispatch(pending_event);
+    }
+}
+
+static mp_obj_t mp_vex_competition_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 0, 2, false);
+    mp_vex_competition_obj_t *self = mp_obj_malloc(mp_vex_competition_obj_t, type);
+
+    mp_obj_t callbacks[4] = {mp_const_none, mp_const_none, mp_const_none, mp_const_none};
+    if (n_args > 0) {
+        callbacks[0] = args[0];
+    }
+    if (n_args > 1) {
+        callbacks[1] = args[1];
+    }
+    for (size_t i = 0; i < 2; ++i) {
+        if (callbacks[i] != mp_const_none && !mp_obj_is_callable(callbacks[i])) {
+            mp_raise_TypeError(MP_ERROR_TEXT("competition callback must be callable or None"));
+        }
+    }
+    MP_STATE_VM(vex_competition_callbacks) = mp_obj_new_tuple(MP_ARRAY_SIZE(callbacks), callbacks);
+
+    if (MP_STATE_VM(vex_pending_competition_event) != MP_OBJ_NULL) {
+        mp_obj_t pending_event = MP_STATE_VM(vex_pending_competition_event);
+        MP_STATE_VM(vex_pending_competition_event) = MP_OBJ_NULL;
+        mp_vex_competition_dispatch(pending_event);
+    }
+    return MP_OBJ_FROM_PTR(self);
+}
+
+static mp_obj_t mp_vex_competition_autonomous(mp_obj_t self_in, mp_obj_t callback) {
+    (void)self_in;
+    mp_vex_competition_set_callback(1, callback);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_vex_competition_autonomous_obj, mp_vex_competition_autonomous);
+
+static mp_obj_t mp_vex_competition_drivercontrol(mp_obj_t self_in, mp_obj_t callback) {
+    (void)self_in;
+    mp_vex_competition_set_callback(0, callback);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_vex_competition_drivercontrol_obj, mp_vex_competition_drivercontrol);
+
+static mp_obj_t mp_vex_competition_pre_auton(mp_obj_t self_in, mp_obj_t callback) {
+    (void)self_in;
+    mp_vex_competition_set_callback(2, callback);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_vex_competition_pre_auton_obj, mp_vex_competition_pre_auton);
+
+static mp_obj_t mp_vex_competition_disabled(mp_obj_t self_in, mp_obj_t callback) {
+    (void)self_in;
+    mp_vex_competition_set_callback(3, callback);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_vex_competition_disabled_obj, mp_vex_competition_disabled);
+
+static mp_obj_t mp_vex_competition_is_autonomous(mp_obj_t self_in) {
+    (void)self_in;
+    return mp_obj_new_bool(vex_competition_is_autonomous());
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_competition_is_autonomous_obj, mp_vex_competition_is_autonomous);
+
+static mp_obj_t mp_vex_competition_is_driver_control(mp_obj_t self_in) {
+    (void)self_in;
+    return mp_obj_new_bool(vex_competition_is_driver_control());
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_competition_is_driver_control_obj, mp_vex_competition_is_driver_control);
+
+static mp_obj_t mp_vex_competition_is_enabled(mp_obj_t self_in) {
+    (void)self_in;
+    return mp_obj_new_bool(vex_competition_is_enabled());
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_competition_is_enabled_obj, mp_vex_competition_is_enabled);
+
+static mp_obj_t mp_vex_competition_is_disabled(mp_obj_t self_in) {
+    (void)self_in;
+    return mp_obj_new_bool(vex_competition_is_disabled());
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_competition_is_disabled_obj, mp_vex_competition_is_disabled);
+
+static mp_obj_t mp_vex_competition_is_competition_switch(mp_obj_t self_in) {
+    (void)self_in;
+    return mp_obj_new_bool(vex_competition_is_competition_switch());
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_competition_is_competition_switch_obj, mp_vex_competition_is_competition_switch);
+
+static mp_obj_t mp_vex_competition_is_field_control(mp_obj_t self_in) {
+    (void)self_in;
+    return mp_obj_new_bool(vex_competition_is_field_control());
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_competition_is_field_control_obj, mp_vex_competition_is_field_control);
+
+static const mp_rom_map_elem_t mp_vex_competition_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_autonomous), MP_ROM_PTR(&mp_vex_competition_autonomous_obj) },
+    { MP_ROM_QSTR(MP_QSTR_drivercontrol), MP_ROM_PTR(&mp_vex_competition_drivercontrol_obj) },
+    { MP_ROM_QSTR(MP_QSTR_driver_control), MP_ROM_PTR(&mp_vex_competition_drivercontrol_obj) },
+    { MP_ROM_QSTR(MP_QSTR_pre_auton), MP_ROM_PTR(&mp_vex_competition_pre_auton_obj) },
+    { MP_ROM_QSTR(MP_QSTR_disabled), MP_ROM_PTR(&mp_vex_competition_disabled_obj) },
+    { MP_ROM_QSTR(MP_QSTR_is_autonomous), MP_ROM_PTR(&mp_vex_competition_is_autonomous_obj) },
+    { MP_ROM_QSTR(MP_QSTR_is_driver_control), MP_ROM_PTR(&mp_vex_competition_is_driver_control_obj) },
+    { MP_ROM_QSTR(MP_QSTR_is_enabled), MP_ROM_PTR(&mp_vex_competition_is_enabled_obj) },
+    { MP_ROM_QSTR(MP_QSTR_is_disabled), MP_ROM_PTR(&mp_vex_competition_is_disabled_obj) },
+    { MP_ROM_QSTR(MP_QSTR_is_competition_switch), MP_ROM_PTR(&mp_vex_competition_is_competition_switch_obj) },
+    { MP_ROM_QSTR(MP_QSTR_is_field_control), MP_ROM_PTR(&mp_vex_competition_is_field_control_obj) },
+};
+static MP_DEFINE_CONST_DICT(mp_vex_competition_locals_dict, mp_vex_competition_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_vex_competition_type,
+    MP_QSTR_competition,
+    MP_TYPE_FLAG_NONE,
+    make_new, mp_vex_competition_make_new,
+    locals_dict, &mp_vex_competition_locals_dict
+);
 
 typedef struct _mp_motor_obj_t{
     mp_obj_base_t base;
@@ -285,7 +577,7 @@ static mp_obj_t mp_motor_spin_for(size_t n_args, const mp_obj_t *args) {
     int units_v = (n_args > 5) ? mp_obj_get_int(args[5])   : 24;      // RPM macro value
     bool wait = (n_args > 6) ? mp_obj_is_true(args[6])   : true;
 
-    motor_spin_for(self -> cpp_handle, direction, angle, units, velocity, units_v, wait);
+    MP_VEX_CALL_BLOCKING(wait, motor_spin_for(self -> cpp_handle, direction, angle, units, velocity, units_v, wait));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_for_obj, 3, 7, mp_motor_spin_for);
@@ -299,7 +591,7 @@ static mp_obj_t mp_motor_spin_to_position(size_t n_args, const mp_obj_t *args){
     int units_v = (n_args > 4) ? mp_obj_get_int(args[4])   : 24;
     bool wait = (n_args > 5) ? mp_obj_is_true(args[5])   : true;
 
-    motor_spin_to_position(self -> cpp_handle, rotation, units, velocity, units_v, wait);
+    MP_VEX_CALL_BLOCKING(wait, motor_spin_to_position(self -> cpp_handle, rotation, units, velocity, units_v, wait));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_to_position_obj, 2, 6, mp_motor_spin_to_position);
@@ -507,7 +799,7 @@ static MP_DEFINE_CONST_DICT(mp_motor_locals_dict, mp_motor_locals_dict_table);
 // Register the finalized Motor class metadata type
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_motor_type,
-    MP_QSTR_Motor,                  // Name exposed to Python
+    MP_QSTR_motor,
     MP_TYPE_FLAG_NONE,
     make_new, mp_motor_make_new,    // Constructor attachment
     locals_dict, &mp_motor_locals_dict
@@ -555,7 +847,7 @@ static mp_obj_t mp_motor_group_spin_for(size_t n_args, const mp_obj_t *args) {
     int units_v = (n_args > 5) ? mp_obj_get_int(args[5])   : 24;      // RPM macro value
     bool wait = (n_args > 6) ? mp_obj_is_true(args[6])   : true;
 
-    motor_group_spin_for(self -> cpp_handle, direction, angle, units, velocity, units_v, wait);
+    MP_VEX_CALL_BLOCKING(wait, motor_group_spin_for(self -> cpp_handle, direction, angle, units, velocity, units_v, wait));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_for_obj, 3, 7, mp_motor_group_spin_for);
@@ -569,7 +861,7 @@ static mp_obj_t mp_motor_group_spin_to_position(size_t n_args, const mp_obj_t *a
     int units_v = (n_args > 4) ? mp_obj_get_int(args[4])   : 24;
     bool wait = (n_args > 5) ? mp_obj_is_true(args[5])   : true;
 
-    motor_group_spin_to_position(self -> cpp_handle, rotation, units, velocity, units_v, wait);
+    MP_VEX_CALL_BLOCKING(wait, motor_group_spin_to_position(self -> cpp_handle, rotation, units, velocity, units_v, wait));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_to_position_obj, 2, 6, mp_motor_group_spin_to_position);
@@ -785,7 +1077,7 @@ static MP_DEFINE_CONST_DICT(mp_motorgroup_locals_dict, mp_motorgroup_locals_dict
 
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_motorgroup_type,
-    MP_QSTR_MotorGroup,             // Name exposed to Python
+    MP_QSTR_motorgroup,
     MP_TYPE_FLAG_NONE,
     make_new, mp_motor_group_make_new,
     locals_dict, &mp_motorgroup_locals_dict
@@ -1018,7 +1310,7 @@ static const mp_rom_map_elem_t mp_drivetrain_locals_dict_table[] = {
 static MP_DEFINE_CONST_DICT(mp_drivetrain_locals_dict, mp_drivetrain_locals_dict_table);
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_drivetrain_type,
-    MP_QSTR_Drivetrain,
+    MP_QSTR_drivetrain,
     MP_TYPE_FLAG_NONE,
     make_new, mp_drivetrain_make_new,
     locals_dict, &mp_drivetrain_locals_dict
@@ -1080,7 +1372,7 @@ static const mp_rom_map_elem_t mp_message_link_locals_dict_table[] = {
 static MP_DEFINE_CONST_DICT(mp_message_link_locals_dict, mp_message_link_locals_dict_table);
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_message_link_type,
-    MP_QSTR_MessageLink,
+    MP_QSTR_messagelink,
     MP_TYPE_FLAG_NONE,
     make_new, mp_message_link_make_new,
     locals_dict, &mp_message_link_locals_dict
@@ -1142,7 +1434,7 @@ static const mp_rom_map_elem_t mp_serial_link_locals_dict_table[] = {
 static MP_DEFINE_CONST_DICT(mp_serial_link_locals_dict, mp_serial_link_locals_dict_table);
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_serial_link_type,
-    MP_QSTR_SerialLink,
+    MP_QSTR_seriallink,
     MP_TYPE_FLAG_NONE,
     make_new, mp_serial_link_make_new,
     locals_dict, &mp_serial_link_locals_dict
@@ -1164,16 +1456,16 @@ static mp_obj_t mp_timer_clear(mp_obj_t self_ptr){
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_timer_clear_obj, mp_timer_clear);
 
-static mp_obj_t mp_timer_time(mp_obj_t self_ptr, mp_obj_t units_t){
-    mp_timer_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+static mp_obj_t mp_timer_time(size_t n_args, const mp_obj_t *args){
+    mp_timer_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    int units = mp_obj_get_int(units_t);
+    int units =(n_args > 2) ? mp_obj_get_int(args[1]) : 38;  // Default is MSEC.
 
     int output;
     output = vex_timer_time(self -> cpp_handle, units);
     return mp_obj_new_int(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_timer_time_obj, mp_timer_time);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_timer_time_obj, 1, 2, mp_timer_time);
 
 static mp_obj_t mp_timer_event(mp_obj_t self_ptr, mp_obj_t callback_func, mp_obj_t delay_t){
     mp_timer_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
@@ -1195,60 +1487,69 @@ static MP_DEFINE_CONST_DICT(mp_timer_locals_dict, mp_timer_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_timer_type,
-    MP_QSTR_Timer,             // Name exposed to Python
+    MP_QSTR_timer,
     MP_TYPE_FLAG_NONE,
     make_new, mp_timer_make_new,
     locals_dict, &mp_timer_locals_dict
 );
 
 static mp_obj_t mp_vex_thread_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
-    mp_arg_check_num(n_args, n_kw, 1, 1, false);
-    if (!mp_obj_is_callable(args[0])) {
+    mp_arg_check_num(n_args, n_kw, 1, 2, false);
+    mp_obj_t callback = args[0];
+    if (!mp_obj_is_callable(callback)) {
         mp_raise_TypeError("thread callback must be callable");
     }
 
     mp_vex_thread_obj_t *self = mp_obj_malloc_with_finaliser(mp_vex_thread_obj_t, type);
-    self->cpp_handle = NULL;
+    self->thread_id = 0;
+    self->stopped = false;
+    self->done = false;
+    bool no_args = n_args == 1;
     mp_obj_t callback_items[] = {
-        args[0],
-        mp_const_none,
-        mp_const_true,
+        callback,
+        no_args ? mp_const_none : args[1],
+        mp_obj_new_bool(no_args),
         mp_const_true,
         MP_OBJ_FROM_PTR(self),
+        MP_OBJ_FROM_PTR(mp_locals_get()),
+        MP_OBJ_FROM_PTR(mp_globals_get()),
     };
-    mp_obj_t callback_data = mp_obj_new_list(5, callback_items);
+    mp_obj_t callback_data = mp_obj_new_list(MP_ARRAY_SIZE(callback_items), callback_items);
     if (MP_STATE_VM(vex_callback_roots) == MP_OBJ_NULL) {
         MP_STATE_VM(vex_callback_roots) = mp_obj_new_list(0, NULL);
     }
     mp_obj_list_append(MP_STATE_VM(vex_callback_roots), callback_data);
-    self->cpp_handle = vex_thread_create(mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
-    if (self->cpp_handle == NULL) {
+    size_t stack_size = 0;
+    self->thread_id = mp_thread_create(mp_vex_thread_entry, MP_OBJ_TO_PTR(callback_data), &stack_size);
+    if (self->thread_id == 0) {
         mp_obj_list_remove(MP_STATE_VM(vex_callback_roots), callback_data);
         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("could not create thread"));
     }
     return MP_OBJ_FROM_PTR(self);
 }
 
+static mp_obj_t mp_vex_thread_is_done(mp_obj_t self_ptr) {
+    mp_vex_thread_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_obj_new_bool(self->done);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_thread_is_done_obj, mp_vex_thread_is_done);
+
 static mp_obj_t mp_vex_thread_stop(mp_obj_t self_ptr) {
     mp_vex_thread_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    if (self->cpp_handle != NULL) {
-        vex_thread_stop(self->cpp_handle);
-    }
+    self->stopped = true;
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_thread_stop_obj, mp_vex_thread_stop);
 
 static mp_obj_t mp_vex_thread_del(mp_obj_t self_ptr) {
     mp_vex_thread_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    if (self->cpp_handle != NULL) {
-        vex_thread_destroy(self->cpp_handle);
-        self->cpp_handle = NULL;
-    }
+    self->stopped = true;
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_thread_del_obj, mp_vex_thread_del);
 
 static const mp_rom_map_elem_t mp_vex_thread_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_is_done), MP_ROM_PTR(&mp_vex_thread_is_done_obj) },
     { MP_ROM_QSTR(MP_QSTR_stop), MP_ROM_PTR(&mp_vex_thread_stop_obj) },
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&mp_vex_thread_del_obj) },
 };
@@ -1888,7 +2189,7 @@ static MP_DEFINE_CONST_DICT(mp_brain_locals_dict, mp_brain_locals_dict_table);
 // Register the finalized Motor class metadata type
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_brain_type,
-    MP_QSTR_Brain,
+    MP_QSTR_brain,
     MP_TYPE_FLAG_NONE,
     make_new, mp_brain_make_new,
     attr, mp_brain_attr,
@@ -1959,7 +2260,7 @@ static void mp_three_wire_ports_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest
 
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_three_wire_port_type,
-    MP_QSTR_ThreeWirePort,
+    MP_QSTR_threewireport,
     MP_TYPE_FLAG_NONE
 );
 
@@ -1996,7 +2297,7 @@ static MP_DEFINE_CONST_DICT(mp_digital_out_locals_dict, mp_digital_out_locals_di
 
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_digital_out_type,
-    MP_QSTR_DigitalOut,
+    MP_QSTR_digitalout,
     MP_TYPE_FLAG_NONE,
     make_new, mp_digital_out_make_new,
     locals_dict, &mp_digital_out_locals_dict
@@ -2381,22 +2682,22 @@ MP_THREE_WIRE_DICT(mp_addressable_led_locals,
 #define MP_DEFINE_THREE_WIRE_TYPE(type_name, qstr_name, constructor, locals) \
 MP_DEFINE_CONST_OBJ_TYPE(type_name, qstr_name, MP_TYPE_FLAG_NONE, make_new, constructor, locals_dict, &locals)
 
-MP_DEFINE_THREE_WIRE_TYPE(mp_analog_in_type, MP_QSTR_AnalogIn, mp_analog_in_make_new, mp_analog_in_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_bumper_type, MP_QSTR_Bumper, mp_bumper_make_new, mp_switch_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_digital_in_type, MP_QSTR_DigitalIn, mp_digital_in_make_new, mp_digital_in_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_encoder_type, MP_QSTR_Encoder, mp_encoder_make_new, mp_encoder_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_gyro_type, MP_QSTR_Gyro, mp_gyro_make_new, mp_gyro_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_led_type, MP_QSTR_Led, mp_led_make_new, mp_led_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_light_type, MP_QSTR_Light, mp_light_make_new, mp_light_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_limit_type, MP_QSTR_Limit, mp_limit_make_new, mp_switch_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_line_type, MP_QSTR_Line, mp_line_make_new, mp_line_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_object_sensor_type, MP_QSTR_ObjectDetector, mp_object_sensor_make_new, mp_object_sensor_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_potentiometer_type, MP_QSTR_Potentiometer, mp_potentiometer_make_new, mp_potentiometer_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_potentiometer_v2_type, MP_QSTR_PotentiometerV2, mp_potentiometer_v2_make_new, mp_potentiometer_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_pwm_type, MP_QSTR_Pwm, mp_pwm_make_new, mp_pwm_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_sonar_type, MP_QSTR_Sonar, mp_sonar_make_new, mp_sonar_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_accelerometer_type, MP_QSTR_Accelerometer, mp_accelerometer_make_new, mp_accelerometer_locals);
-MP_DEFINE_THREE_WIRE_TYPE(mp_addressable_led_type, MP_QSTR_AddressableLed, mp_addressable_led_make_new, mp_addressable_led_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_analog_in_type, MP_QSTR_analogin, mp_analog_in_make_new, mp_analog_in_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_bumper_type, MP_QSTR_bumper, mp_bumper_make_new, mp_switch_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_digital_in_type, MP_QSTR_digitalin, mp_digital_in_make_new, mp_digital_in_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_encoder_type, MP_QSTR_encoder, mp_encoder_make_new, mp_encoder_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_gyro_type, MP_QSTR_gyro, mp_gyro_make_new, mp_gyro_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_led_type, MP_QSTR_led, mp_led_make_new, mp_led_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_light_type, MP_QSTR_light, mp_light_make_new, mp_light_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_limit_type, MP_QSTR_limit, mp_limit_make_new, mp_switch_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_line_type, MP_QSTR_line, mp_line_make_new, mp_line_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_object_sensor_type, MP_QSTR_objectdetector, mp_object_sensor_make_new, mp_object_sensor_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_potentiometer_type, MP_QSTR_potentiometer, mp_potentiometer_make_new, mp_potentiometer_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_potentiometer_v2_type, MP_QSTR_potentiometerv2, mp_potentiometer_v2_make_new, mp_potentiometer_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_pwm_type, MP_QSTR_pwm, mp_pwm_make_new, mp_pwm_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_sonar_type, MP_QSTR_sonar, mp_sonar_make_new, mp_sonar_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_accelerometer_type, MP_QSTR_accelerometer, mp_accelerometer_make_new, mp_accelerometer_locals);
+MP_DEFINE_THREE_WIRE_TYPE(mp_addressable_led_type, MP_QSTR_addressableled, mp_addressable_led_make_new, mp_addressable_led_locals);
 
 static void mp_vex_check_angle_units(int units){
     if (units != MP_VEX_DEGREES && units != MP_VEX_TURNS){
@@ -2490,7 +2791,7 @@ static MP_DEFINE_CONST_DICT(mp_rotation_locals_dict, mp_rotation_locals_dict_tab
 
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_rotation_type,
-    MP_QSTR_Rotation,
+    MP_QSTR_rotation,
     MP_TYPE_FLAG_NONE,
     make_new, mp_rotation_make_new,
     locals_dict, &mp_rotation_locals_dict
@@ -2665,7 +2966,7 @@ static MP_DEFINE_CONST_DICT(mp_inertial_locals_dict, mp_inertial_locals_dict_tab
 
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_inertial_type,
-    MP_QSTR_Inertial,
+    MP_QSTR_inertial,
     MP_TYPE_FLAG_NONE,
     make_new, mp_inertial_make_new,
     locals_dict, &mp_inertial_locals_dict
@@ -2760,7 +3061,7 @@ static MP_DEFINE_CONST_DICT(mp_optical_locals_dict, mp_optical_locals_dict_table
 
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_optical_type,
-    MP_QSTR_Optical,
+    MP_QSTR_optical,
     MP_TYPE_FLAG_NONE,
     make_new, mp_optical_make_new,
     locals_dict, &mp_optical_locals_dict
@@ -2821,7 +3122,7 @@ static MP_DEFINE_CONST_DICT(mp_distance_locals_dict, mp_distance_locals_dict_tab
 
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_distance_type,
-    MP_QSTR_Distance,
+    MP_QSTR_distance,
     MP_TYPE_FLAG_NONE,
     make_new, mp_distance_make_new,
     locals_dict, &mp_distance_locals_dict
@@ -2947,7 +3248,7 @@ static MP_DEFINE_CONST_DICT(mp_gps_locals_dict, mp_gps_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_gps_type,
-    MP_QSTR_Gps,
+    MP_QSTR_gps,
     MP_TYPE_FLAG_NONE,
     make_new, mp_gps_make_new,
     locals_dict, &mp_gps_locals_dict
@@ -3292,7 +3593,7 @@ static MP_DEFINE_CONST_DICT(mp_controller_locals_dict, mp_controller_locals_dict
 
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_controller_type,
-    MP_QSTR_Controller,
+    MP_QSTR_controller,
     MP_TYPE_FLAG_NONE,
     make_new, mp_controller_make_new,
     attr, mp_controller_attr,
@@ -3324,7 +3625,7 @@ static const mp_rom_map_elem_t mp_ports_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_PORT22), MP_ROM_INT(22) },
 };
 static MP_DEFINE_CONST_DICT(mp_ports_locals_dict, mp_ports_locals_dict_table);
-MP_DEFINE_CONST_OBJ_TYPE(mp_ports_type, MP_QSTR_Ports, MP_TYPE_FLAG_NONE, locals_dict, &mp_ports_locals_dict);
+MP_DEFINE_CONST_OBJ_TYPE(mp_ports_type, MP_QSTR_ports, MP_TYPE_FLAG_NONE, locals_dict, &mp_ports_locals_dict);
 
 static const mp_rom_map_elem_t mp_velocity_units_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_PERCENT), MP_ROM_INT(MP_VEX_PERCENT) },
@@ -3333,14 +3634,14 @@ static const mp_rom_map_elem_t mp_velocity_units_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_VOLT), MP_ROM_INT(39) },
 };
 static MP_DEFINE_CONST_DICT(mp_velocity_units_locals_dict, mp_velocity_units_locals_dict_table);
-MP_DEFINE_CONST_OBJ_TYPE(mp_velocity_units_type, MP_QSTR_VelocityUnits, MP_TYPE_FLAG_NONE, locals_dict, &mp_velocity_units_locals_dict);
+MP_DEFINE_CONST_OBJ_TYPE(mp_velocity_units_type, MP_QSTR_velocityunits, MP_TYPE_FLAG_NONE, locals_dict, &mp_velocity_units_locals_dict);
 
 static const mp_rom_map_elem_t mp_angle_units_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_DEGREES), MP_ROM_INT(MP_VEX_DEGREES) },
     { MP_ROM_QSTR(MP_QSTR_TURNS), MP_ROM_INT(MP_VEX_TURNS) },
 };
 static MP_DEFINE_CONST_DICT(mp_angle_units_locals_dict, mp_angle_units_locals_dict_table);
-MP_DEFINE_CONST_OBJ_TYPE(mp_angle_units_type, MP_QSTR_AngleUnits, MP_TYPE_FLAG_NONE, locals_dict, &mp_angle_units_locals_dict);
+MP_DEFINE_CONST_OBJ_TYPE(mp_angle_units_type, MP_QSTR_angleunits, MP_TYPE_FLAG_NONE, locals_dict, &mp_angle_units_locals_dict);
 
 static const mp_rom_map_elem_t mp_font_type_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_MONO12), MP_ROM_INT(40) },
@@ -3355,7 +3656,7 @@ static const mp_rom_map_elem_t mp_font_type_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_PROP60), MP_ROM_INT(49) },
 };
 static MP_DEFINE_CONST_DICT(mp_font_type_locals_dict, mp_font_type_locals_dict_table);
-MP_DEFINE_CONST_OBJ_TYPE(mp_font_type, MP_QSTR_FontType, MP_TYPE_FLAG_NONE, locals_dict, &mp_font_type_locals_dict);
+MP_DEFINE_CONST_OBJ_TYPE(mp_font_type, MP_QSTR_fonttype, MP_TYPE_FLAG_NONE, locals_dict, &mp_font_type_locals_dict);
 
 static const mp_rom_map_elem_t mp_axis_type_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_XAXIS), MP_ROM_INT(MP_VEX_AXIS_X) },
@@ -3366,21 +3667,21 @@ static const mp_rom_map_elem_t mp_axis_type_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_YAW), MP_ROM_INT(MP_VEX_YAW) },
 };
 static MP_DEFINE_CONST_DICT(mp_axis_type_locals_dict, mp_axis_type_locals_dict_table);
-MP_DEFINE_CONST_OBJ_TYPE(mp_axis_type, MP_QSTR_AxisType, MP_TYPE_FLAG_NONE, locals_dict, &mp_axis_type_locals_dict);
+MP_DEFINE_CONST_OBJ_TYPE(mp_axis_type, MP_QSTR_axistype, MP_TYPE_FLAG_NONE, locals_dict, &mp_axis_type_locals_dict);
 
 static const mp_rom_map_elem_t mp_turn_type_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_RIGHT), MP_ROM_INT(MP_VEX_RIGHT) },
     { MP_ROM_QSTR(MP_QSTR_LEFT), MP_ROM_INT(MP_VEX_LEFT) },
 };
 static MP_DEFINE_CONST_DICT(mp_turn_type_locals_dict, mp_turn_type_locals_dict_table);
-MP_DEFINE_CONST_OBJ_TYPE(mp_turn_type, MP_QSTR_TurnType, MP_TYPE_FLAG_NONE, locals_dict, &mp_turn_type_locals_dict);
+MP_DEFINE_CONST_OBJ_TYPE(mp_turn_type, MP_QSTR_turntype, MP_TYPE_FLAG_NONE, locals_dict, &mp_turn_type_locals_dict);
 
 static const mp_rom_map_elem_t mp_led_state_type_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ON), MP_ROM_INT(1) },
     { MP_ROM_QSTR(MP_QSTR_OFF), MP_ROM_INT(0) },
 };
 static MP_DEFINE_CONST_DICT(mp_led_state_type_locals_dict, mp_led_state_type_locals_dict_table);
-MP_DEFINE_CONST_OBJ_TYPE(mp_led_state_type, MP_QSTR_LEDStateType, MP_TYPE_FLAG_NONE, locals_dict, &mp_led_state_type_locals_dict);
+MP_DEFINE_CONST_OBJ_TYPE(mp_led_state_type, MP_QSTR_ledstatetype, MP_TYPE_FLAG_NONE, locals_dict, &mp_led_state_type_locals_dict);
 
 static const mp_rom_map_elem_t mp_object_size_type_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_NONE), MP_ROM_INT(0) },
@@ -3389,7 +3690,7 @@ static const mp_rom_map_elem_t mp_object_size_type_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_LARGE), MP_ROM_INT(3) },
 };
 static MP_DEFINE_CONST_DICT(mp_object_size_type_locals_dict, mp_object_size_type_locals_dict_table);
-MP_DEFINE_CONST_OBJ_TYPE(mp_object_size_type, MP_QSTR_ObjectSizeType, MP_TYPE_FLAG_NONE, locals_dict, &mp_object_size_type_locals_dict);
+MP_DEFINE_CONST_OBJ_TYPE(mp_object_size_type, MP_QSTR_objectsizetype, MP_TYPE_FLAG_NONE, locals_dict, &mp_object_size_type_locals_dict);
 
 static const mp_rom_map_elem_t mp_GearSetting_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_RATIO_6_1),  MP_ROM_INT(8) },
@@ -3397,7 +3698,7 @@ static const mp_rom_map_elem_t mp_GearSetting_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_RATIO_36_1), MP_ROM_INT(36) },
 };
 static MP_DEFINE_CONST_DICT(mp_GearSetting_locals_dict, mp_GearSetting_locals_dict_table);
-MP_DEFINE_CONST_OBJ_TYPE(mp_gear_setting_type, MP_QSTR_GearSetting, MP_TYPE_FLAG_NONE, locals_dict, &mp_GearSetting_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(mp_gear_setting_type, MP_QSTR_gearsetting, MP_TYPE_FLAG_NONE, locals_dict, &mp_GearSetting_locals_dict);
 
 static const mp_rom_map_elem_t mp_color_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_BLACK), MP_ROM_INT(0x000000) },
@@ -3411,9 +3712,10 @@ static const mp_rom_map_elem_t mp_color_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_CYAN), MP_ROM_INT(0x00FFFF) },
 };
 static MP_DEFINE_CONST_DICT(mp_color_locals_dict, mp_color_locals_dict_table);
+
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_color_type,
-    MP_QSTR_Color,
+    MP_QSTR_color,
     MP_TYPE_FLAG_NONE,
     make_new, mp_color_make_new,
     locals_dict, &mp_color_locals_dict
@@ -3425,7 +3727,7 @@ static const mp_rom_map_elem_t mp_distance_units_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_CM), MP_ROM_INT(42) },
 };
 static MP_DEFINE_CONST_DICT(mp_distance_units_locals_dict, mp_distance_units_locals_dict_table);
-MP_DEFINE_CONST_OBJ_TYPE(mp_distance_units_type, MP_QSTR_DistanceUnits, MP_TYPE_FLAG_NONE, locals_dict, &mp_distance_units_locals_dict);
+MP_DEFINE_CONST_OBJ_TYPE(mp_distance_units_type, MP_QSTR_distanceunits, MP_TYPE_FLAG_NONE, locals_dict, &mp_distance_units_locals_dict);
 
 static const mp_rom_map_elem_t mp_analog_units_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_PERCENT), MP_ROM_INT(MP_VEX_PERCENT) },
@@ -3434,12 +3736,22 @@ static const mp_rom_map_elem_t mp_analog_units_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_TWELVEBIT), MP_ROM_INT(MP_VEX_ANALOG_TWELVEBIT) },
 };
 static MP_DEFINE_CONST_DICT(mp_analog_units_locals_dict, mp_analog_units_locals_dict_table);
-MP_DEFINE_CONST_OBJ_TYPE(mp_analog_units_type, MP_QSTR_AnalogUnits, MP_TYPE_FLAG_NONE, locals_dict, &mp_analog_units_locals_dict);
+MP_DEFINE_CONST_OBJ_TYPE(mp_analog_units_type, MP_QSTR_analogunits, MP_TYPE_FLAG_NONE, locals_dict, &mp_analog_units_locals_dict);
+
+static const mp_rom_map_elem_t mp_vex_link_type_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_MANAGER),        MP_ROM_INT(100) },
+    { MP_ROM_QSTR(MP_QSTR_WORKER),         MP_ROM_INT(101) },
+};
+static MP_DEFINE_CONST_DICT(mp_vex_link_type_locals_dict, mp_vex_link_type_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(mp_vex_link_type, MP_QSTR_vexlinktype, MP_TYPE_FLAG_NONE, locals_dict, &mp_vex_link_type_locals_dict);
 
 // This dictionary holds everything inside the top-level namespace: 'import vex'
 static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),    MP_ROM_QSTR(MP_QSTR_vex) },
-    
+    { MP_ROM_QSTR(MP_QSTR_wait),        MP_ROM_PTR(&mp_vex_wait_obj) },
+    { MP_ROM_QSTR(MP_QSTR_abs),         MP_ROM_PTR(&mp_builtin_abs_obj) },
+    { MP_ROM_QSTR(MP_QSTR_Competition), MP_ROM_PTR(&mp_vex_competition_type) },
+
     // Bind Classes into the module namespace
     { MP_ROM_QSTR(MP_QSTR_Motor), MP_ROM_PTR(&mp_motor_type) },
     { MP_ROM_QSTR(MP_QSTR_MotorGroup), MP_ROM_PTR(&mp_motorgroup_type) },
@@ -3484,6 +3796,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_DistanceUnits), MP_ROM_PTR(&mp_distance_units_type) },
     { MP_ROM_QSTR(MP_QSTR_AnalogUnits), MP_ROM_PTR(&mp_analog_units_type) },
     { MP_ROM_QSTR(MP_QSTR_GearSetting), MP_ROM_PTR(&mp_gear_setting_type) },
+    { MP_ROM_QSTR(MP_QSTR_VexlinkType), MP_ROM_PTR(&mp_vex_link_type) },
 
     // Bind Global Enum Constants directly to the module scope
     { MP_ROM_QSTR(MP_QSTR_RATIO_6_1),  MP_ROM_INT(8) },
@@ -3530,12 +3843,10 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_WATT),        MP_ROM_INT(34) },
     { MP_ROM_QSTR(MP_QSTR_CELSIUS),     MP_ROM_INT(35) },
     { MP_ROM_QSTR(MP_QSTR_FAHRENHEIT),  MP_ROM_INT(36) },
-    { MP_ROM_QSTR(MP_QSTR_SECONDS),     MP_ROM_INT(37) },
-    { MP_ROM_QSTR(MP_QSTR_MSEC),        MP_ROM_INT(38) },
+    { MP_ROM_QSTR(MP_QSTR_SECONDS),     MP_ROM_INT(VEX_TIME_UNITS_SECONDS) },
+    { MP_ROM_QSTR(MP_QSTR_MSEC),        MP_ROM_INT(VEX_TIME_UNITS_MSEC) },
     { MP_ROM_QSTR(MP_QSTR_MASTER),        MP_ROM_INT(50) },
     { MP_ROM_QSTR(MP_QSTR_PARTNER),        MP_ROM_INT(51) },
-    { MP_ROM_QSTR(MP_QSTR_MANAGER),        MP_ROM_INT(100) },
-    { MP_ROM_QSTR(MP_QSTR_WORKER),         MP_ROM_INT(101) },
     { MP_ROM_QSTR(MP_QSTR_XAXIS),       MP_ROM_INT(MP_VEX_AXIS_X) },
     { MP_ROM_QSTR(MP_QSTR_YAXIS),       MP_ROM_INT(MP_VEX_AXIS_Y) },
     { MP_ROM_QSTR(MP_QSTR_ZAXIS),       MP_ROM_INT(MP_VEX_AXIS_Z) },

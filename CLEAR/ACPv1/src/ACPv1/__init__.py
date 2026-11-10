@@ -78,6 +78,7 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
     for item in ObjList:
         try:
             item_type=str(type(eval(item)))
+            print("%s : %s"%(item, item_type))
         except NameError:
             continue
         

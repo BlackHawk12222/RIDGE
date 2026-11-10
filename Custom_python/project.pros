@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "Custom_python",
+    "project_name": "CPS",
     "target": "v5",
     "templates": {
       "kernel": {
@@ -594,7 +594,8 @@
     "upload_options": {
       "slot": 5,
       "icon": "power",
-      "after": "screen"
+      "after": "screen",
+      "description": "Custom Python Software"
     },
     "use_early_access": false
   }

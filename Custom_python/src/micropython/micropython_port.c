@@ -11,6 +11,7 @@
 #include "py/nlr.h"
 #include "py/stackctrl.h"
 #include "py/mpstate.h"
+#include "py/mpthread.h"
 #include "mpconfigport.h"
 
 #include "shared/runtime/gchelper.h"
@@ -18,6 +19,9 @@
 extern void mp_port_status(const char *message);
 
 void init_micropython(void *heap, size_t heap_size) {
+    #if MICROPY_PY_THREAD
+    mp_thread_port_init();
+    #endif
     mp_port_status("MP: GC init");
     gc_init(heap, (char *)heap + heap_size);
     mp_port_status("MP: GC ready");

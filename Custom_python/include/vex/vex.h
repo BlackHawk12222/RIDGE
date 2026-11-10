@@ -13,6 +13,26 @@ extern "C"{  // Wrapper to make sure it is defined using C standerds and not C++
 
 typedef void (*c_callback_t)(void* user_data);  // Used for callbacks.
 
+enum {
+    VEX_TIME_UNITS_SECONDS = 37,
+    VEX_TIME_UNITS_MSEC = 38,
+};
+
+enum {
+    VEX_COMPETITION_DRIVER_CONTROL = 0,
+    VEX_COMPETITION_AUTONOMOUS = 1,
+    VEX_COMPETITION_PRE_AUTON = 2,
+    VEX_COMPETITION_DISABLED = 3,
+};
+
+void vex_competition_callback(int event);
+bool vex_competition_is_autonomous(void);
+bool vex_competition_is_driver_control(void);
+bool vex_competition_is_enabled(void);
+bool vex_competition_is_disabled(void);
+bool vex_competition_is_competition_switch(void);
+bool vex_competition_is_field_control(void);
+
 /* DEFINE class Motor for C */
 void* motor_create(int port, int gears, bool reversed);
 void motor_destroy(void* motor_ptr);
@@ -118,6 +138,9 @@ void vex_timer_clear(void* timer_ptr);
 int vex_timer_time(void* timer_ptr, int units);
 void vex_timer_event(void* timer_ptr, mp_obj_t callback_data, int delay_ms);
 mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data);
+
+/* VEX global functions */
+bool vex_logic_wait(double duration, int units);
 
 /* DEFINE class Thread for C */
 void* vex_thread_create(c_callback_t callback, void* user_data);

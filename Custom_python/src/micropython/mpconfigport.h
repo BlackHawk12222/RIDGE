@@ -33,6 +33,9 @@ typedef long mp_off_t;
 
 // Garbage Collection & Core Subsystems
 #define MICROPY_ENABLE_GC               (1)
+#define MICROPY_PY_THREAD               (1)
+#define MICROPY_PY_THREAD_GIL           (1)
+#define MICROPY_MPTHREADPORT_H          "mpthreadport.h"
 #define MICROPY_STACK_CHECK             (0) // Turn off runtime overhead stack boundary checking
 #define MICROPY_HELPER_REPL             (0) // Strip out terminal interactive components
 #define MICROPY_HELPER_LEXER_UNIX       (0) 
