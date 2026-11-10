@@ -659,7 +659,7 @@ static mp_obj_t mp_motor_set_reversed(mp_obj_t self_ptr, mp_obj_t value_t){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     bool value = mp_obj_is_true(value_t);
 
-    motor_set_reversed(self -> cpp_handle, value);
+    vex_motor_set_reversed(self -> cpp_handle, value);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_set_reversed_obj, mp_motor_set_reversed);
@@ -2120,11 +2120,15 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &mp_brain_sdcard_locals_dict
 );
 
-
 static void mp_brain_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    // CRITICAL SAFETY GUARD: If self_in is uninstantiated metadata type, reject immediately
+    if (mp_obj_get_type(self_in) == &mp_type_type) {
+        dest[0] = MP_OBJ_NULL;
+        return;
+    }
+
     mp_brain_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
-    // dest[0] == MP_OBJ_NULL means a READ lookup property (e.g. print(brain.screen))
     if (dest[0] == MP_OBJ_NULL) {
         if (attr == MP_QSTR_screen) {
             dest[0] = self->screen;
@@ -2140,9 +2144,9 @@ static void mp_brain_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
             return;
         }
     }
-    // Fall back to standard method/attribute resolution
     dest[0] = MP_OBJ_NULL; 
 }
+
 
 static mp_obj_t mp_brain_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 0, false); // strict 0 arguments
@@ -3431,67 +3435,38 @@ MP_DEFINE_CONST_OBJ_TYPE(
 );
 
 static void mp_controller_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    // CRITICAL SAFETY GUARD: Catch and prevent raw reflection evaluations
+    if (mp_obj_get_type(self_in) == &mp_type_type) {
+        dest[0] = MP_OBJ_NULL;
+        return;
+    }
+
     mp_controller_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
-    // dest[0] == MP_OBJ_NULL means a READ lookup property (e.g. print(controller.screen))
     if (dest[0] == MP_OBJ_NULL) {
         switch (attr) {
-            case MP_QSTR_screen:
-                dest[0] = self->screen;
-                return;
-            case MP_QSTR_buttonA:
-                dest[0] = self->buttonA;
-                return;
-            case MP_QSTR_buttonB:
-                dest[0] = self->buttonB;
-                return;
-            case MP_QSTR_buttonX:
-                dest[0] = self->buttonX;
-                return;
-            case MP_QSTR_buttonY:
-                dest[0] = self->buttonY;
-                return;
-            case MP_QSTR_buttonUp:
-                dest[0] = self->buttonUp;
-                return;
-            case MP_QSTR_buttonDown:
-                dest[0] = self->buttonDown;
-                return;
-            case MP_QSTR_buttonLeft:
-                dest[0] = self->buttonLeft;
-                return;
-            case MP_QSTR_buttonRight:
-                dest[0] = self->buttonRight;
-                return;
-            case MP_QSTR_buttonL1:
-                dest[0] = self->buttonL1;
-                return;
-            case MP_QSTR_buttonL2:
-                dest[0] = self->buttonL2;
-                return;
-            case MP_QSTR_buttonR1:
-                dest[0] = self->buttonR1;
-                return;
-            case MP_QSTR_buttonR2:
-                dest[0] = self->buttonR2;
-                return;
-            case MP_QSTR_axis1:
-                dest[0] = self->axis1;
-                return;
-            case MP_QSTR_axis2:
-                dest[0] = self->axis2;
-                return;
-            case MP_QSTR_axis3:
-                dest[0] = self->axis3;
-                return;
-            case MP_QSTR_axis4:
-                dest[0] = self->axis4;
-                return;    
+            case MP_QSTR_screen: dest[0] = self->screen; return;
+            case MP_QSTR_buttonA: dest[0] = self->buttonA; return;
+            case MP_QSTR_buttonB: dest[0] = self->buttonB; return;
+            case MP_QSTR_buttonX: dest[0] = self->buttonX; return;
+            case MP_QSTR_buttonY: dest[0] = self->buttonY; return;
+            case MP_QSTR_buttonUp: dest[0] = self->buttonUp; return;
+            case MP_QSTR_buttonDown: dest[0] = self->buttonDown; return;
+            case MP_QSTR_buttonLeft: dest[0] = self->buttonLeft; return;
+            case MP_QSTR_buttonRight: dest[0] = self->buttonRight; return;
+            case MP_QSTR_buttonL1: dest[0] = self->buttonL1; return;
+            case MP_QSTR_buttonL2: dest[0] = self->buttonL2; return;
+            case MP_QSTR_buttonR1: dest[0] = self->buttonR1; return;
+            case MP_QSTR_buttonR2: dest[0] = self->buttonR2; return;
+            case MP_QSTR_axis1: dest[0] = self->axis1; return;
+            case MP_QSTR_axis2: dest[0] = self->axis2; return;
+            case MP_QSTR_axis3: dest[0] = self->axis3; return;
+            case MP_QSTR_axis4: dest[0] = self->axis4; return;    
         }
     }
-    // Fall back to standard method/attribute resolution
     dest[0] = MP_OBJ_NULL; 
 }
+
 
 static mp_obj_t mp_controller_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 1, 1, false); // strict 1 argument

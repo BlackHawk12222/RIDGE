@@ -129,7 +129,7 @@ void motor_set_timeout(void* motor_ptr, float value, int units){
     static_cast<Motor*>(motor_ptr)->set_timeout(value, static_cast<TimeUnits>(units));
 }
 
-void motor_set_reversed(void* motor_ptr, bool value){
+void vex_motor_set_reversed(void* motor_ptr, bool value){
     static_cast<Motor*>(motor_ptr)->set_reversed(value);
 }
 
