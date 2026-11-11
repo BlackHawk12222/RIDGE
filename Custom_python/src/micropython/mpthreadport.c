@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "mpthreadport.h"
 #include "py/gc.h"
@@ -115,31 +116,18 @@ static void thread_task_entry(void *parameter) {
     }
     unlock_thread_records();
     free(record);
+
+    task_delete(NULL); // Required in PROS C API so task never returns to task_clean_up
 }
 
 mp_uint_t mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size) {
     size_t stack_bytes = *stack_size;
-    uint32_t stack_depth;
-    if (stack_bytes == 0) {
-        stack_depth = TASK_STACK_DEPTH_DEFAULT;
-        stack_bytes = (size_t)stack_depth * sizeof(uint32_t);
-    } else {
-        if (stack_bytes > (size_t)UINT16_MAX * sizeof(uint32_t)) {
-            return 0;
-        }
-        stack_depth = (uint32_t)((stack_bytes + sizeof(uint32_t) - 1) / sizeof(uint32_t));
-        if (stack_depth < TASK_STACK_DEPTH_MIN) {
-            stack_depth = TASK_STACK_DEPTH_MIN;
-        }
-        if (stack_depth > UINT16_MAX) {
-            return 0;
-        }
-        stack_bytes = (size_t)stack_depth * sizeof(uint32_t);
-    }
-    *stack_size = stack_bytes;
+    uint32_t stack_depth = 0x1800; // Always use 24 KB (6,144 words) per thread
+    *stack_size = (size_t)stack_depth * sizeof(uint32_t);
 
     mp_thread_record_t *record = malloc(sizeof(*record));
     if (record == NULL) {
+        printf("[mp_thread] malloc failed (requested %u bytes)\n", (unsigned)stack_bytes);
         return 0;
     }
     record->task = NULL;
@@ -156,6 +144,8 @@ mp_uint_t mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size
     task_t task = task_create(thread_task_entry, record, TASK_PRIORITY_DEFAULT,
         (uint16_t)stack_depth, "MicroPython Thread");
     if (task == NULL) {
+        printf("[mp_thread] task_create failed (requested %u bytes, depth %u)\n",
+               (unsigned)stack_bytes, (unsigned)stack_depth);
         lock_thread_records();
         mp_thread_record_t **current = &thread_records;
         while (*current != NULL && *current != record) {
@@ -176,6 +166,7 @@ mp_uint_t mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size
     unlock_thread_records();
     return (mp_uint_t)task;
 }
+
 
 mp_uint_t mp_thread_get_id(void) {
     return (mp_uint_t)task_get_current();

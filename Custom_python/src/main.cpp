@@ -159,7 +159,7 @@ void initialize() {
     python_buffer[bytes_read] = '\0';
 
     pros::task_t task = pros::c::task_create(
-        run_python_script, python_buffer, TASK_PRIORITY_DEFAULT, TASK_STACK_DEPTH_DEFAULT,
+        run_python_script, python_buffer, TASK_PRIORITY_DEFAULT, 0x4000,
         "MicroPython Script"
     );
     if (task == nullptr) {

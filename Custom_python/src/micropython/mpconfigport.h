@@ -57,11 +57,10 @@ typedef long mp_off_t;
 #define MICROPY_REPL_EMACS_KEYS          (0)
 #define MICROPY_REPL_AUTO_INDENT         (0)
 
-// Force standard Python floats to compile as 32-bit single precision
-#define MICROPY_FLOAT_IMPL (MICROPY_FLOAT_IMPL_FLOAT)
-
 /* Allow baseline system tables to align tracking structs */
 #define MICROPY_PY_SYS_MUTABLE                     (1) // SG matching wrapper tracking
+
+#define MICROPY_NLR_SETJMP (1)  // Used for threads.
 
 #define MICROPY_HW_HAS_LCD (0)
 #define MICROPY_HW_ENABLE_LCD (0)

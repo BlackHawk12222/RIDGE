@@ -2,7 +2,6 @@
 
 #include "pros/rtos.hpp"
 
-#include <new>
 #include <memory>
 
 Thread::Thread(Callback callback, void* user_data)
@@ -10,15 +9,20 @@ Thread::Thread(Callback callback, void* user_data)
     auto* task_state = new std::shared_ptr<State>(state_);
     const auto task = pros::c::task_create(
         [](void* parameter) {
-            std::unique_ptr<std::shared_ptr<State>> state_holder(
-                static_cast<std::shared_ptr<State>*>(parameter));
-            const auto& state = *state_holder;
-            state->callback(state->user_data);
+            {
+                std::unique_ptr<std::shared_ptr<State>> state_holder(
+                    static_cast<std::shared_ptr<State>*>(parameter));
+                const auto& state = *state_holder;
+                if (state && state->callback) {
+                    state->callback(state->user_data);
+                }
+            } // state_holder and shared_ptr cleanly destroyed here
+            pros::c::task_delete(nullptr);
         },
-        task_state, TASK_PRIORITY_DEFAULT, TASK_STACK_DEPTH_DEFAULT, "VEX Python Thread");
+        task_state, TASK_PRIORITY_DEFAULT, 0x3000, "VEX Python Thread");
+
     if (task == nullptr) {
         delete task_state;
-        throw std::bad_alloc();
     }
 }
 
@@ -27,9 +31,11 @@ Thread::~Thread() {
 }
 
 void Thread::stop() {
-    state_->stopped.store(true);
+    if (state_) {
+        state_->stopped.store(true);
+    }
 }
 
 bool Thread::is_stopped() const {
-    return state_->stopped.load();
+    return state_ ? state_->stopped.load() : true;
 }

@@ -1452,7 +1452,7 @@ try:
                 None
                 """
 
-                filename=("logrecalled.csv")
+                filename="logrecalled.csv"
                 print("recalling...")
                 with open("ACPv1/Data/loghistory.txt", 'r') as file:
                     for line in file:

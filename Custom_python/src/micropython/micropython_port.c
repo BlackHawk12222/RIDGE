@@ -13,6 +13,7 @@
 #include "py/mpstate.h"
 #include "py/mpthread.h"
 #include "mpconfigport.h"
+#include "pros/rtos.h"
 
 #include "shared/runtime/gchelper.h"
 
@@ -87,12 +88,36 @@ void mp_port_print_last_exception(void) {
     }
 }
 
-size_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
+#include <stdio.h>
+#include <stddef.h>
+#include <string.h>
+#include "pros/rtos.h"
 
-    // Pass output to the standard terminal / console
-    printf("%.*s", (int)len, str);
+#define TX_LINE_BUF_SIZE 512
+
+size_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
+    static char line_buf[TX_LINE_BUF_SIZE];
+    static size_t buf_idx = 0;
+
+    if (str == NULL || len == 0) {
+        return 0;
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        line_buf[buf_idx++] = str[i];
+
+        if (str[i] == '\n' || buf_idx >= TX_LINE_BUF_SIZE) {
+            fwrite(line_buf, 1, buf_idx, stdout);
+            fflush(stdout);
+            buf_idx = 0;
+            if (str[i] == '\n') {
+                task_delay(12);
+            }
+        }
+    }
+
     return len;
-} 
+}
 
 // Concrete implementation mapping to the underlying PROS API delay clock
 void mp_hal_delay_ms(unsigned int ms) {
