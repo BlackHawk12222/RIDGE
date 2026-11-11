@@ -3,6 +3,12 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <limits.h>
+
+#ifndef SSIZE_MAX
+#define SSIZE_MAX INTPTR_MAX
+#endif
+
 
 // Handle stack allocations natively inside the toolchain compiler cross-layers
 #define alloca(size) __builtin_alloca(size)
@@ -15,7 +21,9 @@ typedef long mp_off_t;
 #define MICROPY_CONFIG_ROM_LEVEL        (MICROPY_CONFIG_ROM_LEVEL_EVERYTHING)
 #define MICROPY_ALLOC_PATH_MAX (512) // Default is often 128
 #define MICROPY_ALLOC_LEXER_CHUNK_SIZE (256) // Speeds up on-device compilation
-#define MICROPY_OBJ_REPR (MICROPY_OBJ_REPR_B)
+#define MICROPY_OBJ_REPR (MICROPY_OBJ_REPR_A)
+#define MICROPY_LONGINT_IMPL (MICROPY_LONGINT_IMPL_MPZ)
+#define MICROPY_FLOAT_IMPL (MICROPY_FLOAT_IMPL_FLOAT)
 
 // Force the internal VM runtime structures to look at QSTRs as 16-bit integers
 #define MICROPY_QSTR_BYTES_IN_LEN                  (2)
@@ -26,10 +34,17 @@ typedef long mp_off_t;
 #endif
 
 // Performance & Execution Optimizations
-#define MICROPY_EMIT_THUMB              (1) // Enable direct Thumb assembly generation for V5
-#define MICROPY_EMIT_INLINE_THUMB       (1) // Allows inline assembly inside script functions
+#define MICROPY_EMIT_THUMB              (1)
+#define MICROPY_EMIT_INLINE_THUMB       (1)
 #define MICROPY_COMP_CONST              (1) // Enables compile-time constant optimization
 #define MICROPY_OPT_CACHE_MAP_LOOKUP_IN_BYTECODE (1) // Speeds up object dictionary lookups
+#define MICROPY_OPT_COMPUTED_GOTO (1)
+#define MICROPY_SCHEDULER_DEPTH         (32)
+
+// #define MICROPY_PERSISTENT_CODE_LOAD    (1)
+// #define MICROPY_PERSISTENT_CODE_SAVE    (0)
+// #define MICROPY_PERSISTENT_CODE_LOAD_NATIVE (0)
+// #define MICROPY_PY_MARSHAL              (0)
 
 // Garbage Collection & Core Subsystems
 #define MICROPY_ENABLE_GC               (1)
@@ -44,7 +59,6 @@ typedef long mp_off_t;
 #define MICROPY_PY_SYS_PATH             (1)
 #define MICROPY_PY_SYS_PATH_ARGV_DEFAULTS (1)
 #define MICROPY_ENABLE_COMPILER (1)
-#define MICROPY_FLOAT_IMPL              (MICROPY_FLOAT_IMPL_FLOAT)
 
 // No stdin implementation is provided by this port.
 #define MICROPY_PY_BUILTINS_INPUT       (0)
@@ -60,7 +74,9 @@ typedef long mp_off_t;
 /* Allow baseline system tables to align tracking structs */
 #define MICROPY_PY_SYS_MUTABLE                     (1) // SG matching wrapper tracking
 
-#define MICROPY_NLR_SETJMP (1)  // Used for threads.
+#define MICROPY_NLR_SETJMP (0)
+#define MICROPY_PY_THREAD (1)
+#define MICROPY_PY_THREAD_GIL_VM_DIVISOR (8)
 
 #define MICROPY_HW_HAS_LCD (0)
 #define MICROPY_HW_ENABLE_LCD (0)
@@ -68,6 +84,10 @@ typedef long mp_off_t;
 #define MICROPY_HW_MCU_NAME   "Cortex-A9"
 
 // PROS System Traps & Standard Output Redirects
+#define MICROPY_PORT_ROOT_POINTERS \
+    const char *readline_hist[8]; \
+    mp_obj_t persistent_code_root_pointers;
+
 size_t mp_hal_stdout_tx_strn(const char *str, size_t len);
 
 #endif // INCLUDED_MPCONFIGPORT_H

@@ -28,6 +28,9 @@
 static mp_obj_t mp_vex_wait(size_t n_args, const mp_obj_t *args) {
     mp_arg_check_num(n_args, 0, 1, 2, false);
     double duration = mp_obj_get_float(args[0]);
+    if (duration < 0.0) {
+        duration = 1.0; // Clamp negative loop remainder to 1 ms
+    }
     int units = n_args == 2 ? mp_obj_get_int(args[1]) : VEX_TIME_UNITS_SECONDS;
     MP_THREAD_GIL_EXIT();
     bool valid = vex_logic_wait(duration, units);
@@ -37,6 +40,7 @@ static mp_obj_t mp_vex_wait(size_t n_args, const mp_obj_t *args) {
     }
     return mp_const_none;
 }
+    
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_vex_wait_obj, 1, 2, mp_vex_wait);
 
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_callback_roots);
@@ -92,7 +96,7 @@ mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data) {
     }
     return result;
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_callback_executor_obj, mp_vex_callback_executor);
+MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_callback_executor_obj, mp_vex_callback_executor);
 
 static void mp_vex_callback_trampoline(void *callback_data) {
     while (!mp_sched_schedule(MP_OBJ_FROM_PTR(&mp_vex_callback_executor_obj), MP_OBJ_FROM_PTR(callback_data))) {
@@ -106,8 +110,10 @@ static void *mp_vex_thread_entry(void *thread_data) {
     mp_obj_t *items;
     mp_obj_get_array(callback_data, &count, &items);
     mp_vex_thread_obj_t *thread = MP_OBJ_TO_PTR(items[4]);
+
     mp_state_thread_t thread_state;
-    mp_thread_init_state(&thread_state, 0, MP_OBJ_TO_PTR(items[5]), MP_OBJ_TO_PTR(items[6]));
+    // Pass real stack size (48 KB) instead of 0!
+    mp_thread_init_state(&thread_state, 0x3000 * sizeof(uint32_t), MP_OBJ_TO_PTR(items[5]), MP_OBJ_TO_PTR(items[6]));
 
     #if MICROPY_ENABLE_PYSTACK
     mp_obj_t mini_pystack[128];
@@ -556,14 +562,14 @@ static mp_obj_t mp_motor_make_new(const mp_obj_type_t *type, size_t n_args, size
 static mp_obj_t mp_motor_spin(size_t n_args, const mp_obj_t *args) {
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float velocity = mp_obj_get_float(args[2]);
-    int units = mp_obj_get_int(args[3]);
+    float velocity = (n_args > 2) ? mp_obj_get_float(args[2]) : 601.0f;
+    int units = (n_args > 3) ? mp_obj_get_int(args[3]) : 24;  // Default is RPM.
 
     motor_spin(self->cpp_handle, direction, velocity, units);
     return mp_const_none;
 }
 // obj, requred args, total args, function.
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_obj, 4, 4, mp_motor_spin);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_obj, 1, 4, mp_motor_spin);
 
 static mp_obj_t mp_motor_spin_for(size_t n_args, const mp_obj_t *args) {
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -769,6 +775,12 @@ static mp_obj_t mp_motor_get_timeout(mp_obj_t self_ptr){
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_motor_get_timeout_obj, mp_motor_get_timeout);
 
+static mp_obj_t mp_motor_installed(mp_obj_t self_ptr){
+    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return motor_installed(self->cpp_handle) ? mp_const_true : mp_const_false;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_motor_installed_obj, mp_motor_installed);
+
 static const mp_rom_map_elem_t mp_motor_locals_dict_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
     { MP_ROM_QSTR(MP_QSTR_spin), MP_ROM_PTR(&mp_motor_spin_obj) },
@@ -793,6 +805,7 @@ static const mp_rom_map_elem_t mp_motor_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_efficiency), MP_ROM_PTR(&mp_motor_efficiency_obj) },
     { MP_ROM_QSTR(MP_QSTR_temperature), MP_ROM_PTR(&mp_motor_temperature_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_timeout), MP_ROM_PTR(&mp_motor_get_timeout_obj) },
+    { MP_ROM_QSTR(MP_QSTR_installed), MP_ROM_PTR(&mp_motor_installed_obj) },
 };
 static MP_DEFINE_CONST_DICT(mp_motor_locals_dict, mp_motor_locals_dict_table);
 
@@ -807,14 +820,27 @@ MP_DEFINE_CONST_OBJ_TYPE(
 
 
 static mp_obj_t mp_motor_group_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
-    mp_arg_check_num(n_args, n_kw, 1, 1, false);
+    mp_arg_check_num(n_args, n_kw, 1, MP_OBJ_FUN_ARGS_MAX, false);
 
-    size_t count = 0;
-    mp_obj_t *items;
-    mp_obj_get_array(args[0], &count, &items); // Extracts the Python list array
+    size_t count = n_args;
+    const mp_obj_t *items = args;
+
+    // Also allow a single list/tuple for backwards compatibility if passed
+    if (n_args == 1 && (mp_obj_is_type(args[0], &mp_type_tuple) || mp_obj_is_type(args[0], &mp_type_list))) {
+        mp_obj_t *seq_items;
+        mp_obj_get_array(args[0], &count, &seq_items);
+        items = seq_items;
+    }
+
+    if (count == 0) {
+        mp_raise_ValueError(MP_ERROR_TEXT("MotorGroup requires at least one Motor"));
+    }
 
     void *motor_pointers[count];
     for (size_t i = 0; i < count; i++) {
+        if (!mp_obj_is_type(items[i], &mp_motor_type)) {
+            mp_raise_TypeError(MP_ERROR_TEXT("MotorGroup arguments must be Motor objects"));
+        }
         mp_motor_obj_t *motor_obj = MP_OBJ_TO_PTR(items[i]);
         motor_pointers[i] = motor_obj->cpp_handle;
     }
@@ -1106,13 +1132,26 @@ static size_t mp_drivetrain_motor_ports(mp_obj_t motors_obj, int8_t *ports) {
     return count;
 }
 
+static void* mp_drivetrain_extract_side(mp_obj_t side_obj, bool *is_group) {
+    if (mp_obj_is_type(side_obj, &mp_motor_type)) {
+        *is_group = false;
+        return ((mp_motor_obj_t *)MP_OBJ_TO_PTR(side_obj))->cpp_handle;
+    }
+    if (mp_obj_is_type(side_obj, &mp_motorgroup_type)) {
+        *is_group = true;
+        return ((mp_motorgroup_obj_t *)MP_OBJ_TO_PTR(side_obj))->cpp_handle;
+    }
+    mp_raise_TypeError(MP_ERROR_TEXT("DriveTrain left and right arguments must be Motor or MotorGroup"));
+}
+
 static mp_obj_t mp_drivetrain_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 2, 7, false);
 
-    int8_t left_ports[22];
-    int8_t right_ports[22];
-    size_t left_count = mp_drivetrain_motor_ports(args[0], left_ports);
-    size_t right_count = mp_drivetrain_motor_ports(args[1], right_ports);
+    bool left_is_group = false;
+    bool right_is_group = false;
+    void *left_ptr = mp_drivetrain_extract_side(args[0], &left_is_group);
+    void *right_ptr = mp_drivetrain_extract_side(args[1], &right_is_group);
+
     float wheel_travel = n_args > 2 ? mp_obj_get_float(args[2]) : 300.0f;
     float track_width = n_args > 3 ? mp_obj_get_float(args[3]) : 320.0f;
     float wheel_base = n_args > 4 ? mp_obj_get_float(args[4]) : 320.0f;
@@ -1123,10 +1162,11 @@ static mp_obj_t mp_drivetrain_make_new(const mp_obj_type_t *type, size_t n_args,
     }
 
     mp_drivetrain_obj_t *self = mp_obj_malloc(mp_drivetrain_obj_t, type);
-    self->cpp_handle = drivetrain_create(left_ports, (int)left_count, right_ports, (int)right_count,
+    self->cpp_handle = drivetrain_create(left_ptr, left_is_group, right_ptr, right_is_group,
                                          wheel_travel, track_width, wheel_base, units, gear_ratio);
     return MP_OBJ_FROM_PTR(self);
 }
+
 
 static mp_obj_t mp_drivetrain_drive(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -1459,7 +1499,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_timer_clear_obj, mp_timer_clear);
 static mp_obj_t mp_timer_time(size_t n_args, const mp_obj_t *args){
     mp_timer_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    int units =(n_args > 2) ? mp_obj_get_int(args[1]) : 38;  // Default is MSEC.
+    int units = (n_args > 1) ? mp_obj_get_int(args[1]) : VEX_TIME_UNITS_MSEC;
 
     int output;
     output = vex_timer_time(self -> cpp_handle, units);
@@ -1673,16 +1713,16 @@ static mp_obj_t mp_brain_screen_next_row(mp_obj_t self_ptr){
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_next_row_obj, mp_brain_screen_next_row);
 
-static mp_obj_t mp_brain_screen_clear_row(mp_obj_t self_ptr, mp_obj_t row_t, mp_obj_t color_t){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+static mp_obj_t mp_brain_screen_clear_row(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    int row = mp_obj_get_int(row_t);
-    int color = mp_color_get_value(color_t);
+    int row = mp_obj_get_int(args[1]);
+    int color = (n_args > 2) ? mp_color_get_value(args[2]) : 0;
 
     brain_screen_clear_row(self -> cpp_handle, row, color);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_clear_row_obj, mp_brain_screen_clear_row);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_clear_row_obj, 2, 3 , mp_brain_screen_clear_row);
 
 static mp_obj_t mp_brain_screen_row(mp_obj_t self_ptr){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
@@ -1774,15 +1814,14 @@ static mp_obj_t mp_brain_screen_new_line(mp_obj_t self_ptr){
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_new_line_obj, mp_brain_screen_new_line);
 
-static mp_obj_t mp_brain_screen_clear_screen(mp_obj_t self_ptr, mp_obj_t color_t){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+static mp_obj_t mp_brain_screen_clear_screen(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int color = (n_args > 1) ? mp_color_get_value(args[1]) : 0; // Default to BLACK (0)
 
-    int color = mp_color_get_value(color_t);
-
-    brain_screen_clear_screen(self -> cpp_handle, color);
+    brain_screen_clear_screen(self->cpp_handle, color);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_clear_screen_obj, mp_brain_screen_clear_screen);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_clear_screen_obj, 1, 2, mp_brain_screen_clear_screen);
 
 static mp_obj_t mp_brain_screen_set_font(mp_obj_t self_ptr, mp_obj_t font_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
@@ -2008,7 +2047,10 @@ static mp_obj_t mp_brain_sdcard_loadfile(size_t n_args, const mp_obj_t *args){
     }
 
     size_t result_size = 0;
+    MP_THREAD_GIL_EXIT();
     char* result = brain_sdcard_loadfile(self->cpp_handle, filename, buffer, buffer_size, &result_size);
+    MP_THREAD_GIL_ENTER();
+
     const char* output_data = result_size == 0 ? "" : result;
     mp_obj_t output = mp_obj_new_bytearray(result_size, output_data);
     if (buffer == NULL) {
@@ -2031,7 +2073,9 @@ static mp_obj_t mp_brain_sdcard_savefile(size_t n_args, const mp_obj_t *args){
         buffer_size = buffer_info.len;
     }
 
-    brain_sdcard_savefile(self -> cpp_handle, filename, buffer, buffer_size);
+    MP_THREAD_GIL_EXIT();
+    brain_sdcard_savefile(self->cpp_handle, filename, buffer, buffer_size);
+    MP_THREAD_GIL_ENTER();
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_sdcard_savefile_obj, 2, 3, mp_brain_sdcard_savefile);
@@ -2043,7 +2087,9 @@ static mp_obj_t mp_brain_sdcard_appendfile(mp_obj_t self_ptr, mp_obj_t filename_
     mp_buffer_info_t buffer_info;
     mp_get_buffer_raise(buffer_t, &buffer_info, MP_BUFFER_READ);
 
-    brain_sdcard_appendfile(self -> cpp_handle, filename, buffer_info.buf, buffer_info.len);
+    MP_THREAD_GIL_EXIT();
+    brain_sdcard_appendfile(self->cpp_handle, filename, buffer_info.buf, buffer_info.len);
+    MP_THREAD_GIL_ENTER();
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_sdcard_appendfile_obj, mp_brain_sdcard_appendfile);
@@ -2782,6 +2828,12 @@ static mp_obj_t mp_rotation_changed(size_t n_args, const mp_obj_t *args){
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_rotation_changed_obj, 2, 3, mp_rotation_changed);
 
+static mp_obj_t mp_rotation_installed(mp_obj_t self_ptr){
+    mp_rotation_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return vex_rotation_installed(self->cpp_handle) ? mp_const_true : mp_const_false;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_rotation_installed_obj, mp_rotation_installed);
+
 static const mp_rom_map_elem_t mp_rotation_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_set_position), MP_ROM_PTR(&mp_rotation_set_position_obj) },
     { MP_ROM_QSTR(MP_QSTR_angle), MP_ROM_PTR(&mp_rotation_angle_obj) },
@@ -2790,6 +2842,7 @@ static const mp_rom_map_elem_t mp_rotation_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_reset_position), MP_ROM_PTR(&mp_rotation_reset_position_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_reversed), MP_ROM_PTR(&mp_rotation_set_reversed_obj) },
     { MP_ROM_QSTR(MP_QSTR_changed), MP_ROM_PTR(&mp_rotation_changed_obj) },
+    { MP_ROM_QSTR(MP_QSTR_installed), MP_ROM_PTR(&mp_rotation_installed_obj) },
 };
 static MP_DEFINE_CONST_DICT(mp_rotation_locals_dict, mp_rotation_locals_dict_table);
 
@@ -3720,6 +3773,30 @@ static const mp_rom_map_elem_t mp_vex_link_type_locals_dict_table[] = {
 static MP_DEFINE_CONST_DICT(mp_vex_link_type_locals_dict, mp_vex_link_type_locals_dict_table);
 MP_DEFINE_CONST_OBJ_TYPE(mp_vex_link_type, MP_QSTR_vexlinktype, MP_TYPE_FLAG_NONE, locals_dict, &mp_vex_link_type_locals_dict);
 
+// 1. Add OrientationType (PITCH, ROLL, YAW)
+static const mp_rom_map_elem_t mp_orientation_type_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_PITCH), MP_ROM_INT(MP_VEX_PITCH) },
+    { MP_ROM_QSTR(MP_QSTR_ROLL), MP_ROM_INT(MP_VEX_ROLL) },
+    { MP_ROM_QSTR(MP_QSTR_YAW), MP_ROM_INT(MP_VEX_YAW) },
+};
+static MP_DEFINE_CONST_DICT(mp_orientation_type_locals_dict, mp_orientation_type_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(mp_orientation_type, MP_QSTR_orientationtype, MP_TYPE_FLAG_NONE, locals_dict, &mp_orientation_type_locals_dict);
+
+// 2. Add CurrentUnits (AMP)
+static const mp_rom_map_elem_t mp_current_units_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_AMP), MP_ROM_INT(33) },
+};
+static MP_DEFINE_CONST_DICT(mp_current_units_locals_dict, mp_current_units_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(mp_current_units_type, MP_QSTR_currentunits, MP_TYPE_FLAG_NONE, locals_dict, &mp_current_units_locals_dict);
+
+// 3. Add PowerUnits (WATT)
+static const mp_rom_map_elem_t mp_power_units_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_WATT), MP_ROM_INT(34) },
+};
+static MP_DEFINE_CONST_DICT(mp_power_units_locals_dict, mp_power_units_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(mp_power_units_type, MP_QSTR_powerunits, MP_TYPE_FLAG_NONE, locals_dict, &mp_power_units_locals_dict);
+
+
 // This dictionary holds everything inside the top-level namespace: 'import vex'
 static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),    MP_ROM_QSTR(MP_QSTR_vex) },
@@ -3730,7 +3807,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     // Bind Classes into the module namespace
     { MP_ROM_QSTR(MP_QSTR_Motor), MP_ROM_PTR(&mp_motor_type) },
     { MP_ROM_QSTR(MP_QSTR_MotorGroup), MP_ROM_PTR(&mp_motorgroup_type) },
-    { MP_ROM_QSTR(MP_QSTR_Drivetrain), MP_ROM_PTR(&mp_drivetrain_type) },
+    { MP_ROM_QSTR(MP_QSTR_DriveTrain), MP_ROM_PTR(&mp_drivetrain_type) },
     { MP_ROM_QSTR(MP_QSTR_MessageLink), MP_ROM_PTR(&mp_message_link_type) },
     { MP_ROM_QSTR(MP_QSTR_SerialLink), MP_ROM_PTR(&mp_serial_link_type) },
     { MP_ROM_QSTR(MP_QSTR_Timer), MP_ROM_PTR(&mp_timer_type) },
@@ -3772,6 +3849,9 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_AnalogUnits), MP_ROM_PTR(&mp_analog_units_type) },
     { MP_ROM_QSTR(MP_QSTR_GearSetting), MP_ROM_PTR(&mp_gear_setting_type) },
     { MP_ROM_QSTR(MP_QSTR_VexlinkType), MP_ROM_PTR(&mp_vex_link_type) },
+    { MP_ROM_QSTR(MP_QSTR_OrientationType), MP_ROM_PTR(&mp_orientation_type) },
+    { MP_ROM_QSTR(MP_QSTR_CurrentUnits), MP_ROM_PTR(&mp_current_units_type) },
+    { MP_ROM_QSTR(MP_QSTR_PowerUnits), MP_ROM_PTR(&mp_power_units_type) },
 
     // Bind Global Enum Constants directly to the module scope
     { MP_ROM_QSTR(MP_QSTR_RATIO_6_1),  MP_ROM_INT(8) },
@@ -3848,6 +3928,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ORANGE),      MP_ROM_INT(0xFFA500) },
     { MP_ROM_QSTR(MP_QSTR_PURPLE),      MP_ROM_INT(0x800080) },
     { MP_ROM_QSTR(MP_QSTR_CYAN),        MP_ROM_INT(0x00FFFF) },
+    
 };
 static MP_DEFINE_CONST_DICT(vex_module_globals, vex_module_globals_table);
 

@@ -45,6 +45,8 @@ class Rotation{
                 }
             });
         }
+
+        bool installed();
 };
 
 #endif // ROTATION_HPP

@@ -6,24 +6,15 @@ void Timer::clear(){
 }
 
 unsigned int Timer::time(TimeUnits units){
-    unsigned int output = 0;
+    unsigned int elapsed = pros::millis() - TimeSub;
     switch (units){
         case MSEC:
-        {
-            output = pros::millis();
-            break;
-        }
+            return elapsed;
         case SECONDS:
-        {
-            output = pros::millis() / 1000;
-            break;
-        }
+            return elapsed / 1000;
         default:
-        {
-            break;
-        }
+            return elapsed;
     }
-    return output;
 }
 
 template <typename Func, typename... Args>

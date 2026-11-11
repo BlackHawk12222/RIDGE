@@ -1,5 +1,6 @@
 #include <stdexcept>
 #include <initializer_list>
+#include <cmath>
 #include "main.h"
 #include "vex/motors.hpp"
 
@@ -9,33 +10,30 @@ extern "C"{
 }
 
 Motor::Motor(Ports port, GearSetting gears, bool reversed){
-    PortNum=port;
-    Ratio=gears;
-    IsReversed=reversed;
+    PortNum = port;
+    Ratio = gears;
+    IsReversed = reversed;
 
-    // 2. Cast your custom enum to the correct PROS 4 type: pros::v5::MotorGears
-    // 3. Apply the reversal logic to the port number directly
     std::int8_t active_port = IsReversed ? -static_cast<std::int8_t>(PortNum) : static_cast<std::int8_t>(PortNum);
-    
-    pros::Motor motor(active_port, static_cast<pros::v5::MotorGears>(Ratio));
+
+    this->motor = new pros::Motor(active_port, static_cast<pros::v5::MotorGears>(Ratio));
+    this->BASE = this->motor;
 }
 
-void Motor::timeout(){
-    int TimeTo_MSEC=0;
-    int ExpenedTime_MSEC;
-    if (TimeoutType == SECONDS){
-        TimeTo_MSEC=(int)(TimeoutTime * 1000);
-    }else{
-        TimeTo_MSEC=TimeoutTime;
-    }
 
-    while (ExpenedTime_MSEC >= TimeTo_MSEC && std::abs(motor->get_actual_velocity()) > 1){
-        ExpenedTime_MSEC+=10;
+void Motor::timeout(){
+    int target_ms = (TimeoutType == SECONDS) ? static_cast<int>(TimeoutTime * 1000.0f)
+                                             : static_cast<int>(TimeoutTime);
+    int elapsed_ms = 0;
+
+    while (elapsed_ms < target_ms && std::abs(motor->get_actual_velocity()) > 1.0) {
+        elapsed_ms += 10;
         pros::delay(10);
     }
 
     motor->brake();
 }
+
 
 void Motor::spin(Direction direction, float velocity, VelocityUnits units){
     if (velocity == 601){
@@ -53,6 +51,7 @@ void Motor::spin(Direction direction, float velocity, VelocityUnits units){
                     this->timeout(); // Or simply timeout();
                 }, "timeout");
             } 
+            break;
         }
         case VELOCITY_VOLT:
         {
@@ -62,7 +61,8 @@ void Motor::spin(Direction direction, float velocity, VelocityUnits units){
                 pros::Task timeout([this]() {
                     this->timeout(); // Or simply timeout();
                 }, "timeout");
-            } 
+            }
+            break;
         }
         case VELOCITY_PERCENT:
         {
@@ -72,7 +72,8 @@ void Motor::spin(Direction direction, float velocity, VelocityUnits units){
                 pros::Task timeout([this]() {
                     this->timeout(); // Or simply timeout();
                 }, "timeout");
-            } 
+            }
+            break;
         }
         case DPS:{
             velocity/=360;
@@ -81,12 +82,13 @@ void Motor::spin(Direction direction, float velocity, VelocityUnits units){
                 pros::Task timeout([this]() {
                     this->timeout(); // Or simply timeout();
                 }, "timeout");
-            } 
+            }
+            break;
         }
         default:
         {
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::spin");
+            break;
         }
     }
     
@@ -462,32 +464,29 @@ float Motor::efficiency(EfficiencyUnits units){
 }
 
 int Motor::temperature(TemperatureUnits units){
-    uint32_t output=0;
+    double raw_temp = motor->get_temperature();
+    if (!std::isfinite(raw_temp) || raw_temp < 0.0 || raw_temp > 200.0) {
+        return 2;
+    }
+
+    int output = 0;
     switch(units){
         case CELSIUS:
-        {
-            output= (int)std::round((float)(motor->get_temperature()));
+            output = (int)std::round(raw_temp);
             break;
-        }
         case FAHRENHEIT:
-        {
-            output= (int)std::round((float)(motor->get_temperature()) / 1.8f) + 32;
+            output = (int)std::round((raw_temp * 1.8) + 32.0);
             break;
-        }
         case TEMPERATURE_PERCENT:
-        {
-            output= (int)std::round((float)(motor->get_temperature()) * 0.57143f);
+            output = (int)std::round(raw_temp * 0.57143);
             break;
-        }
         default:
-        {
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
             throw std::runtime_error("Given Invalid Input in Motor::temperature");
-            break;
-        }
     }
     return output;
 }
+
 
 int Motor::get_timeout(){
     int output = 0;
@@ -511,52 +510,53 @@ int Motor::get_timeout(){
     return output; 
 }
 
+bool Motor::installed(){
+    return motor->is_installed();
+}
+
 MotorGroup::MotorGroup(std::initializer_list<Motor> motors){
-    pros::MotorGroup motor(extract_ports(motors)); 
+    this -> motor = new pros::MotorGroup(extract_ports(motors)); 
     
     if (motors.size() > 0) {
         // Get the first motor in the list to use as a configuration template
         const pros::Motor& TemplateMotor = *motors.begin()->BASE;
 
         // Set the configuration of the group using the template motor's data
-        motor.set_gearing(TemplateMotor.get_gearing());
-        motor.set_encoder_units(TemplateMotor.get_encoder_units());
+        motor->set_gearing(TemplateMotor.get_gearing());
+        motor->set_encoder_units(TemplateMotor.get_encoder_units());
     }
     
-    Count=motors.size();
+    this -> Count=motors.size();
 }
 
 MotorGroup::MotorGroup(Motor** motor_array, int count){
-    pros::MotorGroup motor(extract_ports(motor_array, count)); 
+    this -> motor = new pros::MotorGroup(extract_ports(motor_array, count));
     
     if (count > 0) {
         // Get the first motor in the list to use as a configuration template
         const pros::Motor& TemplateMotor = *motor_array[0]->BASE;
 
         // Set the configuration of the group using the template motor's data
-        motor.set_gearing(TemplateMotor.get_gearing());
-        motor.set_encoder_units(TemplateMotor.get_encoder_units());
+        motor -> set_gearing(TemplateMotor.get_gearing());
+        motor -> set_encoder_units(TemplateMotor.get_encoder_units());
     }
     
-    Count=count;
+    this -> Count=count;
 }
     
 void MotorGroup::timeout(){
-    int TimeTo_MSEC=0;
-    int ExpenedTime_MSEC;
-    if (TimeoutType == SECONDS){
-        TimeTo_MSEC=(int)(TimeoutTime * 1000);
-    }else{
-        TimeTo_MSEC=TimeoutTime;
-    }
+    int target_ms = (TimeoutType == SECONDS) ? static_cast<int>(TimeoutTime * 1000.0f)
+                                             : static_cast<int>(TimeoutTime);
+    int elapsed_ms = 0;
 
-    while (ExpenedTime_MSEC >= TimeTo_MSEC && std::abs(motor->get_actual_velocity()) > 1){
-        ExpenedTime_MSEC+=10;
+    while (elapsed_ms < target_ms && std::abs(motor->get_actual_velocity()) > 1.0) {
+        elapsed_ms += 10;
         pros::delay(10);
     }
 
     motor->brake();
 }
+
 
 void MotorGroup::spin(Direction direction, float velocity, VelocityUnits units){
     if (velocity == 601){
@@ -574,6 +574,7 @@ void MotorGroup::spin(Direction direction, float velocity, VelocityUnits units){
                     this->timeout(); // Or simply timeout();
                 }, "timeout");
             } 
+            break;
         }
         case VOLT:
         {
@@ -583,7 +584,8 @@ void MotorGroup::spin(Direction direction, float velocity, VelocityUnits units){
                 pros::Task timeout([this]() {
                     this->timeout(); // Or simply timeout();
                 }, "timeout");
-            }            
+            }
+            break;        
         }
         case VELOCITY_PERCENT:
         {
@@ -594,6 +596,7 @@ void MotorGroup::spin(Direction direction, float velocity, VelocityUnits units){
                     this->timeout();
                 }, "timeout");
             }  
+            break;
         }
         case DPS:{
             velocity/=360;
@@ -603,11 +606,12 @@ void MotorGroup::spin(Direction direction, float velocity, VelocityUnits units){
                     this->timeout(); // Or simply timeout();
                 }, "timeout");
             } 
+            break;
         }
         default:
         {
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::spin");
+            break;
         }
     }
     
@@ -656,7 +660,6 @@ void MotorGroup::spin_for(Direction direction, int angle, AngleUnits units, floa
         default:
         {
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::spin_for");
             break;
         }
     }

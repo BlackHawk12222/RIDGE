@@ -37,3 +37,7 @@ void Rotation::reset_position(){
 void Rotation::set_reversed(bool value){
     Sensor->set_reversed(value);
 }
+
+bool Rotation::installed(){
+    return Sensor->is_installed(); // Match whatever your pros::Rotation* member is named
+}

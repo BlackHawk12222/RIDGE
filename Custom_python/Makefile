@@ -54,14 +54,14 @@ EXTRA_CFLAGS += -I$(BINDIR)/micropython \
                 -Isrc/micropython/py \
                 -Isrc/micropython/extmod \
 				-Isrc/micropython/modules \
-				-O3 -ffast-math -flto
+				-O3 -funroll-loops -mcpu=cortex-a9 -mfpu=neon-fp16 -mfloat-abi=hard
 
 EXTRA_CXXFLAGS += -I$(BINDIR)/micropython \
                   -Isrc/micropython \
                   -Isrc/micropython/py \
                   -Isrc/micropython/extmod \
 				  -Isrc/vex \
-				  -O3 -ffast-math -flto
+				  -O3 -funroll-loops -mcpu=cortex-a9 -mfpu=neon-fp16 -mfloat-abi=hard
 
 # 3. Explicitly scan and track deep source paths inside common.mk loops
 EXTRA_SRCDIRS += src/micropython \

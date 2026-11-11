@@ -95,28 +95,66 @@ void mp_port_print_last_exception(void) {
 
 #define TX_LINE_BUF_SIZE 512
 
-size_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
-    static char line_buf[TX_LINE_BUF_SIZE];
-    static size_t buf_idx = 0;
+#include <stdio.h>
+#include <stddef.h>
+#include "pros/rtos.h"
 
+#define TX_LINE_BUF_SIZE 512
+
+static mutex_t stdout_mutex = NULL;
+
+// size_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
+//     static char line_buf[TX_LINE_BUF_SIZE];
+//     static size_t buf_idx = 0;
+
+//     if (str == NULL || len == 0) {
+//         return 0;
+//     }
+
+//     if (stdout_mutex == NULL) {
+//         stdout_mutex = mutex_create();
+//     }
+//     if (stdout_mutex != NULL) {
+//         mutex_take(stdout_mutex, TIMEOUT_MAX);
+//     }
+
+//     for (size_t i = 0; i < len; i++) {
+//         line_buf[buf_idx++] = str[i];
+
+//         if (str[i] == '\n' || buf_idx >= TX_LINE_BUF_SIZE) {
+//             char flush_copy[TX_LINE_BUF_SIZE];
+//             size_t flush_len = buf_idx;
+//             memcpy(flush_copy, line_buf, flush_len);
+//             buf_idx = 0;
+
+//             if (stdout_mutex != NULL) {
+//                 mutex_give(stdout_mutex);
+//             }
+
+//             // Release the Python GIL while writing to V5 serial
+//             MP_THREAD_GIL_EXIT();
+//             fwrite(flush_copy, 1, flush_len, stdout);
+//             fflush(stdout);
+//             MP_THREAD_GIL_ENTER();
+
+//             if (stdout_mutex != NULL) {
+//                 mutex_take(stdout_mutex, TIMEOUT_MAX);
+//             }
+//         }
+//     }
+
+//     if (stdout_mutex != NULL) {
+//         mutex_give(stdout_mutex);
+//     }
+
+//     return len;
+// }
+
+size_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
     if (str == NULL || len == 0) {
         return 0;
     }
-
-    for (size_t i = 0; i < len; i++) {
-        line_buf[buf_idx++] = str[i];
-
-        if (str[i] == '\n' || buf_idx >= TX_LINE_BUF_SIZE) {
-            fwrite(line_buf, 1, buf_idx, stdout);
-            fflush(stdout);
-            buf_idx = 0;
-            if (str[i] == '\n') {
-                task_delay(12);
-            }
-        }
-    }
-
-    return len;
+    return fwrite(str, 1, len, stdout);
 }
 
 // Concrete implementation mapping to the underlying PROS API delay clock

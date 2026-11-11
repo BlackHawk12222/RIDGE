@@ -122,7 +122,7 @@ static void thread_task_entry(void *parameter) {
 
 mp_uint_t mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size) {
     size_t stack_bytes = *stack_size;
-    uint32_t stack_depth = 0x1800; // Always use 24 KB (6,144 words) per thread
+    uint32_t stack_depth = 0x3000;
     *stack_size = (size_t)stack_depth * sizeof(uint32_t);
 
     mp_thread_record_t *record = malloc(sizeof(*record));

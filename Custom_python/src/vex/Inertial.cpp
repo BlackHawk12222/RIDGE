@@ -3,7 +3,7 @@
 #include <cmath>
 
 Inertial::Inertial(Ports port){
-    Sensor = new pros::Imu(static_cast<std::uint8_t>(port));
+    this -> Sensor = new pros::Imu(static_cast<std::uint8_t>(port));
 }
 
 float Inertial::heading(AngleUnits units){

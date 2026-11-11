@@ -1048,7 +1048,7 @@ try:
 
             start:int=log_time.time()
 
-            self.format:str=str(settings.settings.get('format_used '))
+            self.format:str=str(settings.settings.get('format_used ')).strip()
             self.tolrance:int=int(str(settings.settings.get('default_tolrance ')))
             wait_time_logging:int=int(str(settings.settings.get('logging_loop_wait ')))
 

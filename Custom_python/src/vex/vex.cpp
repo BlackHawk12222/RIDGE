@@ -29,6 +29,7 @@
 #include "vex/ThreeWireDevices/PotentiometerV2.hpp"
 #include "vex/ThreeWireDevices/Pwm.hpp"
 #include "vex/ThreeWireDevices/Sonar.hpp"
+#include "pros/rtos.hpp"
 
 #include <exception>
 
@@ -39,6 +40,8 @@ extern "C"{
     #include "py/obj.h"
     #include "py/mpthread.h"
 }
+
+static pros::Mutex screen_mutex;
 
 template <typename Function>
 static void run_drivetrain_call(bool wait, Function function) {
@@ -177,6 +180,10 @@ int motor_get_timeout(void* motor_ptr){
     return static_cast<Motor*>(motor_ptr)->get_timeout();
 }
 
+bool motor_installed(void* motor_ptr){
+    return static_cast<Motor*>(motor_ptr)->installed();
+}
+
 /*DEFINE class MotorGroup for C*/
 void* motor_group_create(void** motor_ptrs, int count) {
     Motor** target_motors = reinterpret_cast<Motor**>(motor_ptrs);
@@ -277,14 +284,26 @@ int motor_group_count(void* motor_ptr){
 }
 
 /* DEFINE class Drivetrain for C */
-void* drivetrain_create(const int8_t* left_ports, int left_count,
-                        const int8_t* right_ports, int right_count,
-                        float wheel_travel, float track_width, float wheel_base,
-                        int units, float external_gear_ratio){
-    std::vector<std::int8_t> left(left_ports, left_ports + left_count);
-    std::vector<std::int8_t> right(right_ports, right_ports + right_count);
-    return new Drivetrain(left, right, wheel_travel, track_width, wheel_base,
-                          static_cast<DistanceUnits>(units), external_gear_ratio);
+void* drivetrain_create(void* left_ptr, bool left_is_group,
+    void* right_ptr, bool right_is_group,
+    float wheel_travel, float track_width, float wheel_base,
+    int units, float external_gear_ratio){
+
+    const DistanceUnits dist_units = static_cast<DistanceUnits>(units);
+    if (left_is_group && right_is_group) {
+    return new Drivetrain(static_cast<MotorGroup*>(left_ptr), static_cast<MotorGroup*>(right_ptr),
+            wheel_travel, track_width, wheel_base, dist_units, external_gear_ratio);
+    }
+    if (!left_is_group && !right_is_group) {
+    return new Drivetrain(static_cast<Motor*>(left_ptr), static_cast<Motor*>(right_ptr),
+            wheel_travel, track_width, wheel_base, dist_units, external_gear_ratio);
+    }
+    if (left_is_group) {
+    return new Drivetrain(static_cast<MotorGroup*>(left_ptr), static_cast<Motor*>(right_ptr),
+            wheel_travel, track_width, wheel_base, dist_units, external_gear_ratio);
+    }
+    return new Drivetrain(static_cast<Motor*>(left_ptr), static_cast<MotorGroup*>(right_ptr),
+        wheel_travel, track_width, wheel_base, dist_units, external_gear_ratio);
 }
 
 void drivetrain_destroy(void* drivetrain_ptr){
@@ -496,11 +515,9 @@ struct TaskParams {
 
 void timer_rtos_task(void* params) {
     TaskParams* p = static_cast<TaskParams*>(params);
-    
-    pros::delay(p->delay); 
+    pros::delay(p->delay);
 
-    // Inject the Python callback back into MicroPython's execution engine safely
-    while (!mp_sched_schedule(MP_OBJ_FROM_PTR(mp_vex_callback_executor), p->callback_data)) {
+    while (!mp_sched_schedule(MP_OBJ_FROM_PTR(&mp_vex_callback_executor_obj), p->callback_data)) {
         pros::delay(1);
     }
 
@@ -978,6 +995,10 @@ void vex_rotation_changed(void* rotation_ptr, c_callback_t callback, void* args)
             callback(args);
         }
     });
+}
+
+bool vex_rotation_installed(void* rotation_ptr){
+    return static_cast<Rotation*>(rotation_ptr)->installed();
 }
 
 /*DEFINE class Optical for C*/

@@ -4,11 +4,12 @@
 #include <string>
 #include <vector>
 #include <sstream>
-#include <charconv>
 #include <map>
+#include <deque>
 #include "main.h"
 #include "vex/font_init.h"
 #include "timer.hpp"
+#include "pros/rtos.hpp"
 
 extern "C" {
 #include "py/runtime.h"
@@ -130,6 +131,35 @@ class Screen{
         std::string format_text(const std::string& text, const std::string& sep, int precision);
         void draw_text(const std::string& text, int x, int y, bool opaque);
         void delete_text_labels(int x, int y, int width, int height);
+
+        enum class LvglCmdType {
+            DrawText,
+            DeleteArea,
+            ClearAll
+        };
+        
+        struct LvglCmd {
+            LvglCmdType type;
+            std::string text;
+            int x = 0;
+            int y = 0;
+            int width = 0;
+            int height = 0;
+            bool opaque = true;
+            const lv_font_t* font_ptr = nullptr;
+            uint32_t pen_color = 0xFFFFFF;
+            uint32_t bg_color = 0x000000;
+        };
+        
+        pros::Mutex lvgl_queue_mutex_;
+        std::deque<LvglCmd> lvgl_queue_;
+        pros::Task* lvgl_worker_task_ = nullptr;
+        
+        void ensure_lvgl_worker();
+        void process_lvgl_queue();
+        void apply_draw_text_lvgl(const LvglCmd& cmd);
+        void apply_delete_area_lvgl(const LvglCmd& cmd);
+        void apply_clear_all_lvgl();
 
     public:
         void print(std::string text, std::string sep = "", int precision = 2);

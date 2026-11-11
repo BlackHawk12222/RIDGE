@@ -5,8 +5,8 @@
 #include "main.h"
 
 enum TimeUnits{
-    SECONDS=27,
-    MSEC=28
+    SECONDS = 37,
+    MSEC = 38
 };
 
 class Timer{

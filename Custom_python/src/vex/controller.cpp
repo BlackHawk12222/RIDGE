@@ -2,7 +2,7 @@
 #include "vex/controller.hpp"
 
 ControllerScreen::ControllerScreen(pros::Controller* controller){
-    ControllerObj = controller;
+    this -> ControllerObj = controller;
 }
 
 bool ControllerScreen::is_number(const std::string& str) {
@@ -105,27 +105,27 @@ Controller::Controller(ControllerType controller_type){
         }
     }
 
-    ControllerObj = new pros::Controller(Type);
+    this -> ControllerObj = new pros::Controller(Type);
 
-    screen = new ControllerScreen(ControllerObj);
+    this -> screen = new ControllerScreen(ControllerObj);
 
-    axis1 = new ControllerAxis(pros::E_CONTROLLER_ANALOG_RIGHT_X, ControllerObj);
-    axis2 = new ControllerAxis(pros::E_CONTROLLER_ANALOG_RIGHT_Y, ControllerObj);
-    axis3 = new ControllerAxis(pros::E_CONTROLLER_ANALOG_LEFT_Y, ControllerObj);
-    axis4 = new ControllerAxis(pros::E_CONTROLLER_ANALOG_LEFT_X, ControllerObj);
+    this -> axis1 = new ControllerAxis(pros::E_CONTROLLER_ANALOG_RIGHT_X, ControllerObj);
+    this -> axis2 = new ControllerAxis(pros::E_CONTROLLER_ANALOG_RIGHT_Y, ControllerObj);
+    this -> axis3 = new ControllerAxis(pros::E_CONTROLLER_ANALOG_LEFT_Y, ControllerObj);
+    this -> axis4 = new ControllerAxis(pros::E_CONTROLLER_ANALOG_LEFT_X, ControllerObj);
 
-    buttonA = new ControllerButton(pros::E_CONTROLLER_DIGITAL_A, ControllerObj);
-    buttonB = new ControllerButton(pros::E_CONTROLLER_DIGITAL_B, ControllerObj);
-    buttonX = new ControllerButton(pros::E_CONTROLLER_DIGITAL_X, ControllerObj);
-    buttonY = new ControllerButton(pros::E_CONTROLLER_DIGITAL_Y, ControllerObj);
-    buttonDown = new ControllerButton(pros::E_CONTROLLER_DIGITAL_DOWN, ControllerObj);
-    buttonUp = new ControllerButton(pros::E_CONTROLLER_DIGITAL_UP, ControllerObj);
-    buttonLeft = new ControllerButton(pros::E_CONTROLLER_DIGITAL_LEFT, ControllerObj);
-    buttonRight = new ControllerButton(pros::E_CONTROLLER_DIGITAL_RIGHT, ControllerObj);
-    buttonR1 = new ControllerButton(pros::E_CONTROLLER_DIGITAL_R1, ControllerObj);
-    buttonR2 = new ControllerButton(pros::E_CONTROLLER_DIGITAL_R2, ControllerObj);
-    buttonL1 = new ControllerButton(pros::E_CONTROLLER_DIGITAL_L1, ControllerObj);
-    buttonL2 = new ControllerButton(pros::E_CONTROLLER_DIGITAL_L2, ControllerObj);
+    this -> buttonA = new ControllerButton(pros::E_CONTROLLER_DIGITAL_A, ControllerObj);
+    this -> buttonB = new ControllerButton(pros::E_CONTROLLER_DIGITAL_B, ControllerObj);
+    this -> buttonX = new ControllerButton(pros::E_CONTROLLER_DIGITAL_X, ControllerObj);
+    this -> buttonY = new ControllerButton(pros::E_CONTROLLER_DIGITAL_Y, ControllerObj);
+    this -> buttonDown = new ControllerButton(pros::E_CONTROLLER_DIGITAL_DOWN, ControllerObj);
+    this -> buttonUp = new ControllerButton(pros::E_CONTROLLER_DIGITAL_UP, ControllerObj);
+    this -> buttonLeft = new ControllerButton(pros::E_CONTROLLER_DIGITAL_LEFT, ControllerObj);
+    this -> buttonRight = new ControllerButton(pros::E_CONTROLLER_DIGITAL_RIGHT, ControllerObj);
+    this -> buttonR1 = new ControllerButton(pros::E_CONTROLLER_DIGITAL_R1, ControllerObj);
+    this -> buttonR2 = new ControllerButton(pros::E_CONTROLLER_DIGITAL_R2, ControllerObj);
+    this -> buttonL1 = new ControllerButton(pros::E_CONTROLLER_DIGITAL_L1, ControllerObj);
+    this -> buttonL2 = new ControllerButton(pros::E_CONTROLLER_DIGITAL_L2, ControllerObj);
 }
 
 void Controller::rumble(std::string pattern){

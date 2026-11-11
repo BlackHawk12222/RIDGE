@@ -7,6 +7,8 @@
 #include <functional>
 #include <fstream>
 #include <cstdio>
+#include <deque>
+#include <mutex>
 #include <cerrno>
 #include "main.h"
 #include "vex/brain.hpp"
@@ -93,6 +95,103 @@ bool Screen::is_number(const std::string& str) {
     return ec == std::errc() && ptr == str.data() + str.size();
 }
 
+void Screen::ensure_lvgl_worker() {
+    if (lvgl_worker_task_ == nullptr) {
+        lvgl_worker_task_ = new pros::Task([this]() {
+            while (true) {
+                lv_display_t* disp = lv_display_get_default();
+                // Wait until LVGL is registered and NOT actively rendering a frame
+                if (disp != nullptr && !disp->rendering_in_progress) {
+                    process_lvgl_queue();
+                }
+                pros::delay(5);
+            }
+        }, TASK_PRIORITY_DEFAULT, TASK_STACK_DEPTH_DEFAULT, "VEX Screen LVGL");
+    }
+}
+
+void Screen::process_lvgl_queue() {
+    std::deque<LvglCmd> batch;
+    {
+        std::lock_guard<pros::Mutex> lock(lvgl_queue_mutex_);
+        if (lvgl_queue_.empty()) {
+            return;
+        }
+        batch.swap(lvgl_queue_);
+    }
+
+    for (const auto& cmd : batch) {
+        lv_display_t* disp = lv_display_get_default();
+        while (disp != nullptr && disp->rendering_in_progress) {
+            pros::delay(1);
+        }
+        switch (cmd.type) {
+            case LvglCmdType::DrawText:
+                apply_draw_text_lvgl(cmd);
+                break;
+            case LvglCmdType::DeleteArea:
+                apply_delete_area_lvgl(cmd);
+                break;
+            case LvglCmdType::ClearAll:
+                apply_clear_all_lvgl();
+                break;
+        }
+    }
+}
+
+void Screen::apply_draw_text_lvgl(const LvglCmd& cmd) {
+    lv_obj_t* active = lv_screen_active();
+    if (active == nullptr) {
+        return;
+    }
+
+    const std::pair<int, int> position{cmd.x, cmd.y};
+    auto label = TextLabels.find(position);
+    if (label == TextLabels.end()) {
+        lv_obj_t* object = lv_label_create(active);
+        if (object == nullptr) {
+            return;
+        }
+        label = TextLabels.emplace(position, object).first;
+    }
+
+    lv_obj_t* object = label->second;
+    lv_label_set_text(object, cmd.text.c_str());
+    lv_obj_set_style_text_font(object, cmd.font_ptr, LV_PART_MAIN);
+    lv_obj_set_style_text_color(object, lv_color_hex(cmd.pen_color), LV_PART_MAIN);
+    lv_obj_set_style_text_opa(object, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(object, lv_color_hex(cmd.bg_color), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(object, cmd.opaque ? LV_OPA_COVER : LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(object, 0, LV_PART_MAIN);
+    lv_obj_set_style_border_width(object, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(object, 0, LV_PART_MAIN);
+    lv_obj_set_pos(object, cmd.x, cmd.y);
+}
+
+void Screen::apply_delete_area_lvgl(const LvglCmd& cmd) {
+    for (auto label = TextLabels.begin(); label != TextLabels.end();) {
+        lv_obj_t* object = label->second;
+        const int label_x = lv_obj_get_x(object);
+        const int label_y = lv_obj_get_y(object);
+        const int label_right = label_x + lv_obj_get_width(object);
+        const int label_bottom = label_y + lv_obj_get_height(object);
+        if (label_x < cmd.x + cmd.width && label_right > cmd.x &&
+            label_y < cmd.y + cmd.height && label_bottom > cmd.y) {
+            lv_obj_delete(object);
+            label = TextLabels.erase(label);
+        } else {
+            ++label;
+        }
+    }
+}
+
+void Screen::apply_clear_all_lvgl() {
+    for (const auto& label : TextLabels) {
+        lv_obj_delete(label.second);
+    }
+    TextLabels.clear();
+}
+
 const lv_font_t* Screen::current_font() const {
     // The generated mono files currently contain only the space glyph.
     static const std::array<const lv_font_t*, 6> fallback_fonts = {
@@ -170,48 +269,40 @@ std::string Screen::format_text(const std::string& text, const std::string& sep,
 }
 
 void Screen::draw_text(const std::string& text, int x, int y, bool opaque) {
-    lv_lock();
-    const std::pair<int, int> position{x, y};
-    auto label = TextLabels.find(position);
-    if (label == TextLabels.end()) {
-        lv_obj_t* object = lv_label_create(lv_screen_active());
-        if (object == nullptr) {
-            lv_unlock();
-            mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Unable to create screen text"));
-        }
-        label = TextLabels.emplace(position, object).first;
-    }
+    const lv_font_t* font_ptr = current_font();
+    LvglCmd cmd;
+    cmd.type = LvglCmdType::DrawText;
+    cmd.text = text;
+    cmd.x = x;
+    cmd.y = y;
+    cmd.opaque = opaque;
+    cmd.font_ptr = font_ptr;
+    cmd.pen_color = static_cast<uint32_t>(PenColor);
+    cmd.bg_color = BackgroundColor;
 
-    lv_obj_t* object = label->second;
-    lv_label_set_text(object, text.c_str());
-    lv_obj_set_style_text_font(object, current_font(), LV_PART_MAIN);
-    lv_obj_set_style_text_color(object, lv_color_hex(static_cast<uint32_t>(PenColor)), LV_PART_MAIN);
-    lv_obj_set_style_text_opa(object, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(object, lv_color_hex(BackgroundColor), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(object, opaque ? LV_OPA_COVER : LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(object, 0, LV_PART_MAIN);
-    lv_obj_set_style_border_width(object, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(object, 0, LV_PART_MAIN);
-    lv_obj_set_pos(object, x, y);
-    lv_unlock();
+    std::lock_guard<pros::Mutex> lock(lvgl_queue_mutex_);
+    ensure_lvgl_worker();
+    // Coalesce repeated updates to the same (x, y) coordinate so fast loops don't back up
+    for (auto& existing : lvgl_queue_) {
+        if (existing.type == LvglCmdType::DrawText && existing.x == x && existing.y == y) {
+            existing = std::move(cmd);
+            return;
+        }
+    }
+    lvgl_queue_.push_back(std::move(cmd));
 }
 
 void Screen::delete_text_labels(int x, int y, int width, int height) {
-    lv_lock();
-    for (auto label = TextLabels.begin(); label != TextLabels.end();) {
-        lv_obj_t* object = label->second;
-        const int label_x = lv_obj_get_x(object);
-        const int label_y = lv_obj_get_y(object);
-        const int label_right = label_x + lv_obj_get_width(object);
-        const int label_bottom = label_y + lv_obj_get_height(object);
-        if (label_x < x + width && label_right > x && label_y < y + height && label_bottom > y) {
-            lv_obj_delete(object);
-            label = TextLabels.erase(label);
-        } else {
-            ++label;
-        }
-    }
-    lv_unlock();
+    LvglCmd cmd;
+    cmd.type = LvglCmdType::DeleteArea;
+    cmd.x = x;
+    cmd.y = y;
+    cmd.width = width;
+    cmd.height = height;
+
+    std::lock_guard<pros::Mutex> lock(lvgl_queue_mutex_);
+    ensure_lvgl_worker();
+    lvgl_queue_.push_back(std::move(cmd));
 }
 
 void Screen::print(std::string text, std::string sep, int precision) {
@@ -231,7 +322,6 @@ void Screen::print(std::string text, std::string sep, int precision) {
 void Screen::set_cursor(int row, int col){
     ScreenY=row;
     ScreenX=col;
-    
 }
 
 void Screen::next_row(){
@@ -293,13 +383,15 @@ void Screen::new_line(){
     ScreenY+=1;
 }
 
-void Screen::clear_screen(Color color){
-    lv_lock();
-    for (const auto& label : TextLabels) {
-        lv_obj_delete(label.second);
+void Screen::clear_screen(Color color) {
+    {
+        std::lock_guard<pros::Mutex> lock(lvgl_queue_mutex_);
+        ensure_lvgl_worker();
+        lvgl_queue_.clear();
+        LvglCmd cmd;
+        cmd.type = LvglCmdType::ClearAll;
+        lvgl_queue_.push_back(std::move(cmd));
     }
-    TextLabels.clear();
-    lv_unlock();
     BackgroundColor = color.ColorValue;
     pros::screen::set_eraser(color.ColorValue);
     pros::screen::erase();

@@ -123,8 +123,11 @@ void initialize() {
     FILE* py_file = fopen("/usd/main.py", "r");
 
     if (py_file == NULL) {
-        report_status("ERROR: /usd/main.py not found");
-        return;
+        py_file = fopen("/usd/main.mpy", "r");
+        if (py_file == NULL) {
+            report_status("ERROR: /usd/main.py not found");
+            return;
+        }
     }
 
     if (fseek(py_file, 0, SEEK_END) != 0) {
@@ -159,7 +162,7 @@ void initialize() {
     python_buffer[bytes_read] = '\0';
 
     pros::task_t task = pros::c::task_create(
-        run_python_script, python_buffer, TASK_PRIORITY_DEFAULT, 0x4000,
+        run_python_script, python_buffer, 12, 0x4000,
         "MicroPython Script"
     );
     if (task == nullptr) {

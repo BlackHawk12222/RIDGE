@@ -19,7 +19,7 @@ Thread::Thread(Callback callback, void* user_data)
             } // state_holder and shared_ptr cleanly destroyed here
             pros::c::task_delete(nullptr);
         },
-        task_state, TASK_PRIORITY_DEFAULT, 0x3000, "VEX Python Thread");
+        task_state, TASK_PRIORITY_DEFAULT, 0x2000, "VEX Python Thread");
 
     if (task == nullptr) {
         delete task_state;

@@ -147,6 +147,8 @@ class Motor {
         int port() const {
             return IsReversed ? -static_cast<int>(PortNum) : static_cast<int>(PortNum);
         }
+
+        bool installed();
 };
 
 class MotorGroup{ 
@@ -166,16 +168,16 @@ class MotorGroup{
 
         static std::vector<std::int8_t> extract_ports(std::initializer_list<Motor> motors){
             std::vector<std::int8_t> PortList;
-            for (Motor motorloop : motors){
-                PortList.push_back(motorloop.BASE->get_port());
+            for (const Motor& motorloop : motors){
+                PortList.push_back(static_cast<std::int8_t>(motorloop.port()));
             }
             return PortList;
         }
 
         static std::vector<std::int8_t> extract_ports(Motor** motors, int count){
             std::vector<std::int8_t> PortList;
-            for (int i=1; i<=count; i++){
-                PortList.push_back(motors[i]->BASE->get_port());
+            for (int i = 0; i < count; i++){
+                PortList.push_back(static_cast<std::int8_t>(motors[i]->port()));
             }
             return PortList;
         }
@@ -228,6 +230,12 @@ class MotorGroup{
         int get_timeout();
 
         int count();
+
+        // Add inside public: of class MotorGroup in include/vex/motors.hpp
+        std::vector<std::int8_t> get_ports() const {
+            return motor ? motor->get_port_all() : std::vector<std::int8_t>{};
+        }
+
 };
 
 #endif //MOTOR_HPP

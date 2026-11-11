@@ -12,6 +12,7 @@ extern "C"{  // Wrapper to make sure it is defined using C standerds and not C++
 #include <stdint.h>
 
 typedef void (*c_callback_t)(void* user_data);  // Used for callbacks.
+extern const mp_obj_fun_builtin_fixed_t mp_vex_callback_executor_obj;
 
 enum {
     VEX_TIME_UNITS_SECONDS = 37,
@@ -59,6 +60,8 @@ float motor_torque(void* motor_ptr, int units);
 float motor_efficiency(void* motor_ptr, int units);
 int motor_temperature(void* motor_ptr, int units);
 int motor_get_timeout(void* motor_ptr);
+bool motor_installed(void* motor_ptr);
+
 
 /*DEFINE class MotorGroup for C*/
 void* motor_group_create(void** motor_ptrs, int count);
@@ -88,10 +91,11 @@ int motor_group_get_timeout(void* motor_ptr);
 int motor_group_count(void* motor_ptr);
 
 /* DEFINE class Drivetrain for C */
-void* drivetrain_create(const int8_t* left_ports, int left_count,
-                        const int8_t* right_ports, int right_count,
-                        float wheel_travel, float track_width, float wheel_base,
-                        int units, float external_gear_ratio);
+void* drivetrain_create(void* left_ptr, bool left_is_group,
+    void* right_ptr, bool right_is_group,
+    float wheel_travel, float track_width, float wheel_base,
+    int units, float external_gear_ratio);
+
 void drivetrain_destroy(void* drivetrain_ptr);
 void drivetrain_drive(void* drivetrain_ptr, int direction, float velocity, int units);
 void drivetrain_drive_for(void* drivetrain_ptr, int direction, float distance, int units,
@@ -273,6 +277,7 @@ float vex_rotation_velocity(void* rotation_ptr, int units);
 void vex_rotation_reset_position(void* rotation_ptr);
 void vex_rotation_set_reversed(void* rotation_ptr, bool value);
 void vex_rotation_changed(void* rotation_ptr, c_callback_t callback, void* args);
+bool vex_rotation_installed(void* rotation_ptr);
 
 /*DEFINE class Optical for C*/
 void* optical_create(int port);

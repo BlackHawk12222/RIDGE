@@ -54,6 +54,23 @@ class Drivetrain {
                    DistanceUnits units = MM,
                    float external_gear_ratio = 1.0f);
 
+        Drivetrain(Motor* left_motor, Motor* right_motor,
+        float wheel_travel, float track_width, float wheel_base,
+        DistanceUnits units = MM, float external_gear_ratio = 1.0f);
+         
+        Drivetrain(MotorGroup* left_group, MotorGroup* right_group,
+                float wheel_travel, float track_width, float wheel_base,
+                DistanceUnits units = MM, float external_gear_ratio = 1.0f);
+         
+        Drivetrain(Motor* left_motor, MotorGroup* right_group,
+                float wheel_travel, float track_width, float wheel_base,
+                DistanceUnits units = MM, float external_gear_ratio = 1.0f);
+        
+        Drivetrain(MotorGroup* left_group, Motor* right_motor,
+                float wheel_travel, float track_width, float wheel_base,
+                DistanceUnits units = MM, float external_gear_ratio = 1.0f);
+         
+
         void drive(Direction direction, float velocity = -1.0f, VelocityUnits units = VELOCITY_PERCENT);
         void drive_for(Direction direction, float distance, DistanceUnits units = MM,
                        float velocity = -1.0f, VelocityUnits velocity_units = VELOCITY_PERCENT, bool wait = true);

@@ -43,6 +43,34 @@ Drivetrain::Drivetrain(const std::vector<std::int8_t>& left_ports,
     right_origin_ = right_target_;
 }
 
+Drivetrain::Drivetrain(Motor* left_motor, Motor* right_motor,
+    float wheel_travel, float track_width, float wheel_base,
+    DistanceUnits units, float external_gear_ratio)
+: Drivetrain(std::vector<std::int8_t>{static_cast<std::int8_t>(left_motor->port())},
+std::vector<std::int8_t>{static_cast<std::int8_t>(right_motor->port())},
+wheel_travel, track_width, wheel_base, units, external_gear_ratio) {}
+
+Drivetrain::Drivetrain(MotorGroup* left_group, MotorGroup* right_group,
+    float wheel_travel, float track_width, float wheel_base,
+    DistanceUnits units, float external_gear_ratio)
+: Drivetrain(left_group->get_ports(), right_group->get_ports(),
+wheel_travel, track_width, wheel_base, units, external_gear_ratio) {}
+
+Drivetrain::Drivetrain(Motor* left_motor, MotorGroup* right_group,
+    float wheel_travel, float track_width, float wheel_base,
+    DistanceUnits units, float external_gear_ratio)
+: Drivetrain(std::vector<std::int8_t>{static_cast<std::int8_t>(left_motor->port())},
+right_group->get_ports(),
+wheel_travel, track_width, wheel_base, units, external_gear_ratio) {}
+
+Drivetrain::Drivetrain(MotorGroup* left_group, Motor* right_motor,
+    float wheel_travel, float track_width, float wheel_base,
+    DistanceUnits units, float external_gear_ratio)
+: Drivetrain(left_group->get_ports(),
+std::vector<std::int8_t>{static_cast<std::int8_t>(right_motor->port())},
+wheel_travel, track_width, wheel_base, units, external_gear_ratio) {}
+
+
 float Drivetrain::to_millimeters(float value, DistanceUnits units) {
     switch (units) {
         case MM:
