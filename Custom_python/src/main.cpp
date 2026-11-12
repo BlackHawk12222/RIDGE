@@ -6,6 +6,7 @@
 #include "main.h"
 #include "pros/apix.h"
 #include "vex/font_init.h"
+#include "frozen_py.h"
 
 // MicroPython specific headers (must be inside extern "C")
 extern "C" {
@@ -74,8 +75,7 @@ static void queue_competition_event(int event) {
     vex_competition_callback(event);
 }
 
-static void run_python_script(void* script) {
-    char* python_buffer = static_cast<char*>(script);
+static void run_python_script(void* void_ptr) {
     init_micropython(mp_heap, sizeof(mp_heap));
     report_status("MP: ready");
 
@@ -90,8 +90,7 @@ static void run_python_script(void* script) {
 
     capture_traceback_mode = false;
     report_status("MicroPython: running script");
-    int script_succeeded = mp_do_str(python_buffer, 1);
-    free(python_buffer);
+    int script_succeeded = mp_do_str(frozen_py::main_py, 1);
 
     if (script_succeeded) {
         report_status("MicroPython: script finished");
@@ -119,54 +118,55 @@ void initialize() {
     status_screen_line = 1;
     report_status("MP: initializing");
 
-    report_status("initalize: opening /usd/main.py");
-    FILE* py_file = fopen("/usd/main.py", "r");
+    // report_status("initalize: opening /usd/main.py");
+    // FILE* py_file = fopen("/usd/main.py", "r");
 
-    if (py_file == NULL) {
-        py_file = fopen("/usd/main.mpy", "r");
-        if (py_file == NULL) {
-            report_status("ERROR: /usd/main.py not found");
-            return;
-        }
-    }
+    // if (py_file == NULL) {
+    //     py_file = fopen("/usd/main.mpy", "r");
+    //     if (py_file == NULL) {
+    //         report_status("ERROR: /usd/main.py not found");
+    //         return;
+    //     }
+    // }
 
-    if (fseek(py_file, 0, SEEK_END) != 0) {
-        fclose(py_file);
-        report_status("ERROR: cannot seek /usd/main.py");
-        return;
-    }
+    // if (fseek(py_file, 0, SEEK_END) != 0) {
+    //     fclose(py_file);
+    //     report_status("ERROR: cannot seek /usd/main.py");
+    //     return;
+    // }
 
-    long file_size = ftell(py_file);
-    if (file_size < 0 || fseek(py_file, 0, SEEK_SET) != 0) {
-        fclose(py_file);
-        report_status("ERROR: cannot size /usd/main.py");
-        return;
-    }
+    // long file_size = ftell(py_file);
+    // if (file_size < 0 || fseek(py_file, 0, SEEK_SET) != 0) {
+    //     fclose(py_file);
+    //     report_status("ERROR: cannot size /usd/main.py");
+    //     return;
+    // }
 
-    char* python_buffer = (char*)malloc((size_t)file_size + 1);
-    if (python_buffer == NULL) {
-        fclose(py_file);
-        report_status("ERROR: not enough memory for script");
-        return;
-    }
+    // char* python_buffer = (char*)malloc((size_t)file_size + 1);
+    // if (python_buffer == NULL) {
+    //     fclose(py_file);
+    //     report_status("ERROR: not enough memory for script");
+    //     return;
+    // }
 
-    size_t bytes_read = fread(python_buffer, 1, (size_t)file_size, py_file);
-    int read_error = ferror(py_file);
-    fclose(py_file);
+    // size_t bytes_read = fread(python_buffer, 1, (size_t)file_size, py_file);
+    // int read_error = ferror(py_file);
+    // fclose(py_file);
 
-    if (read_error || bytes_read != (size_t)file_size) {
-        free(python_buffer);
-        report_status("ERROR: failed reading /usd/main.py");
-        return;
-    }
-    python_buffer[bytes_read] = '\0';
+    // if (read_error || bytes_read != (size_t)file_size) {
+    //     free(python_buffer);
+    //     report_status("ERROR: failed reading /usd/main.py");
+    //     return;
+    // }
+    // python_buffer[bytes_read] = '\0';
+
+    
 
     pros::task_t task = pros::c::task_create(
-        run_python_script, python_buffer, 12, 0x4000,
+        run_python_script, NULL, 12, 0x4000,
         "MicroPython Script"
     );
     if (task == nullptr) {
-        free(python_buffer);
         report_status("ERROR: cannot start MicroPython task");
         return;
     }

@@ -145,6 +145,7 @@ mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data);
 
 /* VEX global functions */
 bool vex_logic_wait(double duration, int units);
+void vex_logic_yield_ms(uint32_t ms);
 
 /* DEFINE class Thread for C */
 void* vex_thread_create(c_callback_t callback, void* user_data);

@@ -1,11 +1,14 @@
 ################################################################################
 ######################### User configurable parameters #########################
 
-# Add this line near the top of your Makefile
 PYTHON=python3
 
-# This forces PROS to use aggressive optimization instead of the default -Os
-OPTIMIZATIONFLAGS=-O3 -ffast-math -flto
+PY_SOURCES := $(wildcard py/*.py)
+FROZEN_PY_HEADER := include/frozen_py.h
+
+$(FROZEN_PY_HEADER): $(PY_SOURCES) tools/pack_py.py
+	$(PYTHON) tools/pack_py.py
+
 
 # filename extensions
 CEXTS:=c
@@ -24,7 +27,7 @@ EXTRA_CFLAGS=
 EXTRA_CXXFLAGS=
 
 # Set to 1 to enable hot/cold linking
-USE_PACKAGE:=1
+USE_PACKAGE:=0  # Disabled to work wioth the .a src file.
 
 # Add libraries you do not wish to include in the cold image here
 EXCLUDE_COLD_LIBRARIES:= 
@@ -41,53 +44,82 @@ TEMPLATE_FILES=$(INCDIR)/$(LIBNAME)/*.h $(INCDIR)/$(LIBNAME)/*.hpp
 .DEFAULT_GOAL=quick
 
 ################################################################################
-# Custom MicroPython Port Parameter Mapping (Fully Manual)
-################################################################################
-
-# 1. Revert INCDIR back to standard defaults to avoid common.mk layout conflicts
-INCDIR=$(ROOT)/include
-
-# 2. Append the base micropython folder directly into the compiler flag queues.
-# This forces the inclusion of 'mpconfigport.h' via global GCC flags.
-EXTRA_CFLAGS += -I$(BINDIR)/micropython \
-                -Isrc/micropython \
-                -Isrc/micropython/py \
-                -Isrc/micropython/extmod \
-				-Isrc/micropython/modules \
-				-O3 -funroll-loops -mcpu=cortex-a9 -mfpu=neon-fp16 -mfloat-abi=hard
-
-EXTRA_CXXFLAGS += -I$(BINDIR)/micropython \
-                  -Isrc/micropython \
-                  -Isrc/micropython/py \
-                  -Isrc/micropython/extmod \
-				  -Isrc/vex \
-				  -O3 -funroll-loops -mcpu=cortex-a9 -mfpu=neon-fp16 -mfloat-abi=hard
-
-# 3. Explicitly scan and track deep source paths inside common.mk loops
-EXTRA_SRCDIRS += src/micropython \
-                 src/micropython/py \
-                 src/micropython/shared/runtime \
-                 src/micropython/modules
-
-# 4. Handle files you want to manually omit from compiling
-EXCLUDE_SRC_FROM_LIB += src/micropython/shared/runtime/pyexec.c \
-                        src/micropython/py/builtinhelp.c
-
-# 5. Global tracker symbols
-SRC_QSTR += src/mp_port.c src/modpros.c src/micropython/modules/vex_module.c
-
-################################################################################
-########## Nothing below this line should be edited by typical users ###########
--include ./common.mk
-
-PYTHON ?= python
-
-################################################################################
-# Generate MicroPython QSTR data using the upstream 1.29.0 tools.
+# MicroPython Header Paths
 ################################################################################
 
 MPY_ROOT := src/micropython
-MP_QSTR_SOURCES := $(sort $(call rwildcard,$(MPY_ROOT)/,*.c,) src/mp_port.c src/modpros.c src/micropython/modules/vex_module.c)
+
+EXTRA_CFLAGS += -I$(BINDIR)/micropython \
+                -I$(MPY_ROOT) \
+                -I$(MPY_ROOT)/py \
+                -I$(MPY_ROOT)/extmod \
+                -I$(MPY_ROOT)/modules \
+                -Isrc/vex \
+                -O3 -funroll-loops -mcpu=cortex-a9 -mfpu=neon-fp16 -mfloat-abi=hard
+
+EXTRA_CXXFLAGS += -I$(BINDIR)/micropython \
+                  -I$(MPY_ROOT) \
+                  -I$(MPY_ROOT)/py \
+                  -I$(MPY_ROOT)/extmod \
+                  -I$(MPY_ROOT)/modules \
+                  -Isrc/vex \
+                  -O3 -funroll-loops -mcpu=cortex-a9 -mfpu=neon-fp16 -mfloat-abi=hard
+
+################################################################################
+# Full MicroPython Source & QSTR Build (Only active when COMPILE_ALL=1)
+################################################################################
+ifeq ($(COMPILE_ALL),1)
+EXTRA_SRCDIRS += $(MPY_ROOT) \
+                 $(MPY_ROOT)/py \
+                 $(MPY_ROOT)/shared/runtime \
+                 $(MPY_ROOT)/modules
+
+EXCLUDE_SRC_FROM_LIB += $(MPY_ROOT)/shared/runtime/pyexec.c \
+                        $(MPY_ROOT)/py/builtinhelp.c
+endif
+
+# Normal Mode: Compile ONLY src/main.cpp and link firmware/libmpy.a
+ifneq ($(COMPILE_ALL),1)
+CSRC   :=
+ASMSRC :=
+CXXSRC := $(SRCDIR)/main.cpp
+
+COBJ   :=
+ASMOBJ :=
+CXXOBJ := $(BINDIR)/main.cpp.o
+endif
+
+# Ensure frozen_py.h is generated before PROS compiles C/C++ objects
+$(CXXOBJ) $(COBJ): $(FROZEN_PY_HEADER)
+
+
+################################################################################
+# Normal Mode: Compile ONLY src/main.cpp and link firmware/libmpy.a
+################################################################################
+ifneq ($(COMPILE_ALL),1)
+CSRC   :=
+ASMSRC :=
+CXXSRC := $(SRCDIR)/main.cpp
+
+COBJ   :=
+ASMOBJ :=
+CXXOBJ := $(BINDIR)/main.cpp.o
+endif
+
+################################################################################
+# Full Rebuild Mode: Ignore old libmpy.a and generate QSTRs for everything
+################################################################################
+ifeq ($(COMPILE_ALL),1)
+WL_LIBRARIES := $(filter-out %/libmpy.a,$(WL_LIBRARIES))
+LIBAR := $(filter-out %/libmpy.a,$(LIBAR))
+
+# Explicit prerequisite on all object variables
+$(COBJ) $(CXXOBJ) $(ASMOBJ): $(MP_QSTR_HEADER) $(MP_MODULE_HEADER) $(MP_ROOT_POINTER_HEADER)
+
+# Pattern rule order-only prerequisite so PROS's pattern recipes MUST wait for QSTR headers
+$(BINDIR)/%.o: | $(MP_QSTR_HEADER) $(MP_MODULE_HEADER) $(MP_ROOT_POINTER_HEADER)
+
+MP_QSTR_SOURCES = $(sort $(call rwildcard,$(MPY_ROOT)/,*.c) src/mp_port.c src/modpros.c src/micropython/modules/vex_module.c)
 MP_QSTR_GLOBAL_DEPS := $(MPY_ROOT)/mpconfigport.h \
                        $(MPY_ROOT)/py/mpconfig.h \
                        $(MPY_ROOT)/py/qstrdefs.h
@@ -111,9 +143,7 @@ MP_QSTR_OBJECTS := $(filter $(BINDIR)/micropython/%,$(COBJ)) \
                    $(BINDIR)/modpros.c.o
 
 $(CXXOBJ): $(MP_QSTR_HEADER) $(MP_MODULE_HEADER) $(MP_ROOT_POINTER_HEADER)
-
 quick: $(MP_QSTR_HEADER) $(MP_MODULE_HEADER) $(MP_ROOT_POINTER_HEADER)
-
 $(MP_QSTR_OBJECTS): $(MP_QSTR_HEADER) $(MP_MODULE_HEADER) $(MP_ROOT_POINTER_HEADER)
 
 $(MP_QSTR_CPP): $(MP_QSTR_SOURCES) $(MP_QSTR_GLOBAL_DEPS) Makefile common.mk
@@ -174,3 +204,35 @@ $(MP_ROOT_POINTER_HEADER): $(MP_ROOT_POINTER_COLLECTED) $(MPY_ROOT)/py/make_root
 	mkdir -p $(@D)
 	$(PYTHON) $(MPY_ROOT)/py/make_root_pointers.py $< > $@.tmp
 	mv $@.tmp $@
+
+.PHONY: qstr_headers
+qstr_headers: $(MP_QSTR_HEADER) $(MP_MODULE_HEADER) $(MP_ROOT_POINTER_HEADER)
+
+endif
+
+################################################################################
+# Standalone Static Library Builder (Always visible to Make)
+################################################################################
+AR = $(patsubst %gcc,%ar,$(CC))
+
+.PHONY: build_mpy
+build_mpy:
+	$(MAKE) clean
+	rm -rf $(MPY_ROOT)/genhdr/*.h
+	mkdir -p $(BINDIR)/micropython/genhdr
+	printf '#ifndef MICROPY_MPVERSION_H\n#define MICROPY_MPVERSION_H\n#define MICROPY_GIT_TAG "v1.20.0-custom"\n#define MICROPY_GIT_HASH "custom-vex-port"\n#define MICROPY_BUILD_DATE __DATE__\n#endif\n' > $(BINDIR)/micropython/genhdr/mpversion.h
+	$(MAKE) qstr_headers COMPILE_ALL=1 -j36
+	$(MAKE) quick COMPILE_ALL=1 -j36
+	$(MAKE) archive_mpy COMPILE_ALL=1 -j36
+
+.PHONY: archive_mpy
+archive_mpy:
+	mkdir -p $(FWDIR) $(MPY_ROOT)/genhdr
+	rm -f $(FWDIR)/libmpy.a
+	$(AR) rcs $(FWDIR)/libmpy.a $(filter-out $(BINDIR)/main.cpp.o $(BINDIR)/_pros_ld_timestamp.o,$(COBJ) $(CXXOBJ) $(ASMOBJ))
+	cp -f $(BINDIR)/micropython/genhdr/*.h $(MPY_ROOT)/genhdr/
+	@echo "[SUCCESS] Built $(FWDIR)/libmpy.a"
+
+################################################################################
+########## Nothing below this line should be edited by typical users ###########
+-include ./common.mk

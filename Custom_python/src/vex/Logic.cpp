@@ -32,6 +32,14 @@ bool VexLogic::wait(double duration, int units) {
     return true;
 }
 
+void VexLogic::yield_ms(std::uint32_t ms) {
+    pros::delay(ms);
+}
+
 extern "C" bool vex_logic_wait(double duration, int units) {
     return VexLogic::wait(duration, units);
+}
+
+extern "C" void vex_logic_yield_ms(uint32_t ms) {
+    VexLogic::yield_ms(ms);
 }

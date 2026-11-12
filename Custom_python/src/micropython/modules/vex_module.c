@@ -490,6 +490,11 @@ typedef struct _mp_color_obj_t{
     uint32_t value;
 } mp_color_obj_t;
 
+typedef struct _mp_vex_event_obj_t {
+    mp_obj_base_t base;
+    mp_obj_t handlers; // Python list of (callback, args, no_args) tuples
+} mp_vex_event_obj_t;
+
 extern const mp_obj_type_t mp_motor_type;
 extern const mp_obj_type_t mp_motorgroup_type;
 extern const mp_obj_type_t mp_rotation_type;
@@ -3628,6 +3633,147 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &mp_controller_locals_dict
 );
 
+static void mp_vex_event_add_handler(mp_vex_event_obj_t *self, size_t n_args, const mp_obj_t *args) {
+    mp_obj_t callback = args[0];
+    if (!mp_obj_is_callable(callback)) {
+        mp_raise_TypeError(MP_ERROR_TEXT("event callback must be callable"));
+    }
+    bool no_args = (n_args == 1);
+    mp_obj_t entry[] = {
+        callback,
+        no_args ? mp_const_none : args[1],
+        mp_obj_new_bool(no_args),
+    };
+    mp_obj_list_append(self->handlers, mp_obj_new_tuple(3, entry));
+}
+
+static mp_obj_t mp_vex_event_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 0, 2, false);
+    mp_vex_event_obj_t *self = mp_obj_malloc(mp_vex_event_obj_t, type);
+    self->handlers = mp_obj_new_list(0, NULL);
+    if (n_args >= 1 && args[0] != mp_const_none) {
+        mp_vex_event_add_handler(self, n_args, args);
+    }
+    return MP_OBJ_FROM_PTR(self);
+}
+
+// Allows calling event(callback, arg) directly or using @event as a decorator
+static mp_obj_t mp_vex_event_call(mp_obj_t self_in, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 1, 2, false);
+    mp_vex_event_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    mp_vex_event_add_handler(self, n_args, args);
+    return args[0];
+}
+
+static mp_obj_t mp_vex_event_set(size_t n_args, const mp_obj_t *args) {
+    mp_vex_event_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_vex_event_add_handler(self, n_args - 1, args + 1);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_vex_event_set_obj, 2, 3, mp_vex_event_set);
+
+static mp_obj_t mp_vex_event_clear(mp_obj_t self_in) {
+    mp_vex_event_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    mp_obj_list_set_len(self->handlers, 0);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_event_clear_obj, mp_vex_event_clear);
+
+static mp_obj_t mp_vex_event_spawn_all(mp_vex_event_obj_t *self) {
+    size_t count = 0;
+    mp_obj_t *handler_items = NULL;
+    mp_obj_get_array(self->handlers, &count, &handler_items);
+
+    mp_obj_t thread_list = mp_obj_new_list(0, NULL);
+    if (MP_STATE_VM(vex_callback_roots) == MP_OBJ_NULL) {
+        MP_STATE_VM(vex_callback_roots) = mp_obj_new_list(0, NULL);
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        size_t h_len = 0;
+        mp_obj_t *h_items = NULL;
+        mp_obj_get_array(handler_items[i], &h_len, &h_items);
+
+        mp_vex_thread_obj_t *thread_obj = mp_obj_malloc_with_finaliser(mp_vex_thread_obj_t, &mp_vex_thread_type);
+        thread_obj->thread_id = 0;
+        thread_obj->stopped = false;
+        thread_obj->done = false;
+
+        mp_obj_t callback_items[] = {
+            h_items[0],
+            h_items[1],
+            h_items[2],
+            mp_const_true,
+            MP_OBJ_FROM_PTR(thread_obj),
+            MP_OBJ_FROM_PTR(mp_locals_get()),
+            MP_OBJ_FROM_PTR(mp_globals_get()),
+        };
+        mp_obj_t callback_data = mp_obj_new_list(MP_ARRAY_SIZE(callback_items), callback_items);
+        mp_obj_list_append(MP_STATE_VM(vex_callback_roots), callback_data);
+
+        size_t stack_size = 0;
+        thread_obj->thread_id = mp_thread_create(mp_vex_thread_entry, MP_OBJ_TO_PTR(callback_data), &stack_size);
+        if (thread_obj->thread_id == 0) {
+            mp_obj_list_remove(MP_STATE_VM(vex_callback_roots), callback_data);
+            mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("could not create event thread"));
+        }
+        mp_obj_list_append(thread_list, MP_OBJ_FROM_PTR(thread_obj));
+    }
+    return thread_list;
+}
+
+static mp_obj_t mp_vex_event_broadcast(mp_obj_t self_in) {
+    mp_vex_event_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    mp_vex_event_spawn_all(self);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_event_broadcast_obj, mp_vex_event_broadcast);
+
+static mp_obj_t mp_vex_event_broadcast_and_wait(mp_obj_t self_in) {
+    mp_vex_event_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    mp_obj_t thread_list = mp_vex_event_spawn_all(self);
+
+    size_t count = 0;
+    mp_obj_t *threads = NULL;
+    mp_obj_get_array(thread_list, &count, &threads);
+
+    while (true) {
+        bool all_done = true;
+        for (size_t i = 0; i < count; ++i) {
+            mp_vex_thread_obj_t *t = MP_OBJ_TO_PTR(threads[i]);
+            if (!t->done) {
+                all_done = false;
+                break;
+            }
+        }
+        if (all_done) {
+            break;
+        }
+        MP_THREAD_GIL_EXIT();
+        vex_logic_yield_ms(2);
+        MP_THREAD_GIL_ENTER();
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_event_broadcast_and_wait_obj, mp_vex_event_broadcast_and_wait);
+
+static const mp_rom_map_elem_t mp_vex_event_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_broadcast), MP_ROM_PTR(&mp_vex_event_broadcast_obj) },
+    { MP_ROM_QSTR(MP_QSTR_broadcast_and_wait), MP_ROM_PTR(&mp_vex_event_broadcast_and_wait_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set), MP_ROM_PTR(&mp_vex_event_set_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&mp_vex_event_clear_obj) },
+};
+static MP_DEFINE_CONST_DICT(mp_vex_event_locals_dict, mp_vex_event_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_vex_event_type,
+    MP_QSTR_Event,
+    MP_TYPE_FLAG_NONE,
+    make_new, mp_vex_event_make_new,
+    call, mp_vex_event_call,
+    locals_dict, &mp_vex_event_locals_dict
+);
+
 static const mp_rom_map_elem_t mp_ports_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_PORT1), MP_ROM_INT(1) },
     { MP_ROM_QSTR(MP_QSTR_PORT2), MP_ROM_INT(2) },
@@ -3812,6 +3958,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_SerialLink), MP_ROM_PTR(&mp_serial_link_type) },
     { MP_ROM_QSTR(MP_QSTR_Timer), MP_ROM_PTR(&mp_timer_type) },
     { MP_ROM_QSTR(MP_QSTR_Thread), MP_ROM_PTR(&mp_vex_thread_type) },
+    { MP_ROM_QSTR(MP_QSTR_Event), MP_ROM_PTR(&mp_vex_event_type) },
     { MP_ROM_QSTR(MP_QSTR_Brain), MP_ROM_PTR(&mp_brain_type) },
     { MP_ROM_QSTR(MP_QSTR_Controller), MP_ROM_PTR(&mp_controller_type) },
     { MP_ROM_QSTR(MP_QSTR_Rotation), MP_ROM_PTR(&mp_rotation_type) },
