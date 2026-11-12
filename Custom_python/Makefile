@@ -27,7 +27,7 @@ EXTRA_CFLAGS=
 EXTRA_CXXFLAGS=
 
 # Set to 1 to enable hot/cold linking
-USE_PACKAGE:=0  # Disabled to work wioth the .a src file.
+USE_PACKAGE:=1
 
 # Add libraries you do not wish to include in the cold image here
 EXCLUDE_COLD_LIBRARIES:= 
@@ -91,20 +91,6 @@ endif
 
 # Ensure frozen_py.h is generated before PROS compiles C/C++ objects
 $(CXXOBJ) $(COBJ): $(FROZEN_PY_HEADER)
-
-
-################################################################################
-# Normal Mode: Compile ONLY src/main.cpp and link firmware/libmpy.a
-################################################################################
-ifneq ($(COMPILE_ALL),1)
-CSRC   :=
-ASMSRC :=
-CXXSRC := $(SRCDIR)/main.cpp
-
-COBJ   :=
-ASMOBJ :=
-CXXOBJ := $(BINDIR)/main.cpp.o
-endif
 
 ################################################################################
 # Full Rebuild Mode: Ignore old libmpy.a and generate QSTRs for everything
@@ -221,9 +207,9 @@ build_mpy:
 	rm -rf $(MPY_ROOT)/genhdr/*.h
 	mkdir -p $(BINDIR)/micropython/genhdr
 	printf '#ifndef MICROPY_MPVERSION_H\n#define MICROPY_MPVERSION_H\n#define MICROPY_GIT_TAG "v1.20.0-custom"\n#define MICROPY_GIT_HASH "custom-vex-port"\n#define MICROPY_BUILD_DATE __DATE__\n#endif\n' > $(BINDIR)/micropython/genhdr/mpversion.h
-	$(MAKE) qstr_headers COMPILE_ALL=1 -j36
-	$(MAKE) quick COMPILE_ALL=1 -j36
-	$(MAKE) archive_mpy COMPILE_ALL=1 -j36
+	$(MAKE) qstr_headers COMPILE_ALL=1 USE_PACKAGE=0 -j36
+	$(MAKE) quick COMPILE_ALL=1 USE_PACKAGE=0 -j36
+	$(MAKE) archive_mpy COMPILE_ALL=1 USE_PACKAGE=0 -j36
 
 .PHONY: archive_mpy
 archive_mpy:

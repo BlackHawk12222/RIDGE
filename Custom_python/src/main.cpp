@@ -51,10 +51,6 @@ static void report_status(const char* message) {
     pros::screen::print(TEXT_SMALL, status_screen_line++, "%s                                                ", message);
 }
 
-extern "C" void mp_port_status(const char* message) {
-    report_status(message);
-}
-
 static void lock_competition_events() {
     while (competition_event_lock.test_and_set(std::memory_order_acquire)) {
     }

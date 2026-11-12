@@ -23,17 +23,12 @@ void init_micropython(void *heap, size_t heap_size) {
     #if MICROPY_PY_THREAD
     mp_thread_port_init();
     #endif
-    mp_port_status("MP: GC init");
     gc_init(heap, (char *)heap + heap_size);
-    mp_port_status("MP: GC ready");
-    mp_port_status("MP: stack init");
     mp_stack_ctrl_init();
-    mp_port_status("MP: core init");
     mp_init();
 #if MICROPY_PY_SYS_PATH
     mp_obj_list_append(mp_sys_path, mp_obj_new_str("/usd", 4));
 #endif
-    mp_port_status("MP: core ready");
 }
 
 void gc_collect(void) {
