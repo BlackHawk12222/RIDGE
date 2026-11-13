@@ -671,7 +671,7 @@ static mp_obj_t mp_motor_spin(size_t n_args, const mp_obj_t *args) {
     return mp_const_none;
 }
 // obj, requred args, total args, function.
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_obj, 1, 4, mp_motor_spin);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_obj, 2, 4, mp_motor_spin);
 
 static mp_obj_t mp_motor_spin_for(size_t n_args, const mp_obj_t *args) {
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -1604,9 +1604,12 @@ static mp_obj_t mp_timer_time(size_t n_args, const mp_obj_t *args){
 
     int units = (n_args > 1) ? mp_obj_get_int(args[1]) : VEX_TIME_UNITS_MSEC;
 
-    int output;
-    output = vex_timer_time(self -> cpp_handle, units);
-    return mp_obj_new_int(output);
+    const double output = vex_timer_time(self -> cpp_handle, units);
+    // Seconds come back as a float (1.9 s stays 1.9); milliseconds stay an int.
+    if (units == VEX_TIME_UNITS_MSEC) {
+        return mp_obj_new_int((mp_int_t)output);
+    }
+    return mp_vex_new_float((mp_float_t)output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_timer_time_obj, 1, 2, mp_timer_time);
 

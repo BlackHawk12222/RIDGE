@@ -139,7 +139,7 @@ int serial_link_receive(void* link_ptr, int timeout, char* buffer, size_t capaci
 void* vex_timer_create();
 void vex_timer_destroy(void* timer_ptr);
 void vex_timer_clear(void* timer_ptr);
-int vex_timer_time(void* timer_ptr, int units);
+double vex_timer_time(void* timer_ptr, int units);
 void vex_timer_event(void* timer_ptr, mp_obj_t callback_data, int delay_ms);
 mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data);
 

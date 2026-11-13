@@ -95,6 +95,8 @@ class Motor {
         TimeUnits TimeoutType = MSEC;
 
         void timeout();
+        void wait_for_position(double target);
+        volatile std::uint32_t CommandGen = 0;
 
     public:
     
@@ -165,6 +167,8 @@ class MotorGroup{
         int Count=0;
 
         void timeout();
+        void wait_for_position(double target);
+        volatile std::uint32_t CommandGen = 0;
 
         static std::vector<std::int8_t> extract_ports(std::initializer_list<Motor> motors){
             std::vector<std::int8_t> PortList;

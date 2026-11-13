@@ -69,7 +69,12 @@ void Inertial::set_rotation(float value, AngleUnits units){
 }
 
 void Inertial::calibrate(){
-    Sensor->reset(true);
+    // Non-blocking like VEXcode. Wait only until the IMU reports it has
+    // started, so is_calibrating() is true right after this returns.
+    Sensor->reset(false);
+    for (int i = 0; i < 20 && Sensor->get_status() != pros::ImuStatus::calibrating; ++i){
+        pros::delay(5);
+    }
 }
 
 void Inertial::reset_heading(){

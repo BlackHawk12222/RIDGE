@@ -209,7 +209,7 @@ void Drivetrain::turn_for(TurnType direction, float angle, AngleUnits units,
     const float sign = direction == RIGHT ? 1.0f : -1.0f;
     const float wheel_distance = sign * PI * track_width_mm_ * degrees / 360.0f;
     const double motor_degrees = motor_degrees_for_distance(wheel_distance);
-    move_relative(-motor_degrees, motor_degrees, speed, speed_units, wait);
+    move_relative(motor_degrees, -motor_degrees, speed, speed_units, wait);
 }
 
 void Drivetrain::turn_to_heading(float heading, AngleUnits units,
@@ -314,7 +314,7 @@ float Drivetrain::raw_rotation() const {
     const double left_delta = vsafe::num(left_motors_->get_position()) - left_origin_;
     const double right_delta = vsafe::num(right_motors_->get_position()) - right_origin_;
     return static_cast<float>(vsafe::div(
-        (right_delta - left_delta) * wheel_travel_mm_,
+        (left_delta - right_delta) * wheel_travel_mm_,
         2.0 * PI * track_width_mm_ * external_gear_ratio_));
 }
 

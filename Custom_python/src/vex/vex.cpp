@@ -498,7 +498,7 @@ void vex_timer_clear(void* timer_ptr){
     static_cast<Timer*>(timer_ptr)->clear();
 }
 
-int vex_timer_time(void* timer_ptr, int units){
+double vex_timer_time(void* timer_ptr, int units){
     return static_cast<Timer*>(timer_ptr)->time(static_cast<TimeUnits>(units));
 }
 #include <map>

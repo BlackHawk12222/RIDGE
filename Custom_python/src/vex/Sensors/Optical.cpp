@@ -56,7 +56,8 @@ OpticalColor Optical::color(){
 }
 
 float Optical::brightness(){
-    return static_cast<float>(vsafe::num(Sensor->get_brightness()));
+    // PROS reports 0 to 1; VEX reports percent.
+    return static_cast<float>(vsafe::num(Sensor->get_brightness()) * 100.0);
 }
 
 float Optical::hue(){
