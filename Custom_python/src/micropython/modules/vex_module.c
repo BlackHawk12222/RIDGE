@@ -3998,7 +3998,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_FontType), MP_ROM_PTR(&mp_font_type) },
     { MP_ROM_QSTR(MP_QSTR_AxisType), MP_ROM_PTR(&mp_axis_type) },
     { MP_ROM_QSTR(MP_QSTR_TurnType), MP_ROM_PTR(&mp_turn_type) },
-    { MP_ROM_QSTR(MP_QSTR_LEDStateType), MP_ROM_PTR(&mp_led_state_type) },
+    { MP_ROM_QSTR(MP_QSTR_LedStateType), MP_ROM_PTR(&mp_led_state_type) },
     { MP_ROM_QSTR(MP_QSTR_ObjectSizeType), MP_ROM_PTR(&mp_object_size_type) },
     { MP_ROM_QSTR(MP_QSTR_Color), MP_ROM_PTR(&mp_color_type) },
     { MP_ROM_QSTR(MP_QSTR_DistanceUnits), MP_ROM_PTR(&mp_distance_units_type) },

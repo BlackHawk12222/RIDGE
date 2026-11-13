@@ -16,20 +16,22 @@ brain = Brain()
 if brain.sdcard.is_inserted():
     import ACPv1
 
-def autonomous():
-    brain.screen.clear_screen()
-    brain.screen.print("autonomous code")
-    # place automonous code here
+import math
 
-def user_control():
-    brain.screen.clear_screen()
-    brain.screen.print("driver control")
-    # place driver control in this while loop
-    while True:
-        wait(20, MSEC)
+# def autonomous():
+#     brain.screen.clear_screen()
+#     brain.screen.print("autonomous code")
+#     # place automonous code here
 
-# create competition instance
-comp = Competition(user_control, autonomous)
+# def user_control():
+#     brain.screen.clear_screen()
+#     brain.screen.print("driver control")
+#     # place driver control in this while loop
+#     while True:
+#         wait(20, MSEC)
+
+# # create competition instance
+# comp = Competition(user_control, autonomous)
 
 # actions to do when the program starts
 brain.screen.clear_screen()
@@ -78,11 +80,8 @@ drivetrain = DriveTrain(left_drive_smart, right_drive_smart, 319.19, 330.2, 254,
 Intake.set_velocity(100, PERCENT)
 Claw.set_stopping(HOLD)
 
-
-
 # wait for rotation sensor to fully initialize
 wait(30, MSEC)
-
 
 # Color to String Helper
 def convert_color_to_string(col):
@@ -112,8 +111,6 @@ def convert_color_to_string(col):
 wait(200, MSEC)
 # clear the console to make sure we don't have the REPL in the console
 print("\033[2J")
-
-
 
 # define variables used for controlling motors based on controller inputs
 drivetrain_l_needs_to_be_stopped_controller_1 = False
@@ -304,8 +301,6 @@ class robot():
                     liftGroup.stop()
                     Intake.stop()
                 Loading = False
-    
-
 
 class display():
 
@@ -427,10 +422,7 @@ class MC:
             if m.installed:
                 if m.power(PowerUnits.WATT) == motor.power(PowerUnits.WATT):
                     return(port)
-
-
-
-
+                
 def set_velocity(side, velocity):
 
     #set the drivetrain velocity for the individual sides of the drivetrain; useful for turning
@@ -442,14 +434,11 @@ def set_velocity(side, velocity):
         left_drive_smart.set_velocity(velocity, PERCENT)
         right_drive_smart.set_velocity(velocity, PERCENT)
 
-
-
 def resetDrivetrain():
     right_drive_smart.set_velocity(100,PERCENT)
     left_drive_smart.set_velocity(100,PERCENT)
     left_drive_smart.stop()
     right_drive_smart.stop()
-
 
 def AIM_drive(mm,driveVelocity,err=0):
     mmToDeg = (mm/((69.85*3.14159)/360))/0.75
@@ -468,10 +457,7 @@ def AIM_drive(mm,driveVelocity,err=0):
             resetDrivetrain()
             break
 
-
-
 #BAR SWITCHING LOGIC SCRIPTS VVVVVVVVVVVVVVVVVVV
-
 
 def Check_for_bar():
     #checks if an object (the control bar) is close enough. If it is, check to see if it's our own color, and activate the spin command
@@ -480,15 +466,11 @@ def Check_for_bar():
         check_color_redundancy()
     spin_motor()
 
-
-
 def check_dist():
     #used in Check_for_bar(): initializes Color_flips to 0(do not spin), then records the distance to the object.
     global Dist, Color_Flips
     Color_Flips = 0
     Dist = DistanceSensor.object_distance(MM)
-
-
 
 def check_color_redundancy():
     #used in Check_for_bar(): sets Color_flips to 1(spin motor), then checks to see if the detected object is our color. If it is, set Color_flips to 0(do not spin).
@@ -496,8 +478,6 @@ def check_color_redundancy():
     Color_Flips = 1
     if ColorSensor.color() == Color.BLUE and MyColor == "blue" or ColorSensor.color() == Color.RED and MyColor == "red":
         Color_Flips = 0
-
-
 
 def spin_motor():
     #spins Bar_Switcher if Color_fips is 1(spin motor). Continues to do so until distance is too far away(robot has moved away) or color is correct.
@@ -509,9 +489,7 @@ def spin_motor():
             check_color_redundancy()
     Bar_Switcher.stop()
 
-
 # APF SCRIPTS VVVVVVVVVVVVVVVVVVVVVVVVVVVVV
-
 
 def Do_APF():
     # APF - Artificial Polarity Force. Runs all associated APF scripts . Begins by finding the closest obstacle point, noted in OBSTACLE_POINTS[]
@@ -535,8 +513,6 @@ def Do_APF():
             drivetrain.turn(LEFT)
         else:
             pass
-
-
 
 def Find_Closest_Point():
     global Closest_ID, Closest_Distance, temp
@@ -568,8 +544,6 @@ def Find_Closest_Point():
         temp = Closest_ID
         Parse_all()
 
-
-
 def get_relative_heading(get_relative_heading_heading):
 
     #corrects the input value to be relative to the robot's heading
@@ -597,9 +571,6 @@ def get_relative_heading(get_relative_heading_heading):
     else:
         direction_to_turn = "right"
 
-
-
-
 def directionTo_xy(directionTo_xy__x, directionTo_xy__y):
     #get the distance to the x and y coordinated based on the robot's
     global dx, dy, Direction_To_Point
@@ -616,9 +587,6 @@ def directionTo_xy(directionTo_xy__x, directionTo_xy__y):
     #send it over to get the heading in relation to the robot
     get_relative_heading(Direction_To_Point)
 
-
-
-
 def distanceTo_xy(distanceTo_xy_x, distanceTo_xy_y):
     #uses the Pythagorean theorem to get the distance to a point
     global dx, dy, distance_to_point
@@ -630,8 +598,6 @@ def distanceTo_xy(distanceTo_xy_x, distanceTo_xy_y):
     #set distance_to_point to the output of the calculation
     distance_to_point = math.sqrt(dx * dx + dy * dy)
 
-
-
 def Parse_all():
     global Temp2, i, Coords1, Coords2
     # Parse the both halves of the coordinates (X axis and Y axis) and set Coords1 and Coords2
@@ -639,9 +605,7 @@ def Parse_all():
     Coords1 = int(Coords1)
     Coords2 = int(Coords2)
 
-
 #ODOMETRY SCRIPTS VVVVVVVVVVVVVVVVVVVVVVVVVVV
-
 
 def ODOM_loop():
     global Heading, Vertical_current, Horizontal_current, X_assist_Current, Delta_forward, Delta_sideways, Last_forward, Last_sideways, Forward_movement, Sideways_movement, Change_x, Change_y, PosX, PosY
@@ -717,9 +681,6 @@ def color_switching():
         Check_for_bar()
         wait(5, MSEC)
 
-
-
-
 def vs_setup():
     #show setup progression on the brain screen
     global SETUP_progression
@@ -747,9 +708,6 @@ def vs_setup():
         brain.screen.next_row()
         brain.screen.render()
         wait(5, MSEC)
-
-
-
 
 def prog_setup():
     #calibration, scanning, and setup code to run when the program starts
@@ -857,9 +815,6 @@ def CC_display_callback():
         controller_1.screen.print("<")
         wait(0.5, SECONDS)
 
-
-
-
 def draw_button(draw_button_x, draw_button_y, draw_button_width, draw_button_height):
     # Draws a button on the brain screen and checks if it is pressed
     global button_pressed, Auto_Side, MyColor, v, sizeDrawRound, AnimProgress
@@ -874,9 +829,6 @@ def draw_button(draw_button_x, draw_button_y, draw_button_width, draw_button_hei
     if brain.screen.pressing():
         if draw_button_x < brain.screen.x_position() < (draw_button_x + draw_button_width) and draw_button_y < brain.screen.y_position() < (draw_button_y + draw_button_height):
             button_pressed = 1
-
-
-
 
 def bootAnim():
     #User interface and setup complete animation code
@@ -1079,7 +1031,6 @@ def bootAnim():
     brain.screen.clear_screen()
     brain.screen.render()
 
-
 def liftTick_callback():
     MT = MotorTicks()
     liftGroup.set_velocity(100,PERCENT)
@@ -1091,8 +1042,6 @@ def liftTick_callback():
         MT.liftTick()
         MT.grabberTick()
         wait(10, MSEC)  # without this the loop never lets the other threads run
-
-
 
 # Event activation
 CC_display(CC_display_callback)
@@ -1129,7 +1078,6 @@ def driver():
     drive = Thread(lambda: K56721.TankDrive(2))
     color_switching()
 
-
 #PROGRAM RUN VVVVVVVVVVVVVVVVVVV
 
 K56721 = robot()
@@ -1138,7 +1086,6 @@ grabber.set(True)
 
 PROG = Thread( prog_setup )
 VS = Thread( vs_setup )
-
 
 comp = Competition(driver,auto)
 
@@ -1159,3 +1106,7 @@ if comp.is_driver_control():
         claw  = Thread(K56721.autoload)
         drive = Thread(lambda: K56721.TankDrive(2))
         color_switching()
+
+# Catch for if we reach the end.
+while True:
+    wait(100, MSEC)
