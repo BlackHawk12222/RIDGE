@@ -10,6 +10,16 @@ extern "C"{
     #include "py/obj.h"
 }
 
+// Max RPM of a V5 motor cartridge; 200 (green) when unknown.
+static double motor_max_rpm(pros::MotorGears gearing){
+    switch (gearing){
+        case pros::MotorGears::ratio_6_to_1: return 600.0;
+        case pros::MotorGears::ratio_18_to_1: return 200.0;
+        case pros::MotorGears::ratio_36_to_1: return 100.0;
+        default: return 200.0;
+    }
+}
+
 Motor::Motor(Ports port, GearSetting gears, bool reversed){
     PortNum = port;
     Ratio = gears;
@@ -96,49 +106,58 @@ void Motor::spin(Direction direction, float velocity, VelocityUnits units){
 }
 
 void Motor::spin_for(Direction direction, int angle, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
+    // 601 means "no velocity given": use set_velocity()'s value and units.
     if (velocity == 601){
         velocity = Velocity;
+        units_v = DefaultVelocityUnits;
     }
-    bool reverse = direction == REVERSE;
-    velocity = reverse ? -velocity : velocity;
 
-    switch(units) {
-        case RPM:
-        {
-            motor->move_relative(angle, velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            if (wait){
-                while (std::abs(vsafe::num(motor->get_actual_velocity())) > 1){
-                    pros::delay(10);
-                }
-            }
-            break;
-        }
-        case VELOCITY_PERCENT:
-        {
-            velocity*= static_cast<int>(motor->get_gearing());
-            motor->move_relative(angle, velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            if (wait){
-                while (std::abs(vsafe::num(motor->get_actual_velocity())) > 1){
-                    pros::delay(10);
-                }
-            }
-            break;
-        }
+    // Angle units pick the distance; velocity units pick the speed.
+    double degrees = static_cast<double>(angle);
+    switch (units) {
+        case DEGREES: break;
+        case TURNS: degrees *= 360.0; break;
         default:
-        {
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::spin_for");
-            break;
+            return;
+    }
+
+    const double max_rpm = motor_max_rpm(motor->get_gearing());
+    double rpm = 0.0;
+    switch (units_v) {
+        case RPM: rpm = velocity; break;
+        case VELOCITY_PERCENT: rpm = velocity * max_rpm / 100.0; break;
+        case DPS: rpm = velocity / 6.0; break;
+        case VELOCITY_VOLT: rpm = vsafe::div(velocity * max_rpm, 12.0); break;
+        default:
+            mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
+            return;
+    }
+    rpm = vsafe::num(std::abs(rpm));
+
+    // PROS move_relative takes direction from the sign of the distance, not the speed.
+    if (direction == REVERSE){
+        degrees = -degrees;
+    }
+
+    const double target = vsafe::num(motor->get_position()) + degrees;
+    motor->move_relative(degrees, static_cast<std::int32_t>(std::lround(rpm)));
+    if (TimeoutTime != -1.0f) {
+        pros::Task timeout([this]() {
+            this->timeout();
+        }, "timeout");
+    }
+
+    if (wait && degrees != 0.0 && rpm > 0.0){
+        // Done when it reaches the target, or when it has stopped moving
+        // after starting (stalled or stopped by the timeout).
+        int elapsed_ms = 0;
+        while (std::abs(vsafe::num(motor->get_position()) - target) > 3.0){
+            if (elapsed_ms > 150 && std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0){
+                break;
+            }
+            pros::delay(10);
+            elapsed_ms += 10;
         }
     }
 }
@@ -619,49 +638,58 @@ void MotorGroup::spin(Direction direction, float velocity, VelocityUnits units){
 }
 
 void MotorGroup::spin_for(Direction direction, int angle, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
+    // 601 means "no velocity given": use set_velocity()'s value and units.
     if (velocity == 601){
         velocity = Velocity;
+        units_v = DefaultVelocityUnits;
     }
-    bool reverse = direction == REVERSE;
-    velocity = reverse ? -velocity : velocity;
 
-    switch(units) {
-        case RPM:
-        {
-            motor->move_relative(angle, velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            if (wait){
-                while (std::abs(vsafe::num(motor->get_actual_velocity())) > 1){
-                    pros::delay(10);
-                }
-            }
-            
-            break;
-        }
-        case VELOCITY_PERCENT:
-        {
-            velocity*= static_cast<int>(motor->get_gearing());
-            motor->move_relative(angle, velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            if (wait){
-                while (std::abs(vsafe::num(motor->get_actual_velocity())) > 1){
-                    pros::delay(10);
-                }
-            } 
-            break;
-        }
+    // Angle units pick the distance; velocity units pick the speed.
+    double degrees = static_cast<double>(angle);
+    switch (units) {
+        case DEGREES: break;
+        case TURNS: degrees *= 360.0; break;
         default:
-        {
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            break;
+            return;
+    }
+
+    const double max_rpm = motor_max_rpm(motor->get_gearing());
+    double rpm = 0.0;
+    switch (units_v) {
+        case RPM: rpm = velocity; break;
+        case VELOCITY_PERCENT: rpm = velocity * max_rpm / 100.0; break;
+        case DPS: rpm = velocity / 6.0; break;
+        case VELOCITY_VOLT: rpm = vsafe::div(velocity * max_rpm, 12.0); break;
+        default:
+            mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
+            return;
+    }
+    rpm = vsafe::num(std::abs(rpm));
+
+    // PROS move_relative takes direction from the sign of the distance, not the speed.
+    if (direction == REVERSE){
+        degrees = -degrees;
+    }
+
+    const double target = vsafe::num(motor->get_position()) + degrees;
+    motor->move_relative(degrees, static_cast<std::int32_t>(std::lround(rpm)));
+    if (TimeoutTime != -1.0f) {
+        pros::Task timeout([this]() {
+            this->timeout();
+        }, "timeout");
+    }
+
+    if (wait && degrees != 0.0 && rpm > 0.0){
+        // Done when it reaches the target, or when it has stopped moving
+        // after starting (stalled or stopped by the timeout).
+        int elapsed_ms = 0;
+        while (std::abs(vsafe::num(motor->get_position()) - target) > 3.0){
+            if (elapsed_ms > 150 && std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0){
+                break;
+            }
+            pros::delay(10);
+            elapsed_ms += 10;
         }
     }
 }
