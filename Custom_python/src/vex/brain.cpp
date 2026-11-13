@@ -186,6 +186,9 @@ void Screen::poll_touch() {
 
     if (down != was_down) {
         was_down = down;
+        if (down && error_active_) {
+            dismiss_error_box();
+        }
         (down ? press_events_ : release_events_).fetch_add(1, std::memory_order_relaxed);
         if (callback_task_ != nullptr) {
             callback_task_->notify();
@@ -210,13 +213,20 @@ void Screen::lvgl_tick(lv_timer_t* /*timer*/) {
     work.swap(queue_);
     queue_mutex().give();
 
-    if (!work.empty()) {
+    const bool drew = !work.empty();
+    if (drew) {
         execute(work);
         work.clear();
     }
 
+    // The error box is painted into the canvas after the user's drawing, every
+    // time that drawing changes, so it stays on top.
+    bool new_error = false;
     if (error_pending_.load(std::memory_order_acquire)) {
-        update_error_box();
+        new_error = update_error_box();
+    }
+    if (error_active_ && (drew || new_error)) {
+        draw_error_box();
     }
 }
 
@@ -245,44 +255,75 @@ void Screen::show_error(const std::string& text) {
     error_pending_.store(true, std::memory_order_release);
 }
 
-// LVGL thread only.
-void Screen::update_error_box() {
+// LVGL thread only. Takes a new error from show_error(); false if the
+// queue lock was busy (tried again next tick).
+bool Screen::update_error_box() {
     if (!queue_mutex().take(0)) {
-        return;   // try again next tick
+        return false;
     }
-    std::string text = error_text_;
+    error_shown_ = error_text_;
     error_pending_.store(false, std::memory_order_relaxed);
     queue_mutex().give();
+    error_active_ = true;
+    return true;
+}
 
-    if (error_box_ == nullptr) {
-        // lv_layer_top() sits above the canvas, so user drawing and
-        // clear_screen() can't cover the error.
-        error_box_ = lv_obj_create(lv_layer_top());
-        lv_obj_set_size(error_box_, WIDTH - 20, LV_SIZE_CONTENT);
-        lv_obj_set_style_max_height(error_box_, HEIGHT - 20, LV_PART_MAIN);
-        lv_obj_align(error_box_, LV_ALIGN_CENTER, 0, 0);
-        lv_obj_set_style_bg_color(error_box_, lv_color_hex(0xB00000), LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(error_box_, LV_OPA_COVER, LV_PART_MAIN);
-        lv_obj_set_style_border_color(error_box_, lv_color_white(), LV_PART_MAIN);
-        lv_obj_set_style_border_width(error_box_, 2, LV_PART_MAIN);
-        lv_obj_set_style_radius(error_box_, 6, LV_PART_MAIN);
-        lv_obj_set_style_pad_all(error_box_, 8, LV_PART_MAIN);
-        lv_obj_remove_flag(error_box_, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_add_flag(error_box_, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(error_box_, [](lv_event_t* e) {
-            lv_obj_add_flag(static_cast<lv_obj_t*>(lv_event_get_current_target(e)), LV_OBJ_FLAG_HIDDEN);
-        }, LV_EVENT_CLICKED, nullptr);
+namespace {
+    constexpr int kErrorMargin = 10;
+    constexpr int kErrorPad = 8;
+    constexpr std::uint32_t kErrorRed = 0xB00000;
+}
 
-        error_label_ = lv_label_create(error_box_);
-        lv_obj_set_width(error_label_, lv_pct(100));
-        lv_label_set_long_mode(error_label_, LV_LABEL_LONG_WRAP);
-        lv_obj_set_style_text_color(error_label_, lv_color_white(), LV_PART_MAIN);
-        lv_obj_set_style_text_font(error_label_, &lv_font_montserrat_16, LV_PART_MAIN);
+// LVGL thread only. Paints the red error box into the canvas.
+void Screen::draw_error_box() {
+    const lv_font_t* font = &lv_font_montserrat_16;
+    const int box_w = WIDTH - 2 * kErrorMargin;
+    const int text_w = box_w - 2 * kErrorPad;
+
+    lv_point_t size;
+    lv_text_get_size(&size, error_shown_.c_str(), font, 0, 0, text_w, LV_TEXT_FLAG_NONE);
+    const int box_h = clampi(size.y + 2 * kErrorPad, 40, HEIGHT - 2 * kErrorMargin);
+    const int x0 = kErrorMargin;
+    const int y0 = (HEIGHT - box_h) / 2;
+    error_area_ = {x0, y0, x0 + box_w - 1, y0 + box_h - 1};
+
+    lv_layer_t layer;
+    lv_canvas_init_layer(canvas_, &layer);
+
+    lv_draw_rect_dsc_t box;
+    lv_draw_rect_dsc_init(&box);
+    box.bg_color = lv_color_hex(kErrorRed);
+    box.bg_opa = LV_OPA_COVER;
+    box.border_color = lv_color_white();
+    box.border_width = 2;
+    box.border_opa = LV_OPA_COVER;
+    box.radius = 6;
+    lv_draw_rect(&layer, &box, &error_area_);
+
+    lv_area_t text_area = {x0 + kErrorPad, y0 + kErrorPad,
+                           x0 + box_w - 1 - kErrorPad, y0 + box_h - 1 - kErrorPad};
+    lv_draw_label_dsc_t label;
+    lv_draw_label_dsc_init(&label);
+    label.text = error_shown_.c_str();
+    label.font = font;
+    label.color = lv_color_white();
+    label.opa = LV_OPA_COVER;
+    lv_draw_label(&layer, &label, &text_area);
+
+    lv_canvas_finish_layer(canvas_, &layer);
+    lv_obj_invalidate(canvas_);
+}
+
+// LVGL thread only. A tap dismisses the box; its area goes black until the
+// program draws there again.
+void Screen::dismiss_error_box() {
+    error_active_ = false;
+    const std::uint32_t stride_px = buf_->header.stride / 4;
+    std::uint32_t* const base = reinterpret_cast<std::uint32_t*>(buf_->data);
+    for (int y = error_area_.y1; y <= error_area_.y2; ++y) {
+        std::fill_n(base + y * stride_px + error_area_.x1, error_area_.x2 - error_area_.x1 + 1, xrgb(0));
     }
-
-    lv_label_set_text(error_label_, text.c_str());
-    lv_obj_remove_flag(error_box_, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_move_to_index(error_box_, -1);
+    lv_obj_invalidate(canvas_);
 }
 
 void Screen::execute(std::vector<Cmd>& work) {

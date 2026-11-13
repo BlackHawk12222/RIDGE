@@ -206,9 +206,12 @@ class Screen{
         static void lvgl_tick(lv_timer_t* timer);
         static inline std::string error_text_;                 // guarded by queue_mutex()
         static inline std::atomic<bool> error_pending_{false};
-        static inline lv_obj_t* error_box_ = nullptr;          // LVGL thread only
-        static inline lv_obj_t* error_label_ = nullptr;        // LVGL thread only
-        static void update_error_box();
+        static inline std::string error_shown_;                // LVGL thread only
+        static inline bool error_active_ = false;              // LVGL thread only
+        static inline lv_area_t error_area_{};                 // LVGL thread only
+        static bool update_error_box();
+        static void draw_error_box();
+        static void dismiss_error_box();
         static void create_canvas();
         static void execute(std::vector<Cmd>& work);
         static void poll_touch();
