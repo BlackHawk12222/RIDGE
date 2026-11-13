@@ -3957,7 +3957,6 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),    MP_ROM_QSTR(MP_QSTR_vex) },
     { MP_ROM_QSTR(MP_QSTR_wait),        MP_ROM_PTR(&mp_vex_wait_obj) },
     { MP_ROM_QSTR(MP_QSTR_abs),         MP_ROM_PTR(&mp_builtin_abs_obj) },
-    { MP_ROM_QSTR(MP_QSTR_math),        MP_ROM_PTR(&mp_module_math) },  // VEXcode exposes math via from vex import *
     { MP_ROM_QSTR(MP_QSTR_Competition), MP_ROM_PTR(&mp_vex_competition_type) },
 
     // Bind Classes into the module namespace
