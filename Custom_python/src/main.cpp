@@ -47,6 +47,7 @@ static Screen status_screen;   // same LVGL backend as brain.screen
 
 static void report_status(const char* message) {
     printf("%s\n", message);
+    fflush(stdout);
     if (status_screen_line > STATUS_SCREEN_LINES) {
         status_screen.clear_screen(Color(0));
         status_screen_line = 1;

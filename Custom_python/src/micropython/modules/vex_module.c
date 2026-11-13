@@ -47,6 +47,32 @@ MP_REGISTER_ROOT_POINTER(mp_obj_t vex_callback_roots);
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_competition_callbacks);
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_pending_competition_event);
 
+// Print an uncaught exception from a Thread, Event or other callback the way
+// VEXcode V5 Python reports it: a header naming the function, then the normal
+// "Traceback (most recent call last):" block with file names and line numbers.
+// SystemExit is swallowed silently, like CPython does for threads.
+static void mp_vex_report_callback_exception(mp_obj_t callback, mp_obj_t exc) {
+    if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(mp_obj_get_type(exc)), MP_OBJ_FROM_PTR(&mp_type_SystemExit))) {
+        return;
+    }
+    const char *name = NULL;
+    nlr_buf_t nlr;
+    if (nlr_push(&nlr) == 0) {
+        mp_obj_t dest[2];
+        mp_load_method_maybe(callback, MP_QSTR___name__, dest);
+        if (dest[0] != MP_OBJ_NULL && mp_obj_is_str(dest[0])) {
+            name = mp_obj_str_get_str(dest[0]);
+        }
+        nlr_pop();
+    }
+    if (name != NULL) {
+        mp_printf(&mp_plat_print, "Exception in thread %s:\n", name);
+    } else {
+        mp_printf(&mp_plat_print, "Exception in thread:\n");
+    }
+    mp_obj_print_exception(&mp_plat_print, exc);
+}
+
 typedef struct _mp_vex_thread_obj_t{
     mp_obj_base_t base;
     mp_uint_t thread_id;
@@ -88,7 +114,10 @@ mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data) {
         if (thread != NULL) {
             thread->done = true;
         }
-        nlr_raise(nlr.ret_val);
+        // Report here (with the callback's name) instead of re-raising, so the
+        // scheduler doesn't print a second, anonymous copy of the traceback.
+        mp_vex_report_callback_exception(items[0], MP_OBJ_FROM_PTR(nlr.ret_val));
+        result = mp_const_none;
     }
 
     if (thread != NULL) {
@@ -137,8 +166,7 @@ static void *mp_vex_thread_entry(void *thread_data) {
             }
             nlr_pop();
         } else {
-            mp_printf(&mp_plat_print, "Unhandled exception in vex.Thread callback:\n");
-            mp_obj_print_exception(&mp_plat_print, nlr.ret_val);
+            mp_vex_report_callback_exception(items[0], MP_OBJ_FROM_PTR(nlr.ret_val));
         }
     }
 

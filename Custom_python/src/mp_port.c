@@ -228,7 +228,10 @@ const mp_obj_module_t mp_module_errno = { .base = { &mp_type_module } };
 int mp_do_str(const char *src, int input_kind) {
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
-        qstr source_name = qstr_from_str("<stdin>");
+        // Name the frozen script "main.py" so tracebacks read
+        //   File "main.py", line 12, in <module>
+        // like VEXcode V5 Python, instead of "<stdin>".
+        qstr source_name = qstr_from_str("main.py");
         mp_lexer_t *lex = mp_lexer_new_from_str_len(source_name, src, strlen(src), 0);
         if (lex == NULL) {
             printf("Error: MicroPython failed to allocate lexer for the script string!\n");
@@ -248,8 +251,11 @@ int mp_do_str(const char *src, int input_kind) {
         nlr_pop(); // Code executed successfully! Pop the safety buffer.
         return 1;
     } else {
-        printf("MicroPython script error:\n");
-        mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
+        mp_obj_t exc = MP_OBJ_FROM_PTR(nlr.ret_val);
+        if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(mp_obj_get_type(exc)), MP_OBJ_FROM_PTR(&mp_type_SystemExit))) {
+            return 1; // sys.exit() is a normal way to end the program
+        }
+        mp_obj_print_exception(&mp_plat_print, exc);
         return 0;
     }
 }

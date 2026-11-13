@@ -3,8 +3,7 @@
 
 namespace frozen_py {
 
-constexpr const char* main_py = R"PY_EOF(
-# ---------------------------------------------------------------------------- #
+constexpr const char* main_py = R"PY_EOF(# ---------------------------------------------------------------------------- #
 #                                                                              #
 # 	Module:       main.py                                                      #
 # 	Author:       Kyle V                                                       #
@@ -1118,8 +1117,7 @@ while True:
     wait(100, MSEC)
 )PY_EOF";
 
-constexpr const char* main_test_py = R"PY_EOF(
-from vex import *
+constexpr const char* main_test_py = R"PY_EOF(from vex import *
 
 import time, math, cmath, sys, gc, random
 
