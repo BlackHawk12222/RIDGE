@@ -9,7 +9,6 @@
 
 # Library imports
 from vex import *
-import math
 
 
 brain = Brain()
