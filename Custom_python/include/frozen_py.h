@@ -310,9 +310,9 @@ class robot():
 
 class display():
 
-    def __init__(self,object):
-         self.brainObject = object
-         self.BO = self.brainObject
+    def __init__(self, object):
+         self.brainObject: Brain = object
+         self.BO: Brain = self.brainObject
 
     def drawImage(self,name,x,y):
         self.BO.screen.draw_image_from_file(name,x,y)
@@ -348,7 +348,7 @@ class display():
     def printMotors(self):
         for i in range(len(motorNames)):
             self.BO.screen.print(motorPorts[i]+motorNames[i]+motors[i].temperature(PERCENT))
-            self.BO.next_row()
+            self.BO.screen.next_row()
             
 
 class MotorTicks:
@@ -694,7 +694,7 @@ def vs_setup():
     while not SETUP_progression > 0:
         brain.screen.clear_screen()
         brain.screen.set_cursor(1, 1)
-        brain.screen.print("Setup: calibrating...",SETUP_progression)
+        brain.screen.print("Setup: calibrating... %d"%(SETUP_progression))
         brain.screen.next_row()
         brain.screen.render()
         wait(5, MSEC)
@@ -702,7 +702,7 @@ def vs_setup():
     while not SETUP_progression > 1:
         brain.screen.clear_screen()
         brain.screen.set_cursor(1, 1)
-        brain.screen.print("Setup: Scanning Autonomous POINTS...",SETUP_progression)
+        brain.screen.print("Setup: Scanning Autonomous POINTS... %d"%(SETUP_progression))
         brain.screen.next_row()
         brain.screen.render()
         wait(5, MSEC)
@@ -710,7 +710,7 @@ def vs_setup():
     while not SETUP_progression > 2:
         brain.screen.clear_screen()
         brain.screen.set_cursor(1, 1)
-        brain.screen.print("Setup: Finishing...",SETUP_progression)
+        brain.screen.print("Setup: Finishing... %d"%(SETUP_progression))
         brain.screen.next_row()
         brain.screen.render()
         wait(5, MSEC)
@@ -731,7 +731,7 @@ def prog_setup():
     #first step of progression: initialize the inertial sensor
     Inertial_.calibrate()
     while Inertial_.is_calibrating():
-        sleep(50)
+        wait(50, MSEC)
     
     #next step, shown by SETUP_progression
     SETUP_progression = SETUP_progression + 1
