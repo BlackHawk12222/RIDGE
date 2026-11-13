@@ -210,7 +210,7 @@ wait(30, MSEC)
 print("")
 print("==== 4. Motor temperatures and torque limit ====")
 for i, m in enumerate(MOTORS):
-    print("motor %d: %d C = %d%%  (ASAP limits torque at >= 50%% = 45 C)" % (i, m.temperature(CELSIUS), m.temperature(PERCENT)))
+    print("motor %d: %d C = %d%%" % (i, m.temperature(CELSIUS), m.temperature(PERCENT)))
 
 print("")
 print("==== 5. Drive power (PUT THE ROBOT ON A STAND) ====")
