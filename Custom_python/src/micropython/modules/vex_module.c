@@ -946,11 +946,11 @@ static mp_obj_t mp_motor_group_spin(size_t n_args, const mp_obj_t *args) {
     float velocity = (n_args > 2) ? mp_obj_get_float(args[2]) : 601.0f;
     int units = (n_args > 3) ? mp_obj_get_int(args[3]) : 24;  // Default is RPM.
 
-    motor_spin(self->cpp_handle, direction, velocity, units);
+    motor_group_spin(self->cpp_handle, direction, velocity, units);
     return mp_const_none;
 }
-// obj, requred args, total args, function.
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_obj, 1, 4, mp_motor_group_spin);
+// obj, required args (self + direction), total args, function.
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_obj, 2, 4, mp_motor_group_spin);
 
 static mp_obj_t mp_motor_group_spin_for(size_t n_args, const mp_obj_t *args) {
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);

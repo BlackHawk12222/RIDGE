@@ -764,7 +764,7 @@ def prog_setup():
     while True:
         ODOM_loop()
         screen.reset()
-        screen.drawImage("images/RidgeIcon.png",100,0)
+        # screen.drawImage("images/RidgeIcon.png",100,0)
         brain.screen.print(str("horizontal current: ") + str(Horizontal_current))
         brain.screen.next_row()
         brain.screen.print(str("current vertical: ") + str(Vertical_current))
