@@ -1910,7 +1910,7 @@ static mp_obj_t mp_brain_screen_draw_rectangle(size_t n_args, const mp_obj_t *ar
     int y = mp_obj_get_int(args[2]);
     int width = mp_obj_get_int(args[3]);
     int height = mp_obj_get_int(args[4]);
-    int color = (n_args > 5) ? mp_color_get_value(args[5]) : 0; // Default color is BLACK
+    int color = (n_args > 5) ? mp_color_get_value(args[5]) : -1; // -1 = use set_fill_color()
 
     brain_screen_draw_rectangle(self -> cpp_handle, x, y, width, height, color);
     return mp_const_none;
@@ -1922,12 +1922,12 @@ static mp_obj_t mp_brain_screen_draw_circle(size_t n_args, const mp_obj_t *args)
     int x = mp_obj_get_int(args[1]);
     int y = mp_obj_get_int(args[2]);
     int radius = mp_obj_get_int(args[3]);
-    int color = mp_color_get_value(args[4]);
+    int color = (n_args > 4) ? mp_color_get_value(args[4]) : -1; // -1 = use set_fill_color()
 
     brain_screen_draw_circle(self->cpp_handle, x, y, radius, color);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_circle_obj, 5, 5, mp_brain_screen_draw_circle);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_circle_obj, 4, 5, mp_brain_screen_draw_circle);
 
 static mp_obj_t mp_brain_screen_render(mp_obj_t self_ptr){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);

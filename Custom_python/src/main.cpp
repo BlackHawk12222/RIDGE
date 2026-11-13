@@ -6,6 +6,7 @@
 #include "main.h"
 #include "pros/apix.h"
 #include "vex/font_init.h"
+#include "vex/brain.hpp"
 #include "frozen_py.h"
 
 // MicroPython specific headers (must be inside extern "C")
@@ -42,13 +43,16 @@ static int pending_competition_event = -1;
 static constexpr int STATUS_SCREEN_LINES = 8;
 static int status_screen_line = 1;
 
+static Screen status_screen;   // same LVGL backend as brain.screen
+
 static void report_status(const char* message) {
     printf("%s\n", message);
     if (status_screen_line > STATUS_SCREEN_LINES) {
-        pros::screen::scroll(1, 1);
-        status_screen_line = STATUS_SCREEN_LINES;
+        status_screen.clear_screen(Color(0));
+        status_screen_line = 1;
     }
-    pros::screen::print(TEXT_SMALL, status_screen_line++, "%s                                                ", message);
+    status_screen.set_cursor(status_screen_line++, 1);
+    status_screen.print(message);
 }
 
 static void lock_competition_events() {
@@ -104,13 +108,9 @@ static void run_python_script(void* void_ptr) {
 
 void initialize() {
 
-    lv_obj_t* active_screen = lv_screen_active();
-
-    lv_obj_set_style_text_font(active_screen, &mono30, LV_PART_MAIN);
-
-    lv_obj_set_style_text_color(active_screen, lv_color_white(), LV_PART_MAIN);
-
-    pros::screen::erase();
+    Screen::init();                 // LVGL owns the screen; nothing uses pros::screen
+    status_screen.set_font(MONO15);
+    status_screen.clear_screen(Color(0));
     status_screen_line = 1;
     report_status("MP: initializing");
 
