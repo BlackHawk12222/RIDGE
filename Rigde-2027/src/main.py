@@ -58,7 +58,7 @@ left_motor_b = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)#---TWENTY
 liftGroup = MotorGroup(liftOne,liftTwo)
 left_drive_smart = MotorGroup(left_motor_a, left_motor_b)
 right_drive_smart = MotorGroup(right_motor_a, right_motor_b)
-drivetrain = DriveTrain(left_drive_smart, right_drive_smart, 319.19, 330.2, 254, MM, 0.75)
+drivetrain = DriveTrain(left_drive_smart, right_drive_smart, 219.44, 317.5, 254, MM, 0.75)
 
 # Config for Motors
 Intake.set_velocity(100, PERCENT)
@@ -267,7 +267,7 @@ class robot():
                     self.liftRaised = False
                     grabber.set(False)
                     liftGroup.spin_to_position(0,DEGREES,100,PERCENT,False)
-                    Claw.spin_to_position(0,DEGREES)
+                    Claw.spin_to_position(-40, DEGREES)
                     while not liftGroup.position()<10:
                         wait(5,MSEC)
                 else:
@@ -276,7 +276,7 @@ class robot():
                     controller_1.screen.print("running")
                     grabber.set(False)
                     liftGroup.spin_to_position(0,DEGREES)
-                    Claw.spin_to_position(0,DEGREES)
+                    Claw.spin_to_position(-40, DEGREES)
                     while math.fabs(liftGroup.position(DEGREES))>10 and math.fabs(Claw.position(DEGREES))>10:
                         wait(5,MSEC)
                     Intake.spin(FORWARD)
@@ -297,9 +297,30 @@ class robot():
         grabber.set(True)
         wait(100,MSEC)
         liftGroup.spin_to_position(700,DEGREES,100,PERCENT,False)
-        Claw.spin_to_position(205,DEGREES)
+        Claw.spin_to_position(190,DEGREES)
         while not liftGroup.is_done():
             wait(10,MSEC)
+
+    def clawDown(self):
+        self.liftRaised = True
+        liftUp = False
+        controller_1.screen.print("running")
+        grabber.set(False)
+        liftGroup.spin_to_position(0,DEGREES)
+        Claw.spin_to_position(-40 ,DEGREES)
+        while math.fabs(liftGroup.position(DEGREES))>10 and math.fabs(Claw.position(DEGREES))>10:
+            wait(5,MSEC)
+
+    def clawLoad(self):
+        Intake.spin(FORWARD)
+        wait(0.5,SECONDS)
+        grabber.set(True)
+        wait(100,MSEC)
+        liftGroup.spin_to_position(700,DEGREES,100,PERCENT,False)
+        Claw.spin_to_position(205,DEGREES)
+        wait(500,MSEC)
+        liftGroup.stop()
+        Intake.stop()
 
     def clawScore(self):
             Claw.set_velocity(100,PERCENT)
@@ -1091,28 +1112,63 @@ def AIM_turn(d,v=100,p=3):
 
 #Activate auto program; currently, this actually runs in ACPv1
 def auto():
-    color = Thread(lambda: color_switching())
+    color = Thread( color_switching )
     global MyColor
+    Inertial_.reset_heading()
 
-
+    # Temperary Auto setup to make Aton
     MyColor = "red"
 
+    # Inital Right turn for color bar.
     right_drive_smart.spin(FORWARD, 10, PERCENT)
     wait(0.5,SECONDS)
     drivetrain.stop()
     wait(1,SECONDS)
+
+    # Return to center before moving
+    CurrentHeading = Inertial_.heading()
+    if CurrentHeading > 180:  # make sure we dont turn more than 180.
+        drivetrain.turn_for(RIGHT, 360 - CurrentHeading, DEGREES, 100, PERCENT, True)
+    else:
+        drivetrain.turn_for(LEFT, CurrentHeading, DEGREES, 100, PERCENT, True)
+
+    # Drive Forward to setup for turn to right pin slot.
     drivetrain.set_drive_velocity(80,PERCENT)
     drivetrain.set_turn_velocity(80,PERCENT)
-    drivetrain.drive_for(REVERSE, 370, MM)
-    drivetrain.turn_for(RIGHT,95,DEGREES,70,PERCENT,False)
+    drivetrain.drive_for(REVERSE, 260, MM, 80, PERCENT)
+
+    wait(50, MSEC)  # Added wait to stableize robot before turn
+
+    # Turn to Right pin slot.
+    CurrentHeading = Inertial_.heading()
+    if CurrentHeading > 180:  # make sure we dont turn more than 180.
+        drivetrain.turn_for(RIGHT, 80 - (360 - CurrentHeading), DEGREES, 50, PERCENT, True)
+    else:
+        drivetrain.turn_for(RIGHT, 80 - CurrentHeading, DEGREES, 50, PERCENT, True)
+
+    # Bring Claw up to get ready to drop pre load pin
     K56721.clawUp()
+
+    # Waits for drive train to stop before drop.
     while not drivetrain.is_done():
         wait(5,MSEC)
-    drivetrain.drive_for(REVERSE,480, MM)
+
+    # Drive forward to right pin slot.
+    drivetrain.drive_for(REVERSE, 300, MM)
     wait(1,SECONDS)
-    liftGroup.spin_to_position(-200,DEGREES,100,PERCENT)
+    drivetrain.drive_for(REVERSE, 100, MM, 20, PERCENT, False)
+    wait(0.4, SECONDS)
+    # Score preload pin
+    liftGroup.spin_to_position(-500, DEGREES, 100, PERCENT)
     K56721.clawScore()
 
+    # return lift to up position
+    wait(100, MSEC)
+    drivetrain.drive_for(FORWARD, 200, MM)
+    liftGroup.spin_to_position(0,DEGREES,100,PERCENT)
+    K56721.clawDown()
+
+    # Stops Color turn Thread.
     color.stop()
 
 def driver():
