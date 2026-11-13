@@ -93,12 +93,6 @@ static void run_python_script(void* void_ptr) {
     report_status("MicroPython: running script");
     int script_succeeded = mp_do_str(frozen_py::main_py, 1);
 
-    if (script_succeeded) {
-        report_status("MicroPython: script finished");
-    } else {
-        report_status("MicroPython: script failed");
-    }
-
     while (true) {
         MP_THREAD_GIL_EXIT();
         pros::delay(2);
@@ -168,6 +162,7 @@ void initialize() {
         return;
     }
     report_status("MP: script task started");
+    status_screen.clear_screen(Color(0));
 }
 
 void autonomous() {
