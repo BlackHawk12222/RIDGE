@@ -656,6 +656,10 @@ void brain_screen_render(void* screen_ptr){
     static_cast<Screen*>(screen_ptr) -> render();
 }
 
+void vex_show_error_popup(const char* text){
+    Screen::show_error(text == nullptr ? "" : text);
+}
+
 void brain_screen_set_clip_region(void* screen_ptr, int x, int y, int width, int height){
     static_cast<Screen*>(screen_ptr) -> set_clip_region(x, y, width, height);
 }

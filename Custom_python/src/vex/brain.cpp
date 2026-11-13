@@ -214,6 +214,75 @@ void Screen::lvgl_tick(lv_timer_t* /*timer*/) {
         execute(work);
         work.clear();
     }
+
+    if (error_pending_.load(std::memory_order_acquire)) {
+        update_error_box();
+    }
+}
+
+// ---------- Error popup ----------
+
+void Screen::show_error(const std::string& text) {
+    // Keep the last lines: the exception type and message come last in a
+    // traceback, and they are the part that must stay readable.
+    constexpr int kMaxLines = 11;
+    std::string trimmed = text;
+    while (!trimmed.empty() && (trimmed.back() == '\n' || trimmed.back() == '\r')) {
+        trimmed.pop_back();
+    }
+    int lines = 0;
+    for (std::size_t i = trimmed.size(); i-- > 0;) {
+        if (trimmed[i] == '\n' && ++lines == kMaxLines) {
+            trimmed = "...\n" + trimmed.substr(i + 1);
+            break;
+        }
+    }
+
+    init();
+    queue_mutex().take();
+    error_text_ = std::move(trimmed);
+    queue_mutex().give();
+    error_pending_.store(true, std::memory_order_release);
+}
+
+// LVGL thread only.
+void Screen::update_error_box() {
+    if (!queue_mutex().take(0)) {
+        return;   // try again next tick
+    }
+    std::string text = error_text_;
+    error_pending_.store(false, std::memory_order_relaxed);
+    queue_mutex().give();
+
+    if (error_box_ == nullptr) {
+        // lv_layer_top() sits above the canvas, so user drawing and
+        // clear_screen() can't cover the error.
+        error_box_ = lv_obj_create(lv_layer_top());
+        lv_obj_set_size(error_box_, WIDTH - 20, LV_SIZE_CONTENT);
+        lv_obj_set_style_max_height(error_box_, HEIGHT - 20, LV_PART_MAIN);
+        lv_obj_align(error_box_, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_set_style_bg_color(error_box_, lv_color_hex(0xB00000), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(error_box_, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_border_color(error_box_, lv_color_white(), LV_PART_MAIN);
+        lv_obj_set_style_border_width(error_box_, 2, LV_PART_MAIN);
+        lv_obj_set_style_radius(error_box_, 6, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(error_box_, 8, LV_PART_MAIN);
+        lv_obj_remove_flag(error_box_, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(error_box_, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(error_box_, [](lv_event_t* e) {
+            lv_obj_add_flag(static_cast<lv_obj_t*>(lv_event_get_current_target(e)), LV_OBJ_FLAG_HIDDEN);
+        }, LV_EVENT_CLICKED, nullptr);
+
+        error_label_ = lv_label_create(error_box_);
+        lv_obj_set_width(error_label_, lv_pct(100));
+        lv_label_set_long_mode(error_label_, LV_LABEL_LONG_WRAP);
+        lv_obj_set_style_text_color(error_label_, lv_color_white(), LV_PART_MAIN);
+        lv_obj_set_style_text_font(error_label_, &lv_font_montserrat_16, LV_PART_MAIN);
+    }
+
+    lv_label_set_text(error_label_, text.c_str());
+    lv_obj_remove_flag(error_box_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_to_index(error_box_, -1);
 }
 
 void Screen::execute(std::vector<Cmd>& work) {

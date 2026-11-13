@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdint.h>
 #include "py/builtin.h"
 #include "py/runtime.h"
@@ -47,14 +48,13 @@ MP_REGISTER_ROOT_POINTER(mp_obj_t vex_callback_roots);
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_competition_callbacks);
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_pending_competition_event);
 
-// Print an uncaught exception from a Thread, Event or other callback the way
-// VEXcode V5 Python reports it: a header naming the function, then the normal
-// "Traceback (most recent call last):" block with file names and line numbers.
-// SystemExit is swallowed silently, like CPython does for threads.
+// Report an uncaught exception from a Thread, Event or other callback the way
+// VEXcode V5 Python does: a header naming the function, then the normal
+// "Traceback (most recent call last):" block, printed to the terminal and
+// shown in a red error box on the brain screen. SystemExit is ignored.
+void mp_port_report_exception(const char *header, mp_obj_t exc); // mp_port.c
+
 static void mp_vex_report_callback_exception(mp_obj_t callback, mp_obj_t exc) {
-    if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(mp_obj_get_type(exc)), MP_OBJ_FROM_PTR(&mp_type_SystemExit))) {
-        return;
-    }
     const char *name = NULL;
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
@@ -65,12 +65,13 @@ static void mp_vex_report_callback_exception(mp_obj_t callback, mp_obj_t exc) {
         }
         nlr_pop();
     }
+    char header[96];
     if (name != NULL) {
-        mp_printf(&mp_plat_print, "Exception in thread %s:\n", name);
+        snprintf(header, sizeof(header), "Exception in thread %s:", name);
     } else {
-        mp_printf(&mp_plat_print, "Exception in thread:\n");
+        snprintf(header, sizeof(header), "Exception in thread:");
     }
-    mp_obj_print_exception(&mp_plat_print, exc);
+    mp_port_report_exception(header, exc);
 }
 
 typedef struct _mp_vex_thread_obj_t{

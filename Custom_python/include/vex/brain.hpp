@@ -101,6 +101,12 @@ class Screen{
         // Drawing calls also start it on first use.
         static void init();
 
+        // Shows an error box on top of everything on the brain screen, like the
+        // red error popup VEXcode V5 Python shows for an uncaught exception.
+        // Safe to call from any task. Tap the box to hide it; a new error
+        // shows it again. Only the last lines fit, so the error line is kept.
+        static void show_error(const std::string& text);
+
         void print(std::string text, std::string sep = "", int precision = 2);
         void set_cursor(int row, int col);
         void next_row();
@@ -198,6 +204,11 @@ class Screen{
         static void enqueue(Cmd&& cmd);
         static void enqueue_frame(std::vector<Cmd>& frame);
         static void lvgl_tick(lv_timer_t* timer);
+        static inline std::string error_text_;                 // guarded by queue_mutex()
+        static inline std::atomic<bool> error_pending_{false};
+        static inline lv_obj_t* error_box_ = nullptr;          // LVGL thread only
+        static inline lv_obj_t* error_label_ = nullptr;        // LVGL thread only
+        static void update_error_box();
         static void create_canvas();
         static void execute(std::vector<Cmd>& work);
         static void poll_touch();

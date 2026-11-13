@@ -188,6 +188,8 @@ void brain_screen_draw_line(void* screen_ptr, int start_x, int start_y, int end_
 void brain_screen_draw_rectangle(void* screen_ptr, int x, int y, int width, int height, int color);
 void brain_screen_draw_circle(void* screen_ptr, int x, int y, int radius, int color);
 void brain_screen_render(void* screen_ptr);
+// Red error popup on the brain screen (see Screen::show_error).
+void vex_show_error_popup(const char* text);
 void brain_screen_set_clip_region(void* screen_ptr, int x, int y, int width, int height);
 bool brain_screen_pressing(void* screen_ptr);
 int brain_screen_x_position(void* screen_ptr);
