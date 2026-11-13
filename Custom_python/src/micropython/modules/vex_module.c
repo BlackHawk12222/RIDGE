@@ -3957,6 +3957,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),    MP_ROM_QSTR(MP_QSTR_vex) },
     { MP_ROM_QSTR(MP_QSTR_wait),        MP_ROM_PTR(&mp_vex_wait_obj) },
     { MP_ROM_QSTR(MP_QSTR_abs),         MP_ROM_PTR(&mp_builtin_abs_obj) },
+    { MP_ROM_QSTR(MP_QSTR_math),        MP_ROM_PTR(&mp_module_math) },  // VEXcode exposes math via from vex import *
     { MP_ROM_QSTR(MP_QSTR_Competition), MP_ROM_PTR(&mp_vex_competition_type) },
 
     // Bind Classes into the module namespace
@@ -3999,6 +4000,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_AxisType), MP_ROM_PTR(&mp_axis_type) },
     { MP_ROM_QSTR(MP_QSTR_TurnType), MP_ROM_PTR(&mp_turn_type) },
     { MP_ROM_QSTR(MP_QSTR_LEDStateType), MP_ROM_PTR(&mp_led_state_type) },
+    { MP_ROM_QSTR(MP_QSTR_LedStateType), MP_ROM_PTR(&mp_led_state_type) }, // VEXcode spelling
     { MP_ROM_QSTR(MP_QSTR_ObjectSizeType), MP_ROM_PTR(&mp_object_size_type) },
     { MP_ROM_QSTR(MP_QSTR_Color), MP_ROM_PTR(&mp_color_type) },
     { MP_ROM_QSTR(MP_QSTR_DistanceUnits), MP_ROM_PTR(&mp_distance_units_type) },
