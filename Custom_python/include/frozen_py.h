@@ -306,6 +306,7 @@ class robot():
                     liftGroup.stop()
                     Intake.stop()
                 Loading = False
+            wait(50, MSEC)
 
 class display():
 
