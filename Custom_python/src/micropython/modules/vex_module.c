@@ -1677,6 +1677,14 @@ static mp_obj_t mp_vex_stringify(mp_obj_t value) {
     return mp_obj_new_str_from_utf8_vstr(&buffer);
 }
 
+// VEXcode Python accepts floats for screen coordinates; truncate them like VEXcode.
+static int mp_vex_get_coord(mp_obj_t o) {
+    if (mp_obj_is_float(o)) {
+        return (int)mp_obj_get_float(o);
+    }
+    return mp_obj_get_int(o);
+}
+
 static mp_obj_t mp_brain_screen_print(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args) {
     enum { ARG_text, ARG_sep, ARG_precision };
     static const mp_arg_t allowed_args[] = {
@@ -1702,8 +1710,8 @@ static MP_DEFINE_CONST_FUN_OBJ_KW(mp_brain_screen_print_obj, 1, mp_brain_screen_
 static mp_obj_t mp_brain_screen_set_cursor(mp_obj_t self_ptr, mp_obj_t row_t, mp_obj_t col_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
-    int row = mp_obj_get_int(row_t);
-    int col = mp_obj_get_int(col_t);
+    int row = mp_vex_get_coord(row_t);
+    int col = mp_vex_get_coord(col_t);
 
     brain_screen_set_cursor(self -> cpp_handle, row, col);
     return mp_const_none;
@@ -1721,7 +1729,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_next_row_obj, mp_brain_screen_n
 static mp_obj_t mp_brain_screen_clear_row(size_t n_args, const mp_obj_t *args){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    int row = mp_obj_get_int(args[1]);
+    int row = mp_vex_get_coord(args[1]);
     int color = (n_args > 2) ? mp_color_get_value(args[2]) : 0;
 
     brain_screen_clear_row(self -> cpp_handle, row, color);
@@ -1753,8 +1761,8 @@ static mp_obj_t mp_brain_screen_print_at(size_t n_args, const mp_obj_t *args, mp
     enum { ARG_text, ARG_x, ARG_y, ARG_sep, ARG_precision, ARG_opaque };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_text, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_x, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0} },
-        { MP_QSTR_y, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0} },
+        { MP_QSTR_x, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_y, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
         { MP_QSTR_sep, MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
         { MP_QSTR_precision, MP_ARG_INT, {.u_int = 2} },
         { MP_QSTR_opaque, MP_ARG_BOOL, {.u_bool = true} },
@@ -1764,8 +1772,8 @@ static mp_obj_t mp_brain_screen_print_at(size_t n_args, const mp_obj_t *args, mp
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     mp_obj_t text_obj = mp_vex_stringify(values[ARG_text].u_obj);
     const char *text = mp_obj_str_get_str(text_obj);
-    int x = values[ARG_x].u_int;
-    int y = values[ARG_y].u_int;
+    int x = mp_vex_get_coord(values[ARG_x].u_obj);
+    int y = mp_vex_get_coord(values[ARG_y].u_obj);
     const char *sep = values[ARG_sep].u_obj == MP_OBJ_NULL
         ? " "
         : mp_obj_str_get_str(values[ARG_sep].u_obj);
@@ -1804,7 +1812,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_get_string_height_obj, mp_brain
 static mp_obj_t mp_brain_screen_clear_line(mp_obj_t self_ptr, mp_obj_t line_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
-    int line = mp_obj_get_int(line_t);
+    int line = mp_vex_get_coord(line_t);
 
     brain_screen_clear_line(self -> cpp_handle, line);
     return mp_const_none;
@@ -1831,7 +1839,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_clear_screen_obj, 1, 
 static mp_obj_t mp_brain_screen_set_font(mp_obj_t self_ptr, mp_obj_t font_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
-    int font = mp_obj_get_int(font_t);
+    int font = mp_vex_get_coord(font_t);
 
     brain_screen_set_font(self -> cpp_handle, font);
     return mp_const_none;
@@ -1841,7 +1849,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_font_obj, mp_brain_screen_s
 static mp_obj_t mp_brain_screen_set_pen_width(mp_obj_t self_ptr, mp_obj_t value_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
-    int value = mp_obj_get_int(value_t);
+    int value = mp_vex_get_coord(value_t);
 
     brain_screen_set_pen_width(self -> cpp_handle, value);
     return mp_const_none;
@@ -1871,8 +1879,8 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_fill_color_obj, mp_brain_sc
 static mp_obj_t mp_brain_screen_set_origin(mp_obj_t self_ptr, mp_obj_t x_t, mp_obj_t y_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
-    int x = mp_obj_get_int(x_t);
-    int y = mp_obj_get_int(y_t);
+    int x = mp_vex_get_coord(x_t);
+    int y = mp_vex_get_coord(y_t);
 
     brain_screen_set_origin(self -> cpp_handle, x, y);
     return mp_const_none;
@@ -1882,8 +1890,8 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_set_origin_obj, mp_brain_screen
 static mp_obj_t mp_brain_screen_draw_pixel(mp_obj_t self_ptr, mp_obj_t x_t, mp_obj_t y_t){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
-    int x = mp_obj_get_int(x_t);
-    int y = mp_obj_get_int(y_t);
+    int x = mp_vex_get_coord(x_t);
+    int y = mp_vex_get_coord(y_t);
 
     brain_screen_draw_pixel(self -> cpp_handle, x, y);
     return mp_const_none;
@@ -1893,10 +1901,10 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_draw_pixel_obj, mp_brain_screen
 static mp_obj_t mp_brain_screen_draw_line(size_t n_args, const mp_obj_t *args){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    int start_x = mp_obj_get_int(args[1]);
-    int start_y = mp_obj_get_int(args[2]);
-    int end_x = mp_obj_get_int(args[3]);
-    int end_y = mp_obj_get_int(args[4]);
+    int start_x = mp_vex_get_coord(args[1]);
+    int start_y = mp_vex_get_coord(args[2]);
+    int end_x = mp_vex_get_coord(args[3]);
+    int end_y = mp_vex_get_coord(args[4]);
 
     brain_screen_draw_line(self -> cpp_handle, start_x, start_y, end_x, end_y);
     return mp_const_none;
@@ -1906,10 +1914,10 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_line_obj, 5, 5, 
 static mp_obj_t mp_brain_screen_draw_rectangle(size_t n_args, const mp_obj_t *args){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    int x = mp_obj_get_int(args[1]);
-    int y = mp_obj_get_int(args[2]);
-    int width = mp_obj_get_int(args[3]);
-    int height = mp_obj_get_int(args[4]);
+    int x = mp_vex_get_coord(args[1]);
+    int y = mp_vex_get_coord(args[2]);
+    int width = mp_vex_get_coord(args[3]);
+    int height = mp_vex_get_coord(args[4]);
     int color = (n_args > 5) ? mp_color_get_value(args[5]) : -1; // -1 = use set_fill_color()
 
     brain_screen_draw_rectangle(self -> cpp_handle, x, y, width, height, color);
@@ -1919,9 +1927,9 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_rectangle_obj, 5
 
 static mp_obj_t mp_brain_screen_draw_circle(size_t n_args, const mp_obj_t *args){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    int x = mp_obj_get_int(args[1]);
-    int y = mp_obj_get_int(args[2]);
-    int radius = mp_obj_get_int(args[3]);
+    int x = mp_vex_get_coord(args[1]);
+    int y = mp_vex_get_coord(args[2]);
+    int radius = mp_vex_get_coord(args[3]);
     int color = (n_args > 4) ? mp_color_get_value(args[4]) : -1; // -1 = use set_fill_color()
 
     brain_screen_draw_circle(self->cpp_handle, x, y, radius, color);
@@ -1940,10 +1948,10 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_render_obj, mp_brain_screen_ren
 static mp_obj_t mp_brain_screen_set_clip_region(size_t n_args, const mp_obj_t *args){
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    int x = mp_obj_get_int(args[1]);
-    int y = mp_obj_get_int(args[2]);
-    int width = mp_obj_get_int(args[3]);
-    int height = mp_obj_get_int(args[4]);
+    int x = mp_vex_get_coord(args[1]);
+    int y = mp_vex_get_coord(args[2]);
+    int width = mp_vex_get_coord(args[3]);
+    int height = mp_vex_get_coord(args[4]);
 
     brain_screen_set_clip_region(self -> cpp_handle, x, y, width, height);
     return mp_const_none;
@@ -3884,6 +3892,7 @@ static const mp_rom_map_elem_t mp_color_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ORANGE), MP_ROM_INT(0xFFA500) },
     { MP_ROM_QSTR(MP_QSTR_PURPLE), MP_ROM_INT(0x800080) },
     { MP_ROM_QSTR(MP_QSTR_CYAN), MP_ROM_INT(0x00FFFF) },
+    { MP_ROM_QSTR(MP_QSTR_TRANSPARENT), MP_ROM_INT(0x1000000) }, // bit 24 = draw nothing
 };
 static MP_DEFINE_CONST_DICT(mp_color_locals_dict, mp_color_locals_dict_table);
 
@@ -4075,6 +4084,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ORANGE),      MP_ROM_INT(0xFFA500) },
     { MP_ROM_QSTR(MP_QSTR_PURPLE),      MP_ROM_INT(0x800080) },
     { MP_ROM_QSTR(MP_QSTR_CYAN),        MP_ROM_INT(0x00FFFF) },
+    { MP_ROM_QSTR(MP_QSTR_TRANSPARENT), MP_ROM_INT(0x1000000) },
     
 };
 static MP_DEFINE_CONST_DICT(vex_module_globals, vex_module_globals_table);

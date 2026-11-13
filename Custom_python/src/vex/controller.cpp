@@ -1,47 +1,86 @@
+#include <format>
+#include <sstream>
+#include <charconv>
+#include <algorithm>
 #include "main.h"
 #include "vex/controller.hpp"
 
 ControllerScreen::ControllerScreen(pros::Controller* controller){
     this -> ControllerObj = controller;
+    for (int i = 0; i < ROWS; ++i) {
+        Wanted[i] = std::string(COLS, ' ');
+        Shown[i] = std::string();   // unknown: force the first send
+    }
+    Flusher = new pros::Task([this]() { flush_loop(); },
+                             TASK_PRIORITY_DEFAULT, TASK_STACK_DEPTH_DEFAULT, "VEX Ctrl Screen");
+}
+
+void ControllerScreen::flush_loop(){
+    int next = 0;
+    while (true) {
+        // Find one changed row, starting after the last one sent so rows take turns.
+        int row = -1;
+        std::string text;
+        Lock.take();
+        for (int i = 0; i < ROWS; ++i) {
+            const int r = (next + i) % ROWS;
+            if (Wanted[r] != Shown[r]) {
+                row = r;
+                text = Wanted[r];
+                break;
+            }
+        }
+        Lock.give();
+
+        if (row >= 0 && ControllerObj->is_connected()) {
+            // set_text with a full-width row overwrites old text: no separate clear needed.
+            if (ControllerObj->set_text(row, 0, text.c_str()) == 1) {
+                Shown[row] = text;
+            }
+            next = row + 1;
+        } else if (!ControllerObj->is_connected()) {
+            for (auto& s : Shown) s.clear();   // resend everything after a reconnect
+        }
+        pros::delay(55);   // the controller accepts ~1 update per 50 ms
+    }
 }
 
 bool ControllerScreen::is_number(const std::string& str) {
     double value;
-    
-    // &str[0] gets the pointer to the start, + str.size() gets the end
     auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), value);
-    
-    // Success means no error (ec) AND the pointer reached the end of the string
     return ec == std::errc() && ptr == str.data() + str.size();
 }
 
-void ControllerScreen::print(std::string value, std::string sep, int precision){
-    if (sep == "") {
-        if (is_number(value)){
-            double number=std::stod(value);
-            std::string output=std::format("{:.{}f}", number, precision);
+void ControllerScreen::write(int row, int column, const std::string& text){
+    if (row < 1 || row > ROWS || column < 1 || column > COLS) return;
+    Lock.take();
+    std::string& line = Wanted[row - 1];
+    const size_t start = static_cast<size_t>(column - 1);
+    const size_t n = std::min(text.size(), static_cast<size_t>(COLS) - start);
+    line.replace(start, n, text, 0, n);
+    Lock.give();
+}
 
-            ControllerObj->print(ScreenRow, ScreenColumn, "%s", output);
-        }else{
-            ControllerObj->print(ScreenRow, ScreenColumn, "%s", value.c_str());
+void ControllerScreen::print(std::string value, std::string sep, int precision){
+    std::string output;
+    if (sep.empty()) {
+        if (is_number(value)) {
+            output = std::format("{:.{}f}", std::stod(value), precision);
+        } else {
+            output = value;
         }
-        
-    }else {
-        std::vector<std::string> TextList;
+    } else {
         std::stringstream ss(value);
         std::string line;
-        std::string output;
-
         if (std::getline(ss, line)) {
-            output += line; // Add first line without separator
+            output += line;
         }
-        
         while (std::getline(ss, line)) {
             output += sep + line;
         }
-
-        ControllerObj->print(ScreenRow, ScreenColumn, "%s", output.c_str());
     }
+    write(ScreenRow, ScreenColumn, output);
+    ScreenColumn += static_cast<int>(output.size());   // VEXcode advances the cursor
 }
 
 void ControllerScreen::set_cursor(int row, int column){
@@ -58,15 +97,23 @@ int ControllerScreen::row(){
 }
 
 void ControllerScreen::clear_screen(){
-    ControllerObj -> clear();
+    Lock.take();
+    for (auto& line : Wanted) line.assign(COLS, ' ');
+    Lock.give();
+    ScreenRow = 1;
+    ScreenColumn = 1;
 }
 
 void ControllerScreen::clear_row(int row){
-    ControllerObj -> clear_line(row);
+    if (row < 1 || row > ROWS) return;
+    Lock.take();
+    Wanted[row - 1].assign(COLS, ' ');
+    Lock.give();
 }
 
 void ControllerScreen::next_row(){
-    ScreenRow+=1;
+    ScreenRow += 1;
+    ScreenColumn = 1;
 }
 
 ControllerButton::ControllerButton(pros::controller_digital_e_t Button, pros::Controller* controller){

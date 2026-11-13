@@ -1090,6 +1090,7 @@ def liftTick_callback():
         MT.intake_tick()
         MT.liftTick()
         MT.grabberTick()
+        wait(10, MSEC)  # without this the loop never lets the other threads run
 
 
 
@@ -1146,13 +1147,15 @@ if comp.is_driver_control():
         comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=auto)
     else:
         wait(1,SECONDS)
-        while not setUp:
-            wait(5,MSEC)
+        # wait for prog_setup (menus + animation) to finish before driving
+        controller_1.screen.set_cursor(1, 1)
+        while setUp:
             controller_1.screen.print(".")
+            wait(500,MSEC)
         if RunAuto:
             controller_1.screen.print("auto")
             auto()
-            RunAut0 = False
+            RunAuto = False
         claw  = Thread(K56721.autoload)
         drive = Thread(lambda: K56721.TankDrive(2))
         color_switching()

@@ -114,7 +114,11 @@ namespace {
     constexpr std::size_t kMaxQueued = 2048;
     constexpr std::uint32_t kTickMs = 5;
 
+    constexpr std::uint32_t kTransparent = 0x1000000u;   // Color.TRANSPARENT
+    constexpr std::uint32_t kColorMask = 0x1FFFFFFu;     // RGB + transparent bit
     inline std::uint32_t xrgb(std::uint32_t rgb) { return 0xFF000000u | (rgb & 0x00FFFFFFu); }
+    inline bool is_clear(std::uint32_t c) { return (c & kTransparent) != 0; }
+    inline lv_opa_t opa_of(std::uint32_t c) { return is_clear(c) ? LV_OPA_TRANSP : LV_OPA_COVER; }
     inline int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 }
 
@@ -243,7 +247,7 @@ void Screen::execute(std::vector<Cmd>& work) {
                 break;
             }
             case Op::Pixel: {
-                if (c.x < c.cx1 || c.x > c.cx2 || c.y < c.cy1 || c.y > c.cy2) break;
+                if (is_clear(c.pen) || c.x < c.cx1 || c.x > c.cx2 || c.y < c.cy1 || c.y > c.cy2) break;
                 close_layer();
                 base[c.y * stride_px + c.x] = xrgb(c.pen);
                 break;
@@ -272,7 +276,7 @@ void Screen::execute(std::vector<Cmd>& work) {
                     lv_point_t size;
                     lv_text_get_size(&size, c.text.c_str(), c.font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
                     lv_area_t area = {c.x, c.y, static_cast<int32_t>(c.x + size.x - 1), static_cast<int32_t>(c.y + size.y - 1)};
-                    if (c.opaque) {
+                    if (c.opaque && !is_clear(c.fill)) {
                         lv_draw_rect_dsc_t bg;
                         lv_draw_rect_dsc_init(&bg);
                         bg.bg_color = lv_color_hex(c.fill);
@@ -284,16 +288,16 @@ void Screen::execute(std::vector<Cmd>& work) {
                     d.text = c.text.c_str();   // stays alive until finish_layer
                     d.font = c.font;
                     d.color = lv_color_hex(c.pen);
-                    d.opa = LV_OPA_COVER;
+                    d.opa = opa_of(c.pen);
                     lv_draw_label(&layer, &d, &area);
                 } else if (c.op == Op::Rect || c.op == Op::Circle) {
                     lv_draw_rect_dsc_t d;
                     lv_draw_rect_dsc_init(&d);
                     d.bg_color = lv_color_hex(c.fill);
-                    d.bg_opa = LV_OPA_COVER;
+                    d.bg_opa = opa_of(c.fill);
                     d.border_color = lv_color_hex(c.pen);
                     d.border_width = c.pen_width;
-                    d.border_opa = c.pen_width > 0 ? LV_OPA_COVER : LV_OPA_TRANSP;
+                    d.border_opa = c.pen_width > 0 ? opa_of(c.pen) : LV_OPA_TRANSP;
                     lv_area_t area;
                     if (c.op == Op::Rect) {
                         area = {c.x, c.y, static_cast<int32_t>(c.x + c.w - 1), static_cast<int32_t>(c.y + c.h - 1)};
@@ -311,7 +315,8 @@ void Screen::execute(std::vector<Cmd>& work) {
                     d.p2.x = c.w;  d.p2.y = c.h;
                     d.color = lv_color_hex(c.pen);
                     d.width = c.pen_width > 0 ? c.pen_width : 1;
-                    d.opa = LV_OPA_COVER;
+                    d.opa = opa_of(c.pen);
+                    d.round_start = d.round_end = d.width > 2;   // thick lines join cleanly
                     lv_draw_line(&layer, &d);
                 }
                 break;
@@ -527,9 +532,9 @@ void Screen::clear_line(int line){
 }
 
 void Screen::clear_screen(Color color) {
-    BackgroundColor = color.ColorValue;
+    BackgroundColor = is_clear(color.ColorValue) ? 0 : (color.ColorValue & 0x00FFFFFFu);
     Cmd c = make_cmd(Op::Clear);
-    c.fill = color.ColorValue;
+    c.fill = BackgroundColor;
     submit(std::move(c));
 }
 
@@ -553,11 +558,11 @@ void Screen::set_pen_width(int value){
 }
 
 void Screen::set_pen_color(Color color){
-    PenColor = color.ColorValue & 0x00FFFFFFu;
+    PenColor = color.ColorValue & kColorMask;
 }
 
 void Screen::set_fill_color(Color color){
-    FillColor = color.ColorValue & 0x00FFFFFFu;
+    FillColor = color.ColorValue & kColorMask;
 }
 
 void Screen::set_origin(int x, int y){
@@ -598,7 +603,7 @@ void Screen::draw_rectangle(int x, int y, int width, int height, Color color){
     c.y = static_cast<std::int16_t>(y + YOffset);
     c.w = static_cast<std::int16_t>(width);
     c.h = static_cast<std::int16_t>(height);
-    if (color.ColorValue != USE_FILL) c.fill = color.ColorValue & 0x00FFFFFFu;
+    if (color.ColorValue != USE_FILL) c.fill = color.ColorValue & kColorMask;
     submit(std::move(c));
 }
 
@@ -608,7 +613,7 @@ void Screen::draw_circle(int x, int y, int radius, Color color){
     c.x = static_cast<std::int16_t>(x + XOffset);
     c.y = static_cast<std::int16_t>(y + YOffset);
     c.w = static_cast<std::int16_t>(radius);
-    if (color.ColorValue != USE_FILL) c.fill = color.ColorValue & 0x00FFFFFFu;
+    if (color.ColorValue != USE_FILL) c.fill = color.ColorValue & kColorMask;
     submit(std::move(c));
 }
 
