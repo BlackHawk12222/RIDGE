@@ -40,6 +40,39 @@ static mp_thread_record_t *find_thread_record(task_t task) {
     return NULL;
 }
 
+// ---- Fast thread-state lookup via FreeRTOS thread-local storage ----
+// FreeRTOS TLS (exported by libpros.a)
+extern void *pvTaskGetThreadLocalStoragePointer(task_t task, int32_t index);
+extern void vTaskSetThreadLocalStoragePointer(task_t task, int32_t index, void *value);
+
+#ifndef MP_THREAD_TLS_INDEX
+#define MP_THREAD_TLS_INDEX (4)   // PROS uses the low slots
+#endif
+
+static inline mp_thread_record_t *tls_get_record(void) {
+    return (mp_thread_record_t *)pvTaskGetThreadLocalStoragePointer(NULL, MP_THREAD_TLS_INDEX);
+}
+
+static inline void tls_set_record(mp_thread_record_t *record) {
+    vTaskSetThreadLocalStoragePointer(NULL, MP_THREAD_TLS_INDEX, record);
+}
+
+// Fallback: old locked lookup, then cache it in TLS
+static mp_thread_record_t *slow_find_current_record(void) {
+    lock_thread_records();
+    mp_thread_record_t *record = find_thread_record(task_get_current());
+    unlock_thread_records();
+    if (record != NULL) {
+        tls_set_record(record);
+    }
+    return record;
+}
+
+static inline mp_thread_record_t *current_record(void) {
+    mp_thread_record_t *record = tls_get_record();
+    return record != NULL ? record : slow_find_current_record();
+}
+
 static void save_stack_pointer(mp_thread_record_t *record) {
     volatile uintptr_t stack_marker = 0;
     record->saved_stack_pointer = (uintptr_t)&stack_marker;
@@ -62,18 +95,15 @@ void mp_thread_port_init(void) {
     main_record->next = NULL;
     save_stack_pointer(main_record);
     thread_records = main_record;
+    tls_set_record(main_record);
 }
 
 struct _mp_state_thread_t *mp_thread_get_state(void) {
-    task_t current_task = task_get_current();
-    lock_thread_records();
-    mp_thread_record_t *record = find_thread_record(current_task);
-    mp_state_thread_t *state = record == NULL ? NULL : record->state;
-    unlock_thread_records();
-    if (state == NULL) {
+    mp_thread_record_t *record = current_record();
+    if (record == NULL || record->state == NULL) {
         abort();
     }
-    return state;
+    return record->state;
 }
 
 void mp_thread_set_state(struct _mp_state_thread_t *state) {
@@ -94,6 +124,7 @@ void mp_thread_set_state(struct _mp_state_thread_t *state) {
     }
     record->state = state;
     save_stack_pointer(record);
+    tls_set_record(record);
     unlock_thread_records();
 }
 
@@ -102,6 +133,7 @@ static void thread_task_entry(void *parameter) {
     lock_thread_records();
     record->task = task_get_current();
     unlock_thread_records();
+    tls_set_record(record);
 
     record->entry(record->arg);
     mp_thread_finish();
@@ -115,6 +147,7 @@ static void thread_task_entry(void *parameter) {
         *current = record->next;
     }
     unlock_thread_records();
+    tls_set_record(NULL);
     free(record);
 
     task_delete(NULL); // Required in PROS C API so task never returns to task_clean_up
@@ -194,24 +227,20 @@ void mp_thread_mutex_init(mp_thread_mutex_t *mutex) {
 
 int mp_thread_mutex_lock(mp_thread_mutex_t *mutex, int wait) {
     if (mutex == &MP_STATE_VM(gil_mutex)) {
-        lock_thread_records();
-        mp_thread_record_t *record = find_thread_record(task_get_current());
+        mp_thread_record_t *record = current_record();
         if (record != NULL) {
             save_stack_pointer(record);
         }
-        unlock_thread_records();
     }
     return mutex_take(*mutex, wait ? TIMEOUT_MAX : 0) ? 1 : 0;
 }
 
 void mp_thread_mutex_unlock(mp_thread_mutex_t *mutex) {
     if (mutex == &MP_STATE_VM(gil_mutex)) {
-        lock_thread_records();
-        mp_thread_record_t *record = find_thread_record(task_get_current());
+        mp_thread_record_t *record = current_record();
         if (record != NULL) {
             save_stack_pointer(record);
         }
-        unlock_thread_records();
     }
     if (!mutex_give(*mutex)) {
         abort();
