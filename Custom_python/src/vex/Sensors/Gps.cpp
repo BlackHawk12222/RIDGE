@@ -1,4 +1,5 @@
 #include "vex/Sensors/Gps.hpp"
+#include "vex/safe_value.hpp"
 
 #include <stdexcept>
 
@@ -29,23 +30,23 @@ void Gps::set_location(double x, double y, DistanceUnits distance_units,
 }
 
 double Gps::x_position(DistanceUnits units) {
-    return from_meters(Sensor.get_position_x(), units);
+    return from_meters(vsafe::num(Sensor.get_position_x()), units);
 }
 
 double Gps::y_position(DistanceUnits units) {
-    return from_meters(Sensor.get_position_y(), units);
+    return from_meters(vsafe::num(Sensor.get_position_y()), units);
 }
 
 double Gps::heading() {
-    return Sensor.get_heading();
+    return vsafe::num(Sensor.get_heading());
 }
 
 double Gps::acceleration(AxisType axis) {
     const pros::gps_accel_s_t acceleration_value = Sensor.get_accel();
     switch (axis) {
-        case XAXIS: return acceleration_value.x;
-        case YAXIS: return acceleration_value.y;
-        case ZAXIS: return acceleration_value.z;
+        case XAXIS: return vsafe::num(acceleration_value.x);
+        case YAXIS: return vsafe::num(acceleration_value.y);
+        case ZAXIS: return vsafe::num(acceleration_value.z);
         default: throw std::invalid_argument("invalid GPS acceleration axis");
     }
 }
@@ -54,9 +55,9 @@ double Gps::gyro_rate(AxisType axis, VelocityUnits units) {
     const pros::gps_gyro_s_t rate = Sensor.get_gyro_rate();
     double degrees_per_second;
     switch (axis) {
-        case XAXIS: degrees_per_second = rate.x; break;
-        case YAXIS: degrees_per_second = rate.y; break;
-        case ZAXIS: degrees_per_second = rate.z; break;
+        case XAXIS: degrees_per_second = vsafe::num(rate.x); break;
+        case YAXIS: degrees_per_second = vsafe::num(rate.y); break;
+        case ZAXIS: degrees_per_second = vsafe::num(rate.z); break;
         default: throw std::invalid_argument("invalid GPS gyroscope axis");
     }
     return units == RPM ? degrees_per_second / 6.0 : degrees_per_second;
@@ -66,9 +67,9 @@ double Gps::orientation(AxisType axis, AngleUnits units) {
     const pros::gps_orientation_s_t orientation_value = Sensor.get_orientation();
     double degrees;
     switch (axis) {
-        case PITCH: degrees = orientation_value.pitch; break;
-        case ROLL: degrees = orientation_value.roll; break;
-        case YAW: degrees = orientation_value.yaw; break;
+        case PITCH: degrees = vsafe::num(orientation_value.pitch); break;
+        case ROLL: degrees = vsafe::num(orientation_value.roll); break;
+        case YAW: degrees = vsafe::num(orientation_value.yaw); break;
         default: throw std::invalid_argument("invalid GPS orientation axis");
     }
     return units == TURNS ? degrees / 360.0 : degrees;

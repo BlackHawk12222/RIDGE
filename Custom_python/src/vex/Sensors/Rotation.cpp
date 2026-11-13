@@ -1,4 +1,5 @@
 #include "vex/Sensors/Rotation.hpp"
+#include "vex/safe_value.hpp"
 
 #include <cmath>
 
@@ -13,17 +14,17 @@ void Rotation::set_position(float value, AngleUnits units){
 }
 
 float Rotation::angle(AngleUnits units){
-    const float degrees = static_cast<float>(Sensor->get_angle()) / 100.0f;
+    const float degrees = static_cast<float>(vsafe::num(Sensor->get_angle())) / 100.0f;
     return units == TURNS ? degrees / 360.0f : degrees;
 }
 
 float Rotation::position(AngleUnits units){
-    const float degrees = static_cast<float>(Sensor->get_position()) / 100.0f;
+    const float degrees = static_cast<float>(vsafe::num(Sensor->get_position())) / 100.0f;
     return units == TURNS ? degrees / 360.0f : degrees;
 }
 
 float Rotation::velocity(VelocityUnits units){
-    const float centidegrees_per_second = static_cast<float>(Sensor->get_velocity());
+    const float centidegrees_per_second = static_cast<float>(vsafe::num(Sensor->get_velocity()));
     if (units == RPM){
         return centidegrees_per_second / 600.0f;
     }

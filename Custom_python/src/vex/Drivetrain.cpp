@@ -1,4 +1,5 @@
 #include <cmath>
+#include "vex/safe_value.hpp"
 #include <stdexcept>
 
 #include "vex/Drivetrain.hpp"
@@ -37,8 +38,8 @@ Drivetrain::Drivetrain(const std::vector<std::int8_t>& left_ports,
     right_motors_ = std::make_unique<pros::MotorGroup>(
         right_ports, pros::v5::MotorGears::invalid, pros::v5::MotorUnits::degrees);
 
-    left_target_ = left_motors_->get_position();
-    right_target_ = right_motors_->get_position();
+    left_target_ = vsafe::num(left_motors_->get_position());
+    right_target_ = vsafe::num(right_motors_->get_position());
     left_origin_ = left_target_;
     right_origin_ = right_target_;
 }
@@ -136,13 +137,13 @@ void Drivetrain::command_relative(pros::MotorGroup& motors, double degrees, floa
 }
 
 double Drivetrain::motor_degrees_for_distance(float distance_mm) const {
-    return static_cast<double>(distance_mm) * 360.0 * external_gear_ratio_ / wheel_travel_mm_;
+    return vsafe::div(static_cast<double>(distance_mm) * 360.0 * external_gear_ratio_, wheel_travel_mm_);
 }
 
 void Drivetrain::move_relative(double left_degrees, double right_degrees,
                                float velocity, VelocityUnits units, bool wait) {
-    left_target_ = left_motors_->get_position() + left_degrees;
-    right_target_ = right_motors_->get_position() + right_degrees;
+    left_target_ = vsafe::num(left_motors_->get_position()) + left_degrees;
+    right_target_ = vsafe::num(right_motors_->get_position()) + right_degrees;
     target_active_ = true;
     continuous_motion_ = false;
     command_relative(*left_motors_, left_degrees, velocity, units);
@@ -153,8 +154,8 @@ void Drivetrain::move_relative(double left_degrees, double right_degrees,
 }
 
 bool Drivetrain::target_reached() const {
-    return std::abs(left_motors_->get_position() - left_target_) <= POSITION_TOLERANCE_DEGREES &&
-           std::abs(right_motors_->get_position() - right_target_) <= POSITION_TOLERANCE_DEGREES;
+    return std::abs(vsafe::num(left_motors_->get_position()) - left_target_) <= POSITION_TOLERANCE_DEGREES &&
+           std::abs(vsafe::num(right_motors_->get_position()) - right_target_) <= POSITION_TOLERANCE_DEGREES;
 }
 
 void Drivetrain::wait_for_target() {
@@ -285,8 +286,8 @@ bool Drivetrain::is_done() {
         return true;
     }
     return !continuous_motion_ &&
-           std::abs(left_motors_->get_actual_velocity()) < 1.0 &&
-           std::abs(right_motors_->get_actual_velocity()) < 1.0;
+           std::abs(vsafe::num(left_motors_->get_actual_velocity())) < 1.0 &&
+           std::abs(vsafe::num(right_motors_->get_actual_velocity())) < 1.0;
 }
 
 bool Drivetrain::is_moving() const {
@@ -294,8 +295,8 @@ bool Drivetrain::is_moving() const {
         return !target_reached();
     }
     return continuous_motion_ ||
-           std::abs(left_motors_->get_actual_velocity()) >= 1.0 ||
-           std::abs(right_motors_->get_actual_velocity()) >= 1.0;
+           std::abs(vsafe::num(left_motors_->get_actual_velocity())) >= 1.0 ||
+           std::abs(vsafe::num(right_motors_->get_actual_velocity())) >= 1.0;
 }
 
 float Drivetrain::rotation(AngleUnits units) const {
@@ -310,11 +311,11 @@ float Drivetrain::rotation(AngleUnits units) const {
 }
 
 float Drivetrain::raw_rotation() const {
-    const double left_delta = left_motors_->get_position() - left_origin_;
-    const double right_delta = right_motors_->get_position() - right_origin_;
-    return static_cast<float>(
-        (right_delta - left_delta) * wheel_travel_mm_ /
-        (2.0 * PI * track_width_mm_ * external_gear_ratio_));
+    const double left_delta = vsafe::num(left_motors_->get_position()) - left_origin_;
+    const double right_delta = vsafe::num(right_motors_->get_position()) - right_origin_;
+    return static_cast<float>(vsafe::div(
+        (right_delta - left_delta) * wheel_travel_mm_,
+        2.0 * PI * track_width_mm_ * external_gear_ratio_));
 }
 
 float Drivetrain::heading(AngleUnits units) const {
@@ -330,7 +331,7 @@ float Drivetrain::heading(AngleUnits units) const {
 
 float Drivetrain::velocity(VelocityUnits units) const {
     const float average_rpm = static_cast<float>(
-        (left_motors_->get_actual_velocity() + right_motors_->get_actual_velocity()) / 2.0);
+        (vsafe::num(left_motors_->get_actual_velocity()) + vsafe::num(right_motors_->get_actual_velocity())) / 2.0);
     if (units == RPM) {
         return average_rpm;
     }
@@ -338,8 +339,8 @@ float Drivetrain::velocity(VelocityUnits units) const {
         return average_rpm * 6.0f;
     }
     if (units == VELOCITY_PERCENT) {
-        return average_rpm * 100.0f /
-               ((max_rpm(*left_motors_) + max_rpm(*right_motors_)) / 2.0f);
+        return static_cast<float>(vsafe::div(average_rpm * 100.0,
+               (max_rpm(*left_motors_) + max_rpm(*right_motors_)) / 2.0));
     }
     throw std::invalid_argument("Unsupported drivetrain velocity unit");
 }

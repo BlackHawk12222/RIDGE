@@ -1,4 +1,5 @@
 #include <format>
+#include "vex/safe_value.hpp"
 #include <sstream>
 #include <charconv>
 #include <algorithm>
@@ -122,7 +123,7 @@ ControllerButton::ControllerButton(pros::controller_digital_e_t Button, pros::Co
 }
 
 bool ControllerButton::pressing(){
-    return ControllerObj -> get_digital(ButtonType);
+    return vsafe::num(ControllerObj -> get_digital(ButtonType));
 }
 
 ControllerAxis::ControllerAxis(pros::controller_analog_e_t Axis, pros::Controller* controller){
@@ -131,7 +132,7 @@ ControllerAxis::ControllerAxis(pros::controller_analog_e_t Axis, pros::Controlle
 }
 
 int ControllerAxis::position(){
-    return ControllerObj -> get_analog(AxisType);
+    return vsafe::num(ControllerObj -> get_analog(AxisType));
 }
 
 Controller::Controller(ControllerType controller_type){

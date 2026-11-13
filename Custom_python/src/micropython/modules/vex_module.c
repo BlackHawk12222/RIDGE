@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 #include "py/builtin.h"
@@ -7,6 +8,17 @@
 #include "py/mphal.h"
 #include "py/mpthread.h"
 #include "vex/vex.h"
+
+// VEXcode never hands Python infinity or NaN, and a NaN or infinite argument
+// would be undefined behavior once converted to an int for PROS. Both
+// directions map non-finite values to 0.
+static inline mp_obj_t mp_vex_new_float(mp_float_t v) {
+    return mp_obj_new_float(isfinite(v) ? v : (mp_float_t)0);
+}
+static inline mp_float_t mp_vex_get_float(mp_obj_t o) {
+    const mp_float_t v = mp_obj_get_float(o);
+    return isfinite(v) ? v : (mp_float_t)0;
+}
 
 #define MP_VEX_CALL_BLOCKING(wait, ...) \
     do { \
@@ -28,7 +40,7 @@
 
 static mp_obj_t mp_vex_wait(size_t n_args, const mp_obj_t *args) {
     mp_arg_check_num(n_args, 0, 1, 2, false);
-    double duration = mp_obj_get_float(args[0]);
+    double duration = mp_vex_get_float(args[0]);
     if (duration < 0.0) {
         duration = 1.0; // Clamp negative loop remainder to 1 ms
     }
@@ -652,7 +664,7 @@ static mp_obj_t mp_motor_make_new(const mp_obj_type_t *type, size_t n_args, size
 static mp_obj_t mp_motor_spin(size_t n_args, const mp_obj_t *args) {
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float velocity = (n_args > 2) ? mp_obj_get_float(args[2]) : 601.0f;
+    float velocity = (n_args > 2) ? mp_vex_get_float(args[2]) : 601.0f;
     int units = (n_args > 3) ? mp_obj_get_int(args[3]) : 24;  // Default is RPM.
 
     motor_spin(self->cpp_handle, direction, velocity, units);
@@ -669,7 +681,7 @@ static mp_obj_t mp_motor_spin_for(size_t n_args, const mp_obj_t *args) {
 
     // Defining default values.
     int units = (n_args > 3) ? mp_obj_get_int(args[3])   : 29;      // DEGREES macro value
-    float velocity = (n_args > 4) ? mp_obj_get_float(args[4]) : 601.0f;
+    float velocity = (n_args > 4) ? mp_vex_get_float(args[4]) : 601.0f;
     int units_v = (n_args > 5) ? mp_obj_get_int(args[5])   : 24;      // RPM macro value
     bool wait = (n_args > 6) ? mp_obj_is_true(args[6])   : true;
 
@@ -683,7 +695,7 @@ static mp_obj_t mp_motor_spin_to_position(size_t n_args, const mp_obj_t *args){
     int rotation = mp_obj_get_int(args[1]);
 
     int units = (n_args > 2) ? mp_obj_get_int(args[2])   : 29;
-    float velocity = (n_args > 3) ? mp_obj_get_float(args[3]) : 601.0f;
+    float velocity = (n_args > 3) ? mp_vex_get_float(args[3]) : 601.0f;
     int units_v = (n_args > 4) ? mp_obj_get_int(args[4])   : 24;
     bool wait = (n_args > 5) ? mp_obj_is_true(args[5])   : true;
 
@@ -704,7 +716,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_stop_obj, 1, 2, mp_motor_sto
 
 static mp_obj_t mp_motor_set_position(mp_obj_t self_ptr, mp_obj_t position_t, mp_obj_t units_t){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float position = mp_obj_get_float(position_t);
+    float position = mp_vex_get_float(position_t);
     int units = mp_obj_get_int(units_t);
 
     motor_set_position(self -> cpp_handle, position, units);
@@ -714,7 +726,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_set_position_obj, mp_motor_set_positio
 
 static mp_obj_t mp_motor_set_velosity(mp_obj_t self_ptr, mp_obj_t velosity_t, mp_obj_t units_t){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float velosity = mp_obj_get_float(velosity_t);
+    float velosity = mp_vex_get_float(velosity_t);
     int units = mp_obj_get_int(units_t);
 
     motor_set_velocity(self -> cpp_handle, velosity, units);
@@ -733,7 +745,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_set_stopping_obj, mp_motor_set_stoppin
 
 static mp_obj_t mp_motor_set_max_torque(mp_obj_t self_ptr, mp_obj_t torque_t, mp_obj_t units_t){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float torque = mp_obj_get_float(torque_t);
+    float torque = mp_vex_get_float(torque_t);
     int units = mp_obj_get_int(units_t);
 
     motor_set_max_torque(self -> cpp_handle, torque, units);
@@ -743,7 +755,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_set_max_torque_obj, mp_motor_set_max_t
 
 static mp_obj_t mp_motor_set_timeout(mp_obj_t self_ptr, mp_obj_t value_t, mp_obj_t units_t){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float value = mp_obj_get_float(value_t);
+    float value = mp_vex_get_float(value_t);
     int units = mp_obj_get_int(units_t);
 
     motor_set_timeout(self -> cpp_handle, value, units);
@@ -792,7 +804,7 @@ static mp_obj_t mp_motor_position(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_position(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_position_obj, mp_motor_position);
 
@@ -802,7 +814,7 @@ static mp_obj_t mp_motor_velocity(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_velocity(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_velocity_obj, mp_motor_velocity);
 
@@ -812,7 +824,7 @@ static mp_obj_t mp_motor_current(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_current(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_current_obj, mp_motor_current);
 
@@ -822,7 +834,7 @@ static mp_obj_t mp_motor_power(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_power(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_power_obj, mp_motor_power);
 
@@ -832,7 +844,7 @@ static mp_obj_t mp_motor_torque(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_torque(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_torque_obj, mp_motor_torque);
 
@@ -842,7 +854,7 @@ static mp_obj_t mp_motor_efficiency(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_efficiency(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_efficiency_obj, mp_motor_efficiency);
 
@@ -943,7 +955,7 @@ static mp_obj_t mp_motor_group_make_new(const mp_obj_type_t *type, size_t n_args
 static mp_obj_t mp_motor_group_spin(size_t n_args, const mp_obj_t *args) {
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float velocity = (n_args > 2) ? mp_obj_get_float(args[2]) : 601.0f;
+    float velocity = (n_args > 2) ? mp_vex_get_float(args[2]) : 601.0f;
     int units = (n_args > 3) ? mp_obj_get_int(args[3]) : 24;  // Default is RPM.
 
     motor_group_spin(self->cpp_handle, direction, velocity, units);
@@ -960,7 +972,7 @@ static mp_obj_t mp_motor_group_spin_for(size_t n_args, const mp_obj_t *args) {
 
     // Defining default values.
     int units = (n_args > 3) ? mp_obj_get_int(args[3])   : 29;      // DEGREES macro value
-    float velocity = (n_args > 4) ? mp_obj_get_float(args[4]) : 601.0f;
+    float velocity = (n_args > 4) ? mp_vex_get_float(args[4]) : 601.0f;
     int units_v = (n_args > 5) ? mp_obj_get_int(args[5])   : 24;      // RPM macro value
     bool wait = (n_args > 6) ? mp_obj_is_true(args[6])   : true;
 
@@ -974,7 +986,7 @@ static mp_obj_t mp_motor_group_spin_to_position(size_t n_args, const mp_obj_t *a
     int rotation = mp_obj_get_int(args[1]);
 
     int units = (n_args > 2) ? mp_obj_get_int(args[2])   : 29;
-    float velocity = (n_args > 3) ? mp_obj_get_float(args[3]) : 601.0f;
+    float velocity = (n_args > 3) ? mp_vex_get_float(args[3]) : 601.0f;
     int units_v = (n_args > 4) ? mp_obj_get_int(args[4])   : 24;
     bool wait = (n_args > 5) ? mp_obj_is_true(args[5])   : true;
 
@@ -995,7 +1007,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_stop_obj, 1, 2, mp_mot
 
 static mp_obj_t mp_motor_group_set_position(mp_obj_t self_ptr, mp_obj_t position_t, mp_obj_t units_t){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float position = mp_obj_get_float(position_t);
+    float position = mp_vex_get_float(position_t);
     int units = mp_obj_get_int(units_t);
 
     motor_group_set_position(self -> cpp_handle, position, units);
@@ -1005,7 +1017,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_group_set_position_obj, mp_motor_group
 
 static mp_obj_t mp_motor_group_set_velosity(mp_obj_t self_ptr, mp_obj_t velosity_t, mp_obj_t units_t){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float velosity = mp_obj_get_float(velosity_t);
+    float velosity = mp_vex_get_float(velosity_t);
     int units = mp_obj_get_int(units_t);
 
     motor_group_set_velocity(self -> cpp_handle, velosity, units);
@@ -1024,7 +1036,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_set_stopping_obj, mp_motor_group
 
 static mp_obj_t mp_motor_group_set_max_torque(mp_obj_t self_ptr, mp_obj_t torque_t, mp_obj_t units_t){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float torque = mp_obj_get_float(torque_t);
+    float torque = mp_vex_get_float(torque_t);
     int units = mp_obj_get_int(units_t);
 
     motor_group_set_max_torque(self -> cpp_handle, torque, units);
@@ -1034,7 +1046,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_group_set_max_torque_obj, mp_motor_gro
 
 static mp_obj_t mp_motor_group_set_timeout(mp_obj_t self_ptr, mp_obj_t value_t, mp_obj_t units_t){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float value = mp_obj_get_float(value_t);
+    float value = mp_vex_get_float(value_t);
     int units = mp_obj_get_int(units_t);
 
     motor_group_set_timeout(self -> cpp_handle, value, units);
@@ -1083,7 +1095,7 @@ static mp_obj_t mp_motor_group_position(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_group_position(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_position_obj, mp_motor_group_position);
 
@@ -1093,7 +1105,7 @@ static mp_obj_t mp_motor_group_velocity(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_group_velocity(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_velocity_obj, mp_motor_group_velocity);
 
@@ -1103,7 +1115,7 @@ static mp_obj_t mp_motor_group_current(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_group_current(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_current_obj, mp_motor_group_current);
 
@@ -1113,7 +1125,7 @@ static mp_obj_t mp_motor_group_power(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_group_power(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_power_obj, mp_motor_group_power);
 
@@ -1123,7 +1135,7 @@ static mp_obj_t mp_motor_group_torque(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_group_torque(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_torque_obj, mp_motor_group_torque);
 
@@ -1133,7 +1145,7 @@ static mp_obj_t mp_motor_group_efficiency(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_group_efficiency(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_efficiency_obj, mp_motor_group_efficiency);
 
@@ -1243,11 +1255,11 @@ static mp_obj_t mp_drivetrain_make_new(const mp_obj_type_t *type, size_t n_args,
     void *left_ptr = mp_drivetrain_extract_side(args[0], &left_is_group);
     void *right_ptr = mp_drivetrain_extract_side(args[1], &right_is_group);
 
-    float wheel_travel = n_args > 2 ? mp_obj_get_float(args[2]) : 300.0f;
-    float track_width = n_args > 3 ? mp_obj_get_float(args[3]) : 320.0f;
-    float wheel_base = n_args > 4 ? mp_obj_get_float(args[4]) : 320.0f;
+    float wheel_travel = n_args > 2 ? mp_vex_get_float(args[2]) : 300.0f;
+    float track_width = n_args > 3 ? mp_vex_get_float(args[3]) : 320.0f;
+    float wheel_base = n_args > 4 ? mp_vex_get_float(args[4]) : 320.0f;
     int units = n_args > 5 ? mp_obj_get_int(args[5]) : 40;
-    float gear_ratio = n_args > 6 ? mp_obj_get_float(args[6]) : 1.0f;
+    float gear_ratio = n_args > 6 ? mp_vex_get_float(args[6]) : 1.0f;
     if (wheel_travel <= 0.0f || track_width <= 0.0f || wheel_base <= 0.0f || gear_ratio <= 0.0f) {
         mp_raise_ValueError("drivetrain dimensions and gear ratio must be positive");
     }
@@ -1262,7 +1274,7 @@ static mp_obj_t mp_drivetrain_make_new(const mp_obj_type_t *type, size_t n_args,
 static mp_obj_t mp_drivetrain_drive(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float velocity = n_args > 2 ? mp_obj_get_float(args[2]) : -1.0f;
+    float velocity = n_args > 2 ? mp_vex_get_float(args[2]) : -1.0f;
     int units = n_args > 3 ? mp_obj_get_int(args[3]) : 23;
     drivetrain_drive(self->cpp_handle, direction, velocity, units);
     return mp_const_none;
@@ -1272,9 +1284,9 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_drive_obj, 2, 4, mp_dri
 static mp_obj_t mp_drivetrain_drive_for(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float distance = mp_obj_get_float(args[2]);
+    float distance = mp_vex_get_float(args[2]);
     int units = n_args > 3 ? mp_obj_get_int(args[3]) : 40;
-    float velocity = n_args > 4 ? mp_obj_get_float(args[4]) : -1.0f;
+    float velocity = n_args > 4 ? mp_vex_get_float(args[4]) : -1.0f;
     int velocity_units = n_args > 5 ? mp_obj_get_int(args[5]) : 23;
     bool wait = n_args > 6 ? mp_obj_is_true(args[6]) : true;
     drivetrain_drive_for(self->cpp_handle, direction, distance, units, velocity, velocity_units, wait);
@@ -1285,7 +1297,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_drive_for_obj, 3, 7, mp
 static mp_obj_t mp_drivetrain_turn(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float velocity = n_args > 2 ? mp_obj_get_float(args[2]) : -1.0f;
+    float velocity = n_args > 2 ? mp_vex_get_float(args[2]) : -1.0f;
     int units = n_args > 3 ? mp_obj_get_int(args[3]) : 23;
     drivetrain_turn(self->cpp_handle, direction, velocity, units);
     return mp_const_none;
@@ -1295,9 +1307,9 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_obj, 2, 4, mp_driv
 static mp_obj_t mp_drivetrain_turn_for(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float angle = mp_obj_get_float(args[2]);
+    float angle = mp_vex_get_float(args[2]);
     int units = n_args > 3 ? mp_obj_get_int(args[3]) : 29;
-    float velocity = n_args > 4 ? mp_obj_get_float(args[4]) : -1.0f;
+    float velocity = n_args > 4 ? mp_vex_get_float(args[4]) : -1.0f;
     int velocity_units = n_args > 5 ? mp_obj_get_int(args[5]) : 23;
     bool wait = n_args > 6 ? mp_obj_is_true(args[6]) : true;
     drivetrain_turn_for(self->cpp_handle, direction, angle, units, velocity, velocity_units, wait);
@@ -1307,9 +1319,9 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_for_obj, 3, 7, mp_
 
 static mp_obj_t mp_drivetrain_turn_to_heading(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float heading = mp_obj_get_float(args[1]);
+    float heading = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : 29;
-    float velocity = n_args > 3 ? mp_obj_get_float(args[3]) : -1.0f;
+    float velocity = n_args > 3 ? mp_vex_get_float(args[3]) : -1.0f;
     int velocity_units = n_args > 4 ? mp_obj_get_int(args[4]) : 23;
     bool wait = n_args > 5 ? mp_obj_is_true(args[5]) : true;
     drivetrain_turn_to_heading(self->cpp_handle, heading, units, velocity, velocity_units, wait);
@@ -1319,9 +1331,9 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_to_heading_obj, 2,
 
 static mp_obj_t mp_drivetrain_turn_to_rotation(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float rotation = mp_obj_get_float(args[1]);
+    float rotation = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : 29;
-    float velocity = n_args > 3 ? mp_obj_get_float(args[3]) : -1.0f;
+    float velocity = n_args > 3 ? mp_vex_get_float(args[3]) : -1.0f;
     int velocity_units = n_args > 4 ? mp_obj_get_int(args[4]) : 23;
     bool wait = n_args > 5 ? mp_obj_is_true(args[5]) : true;
     drivetrain_turn_to_rotation(self->cpp_handle, rotation, units, velocity, velocity_units, wait);
@@ -1339,14 +1351,14 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_stop_obj, 1, 2, mp_driv
 
 static mp_obj_t mp_drivetrain_set_drive_velocity(mp_obj_t self_ptr, mp_obj_t velocity_obj, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    drivetrain_set_drive_velocity(self->cpp_handle, mp_obj_get_float(velocity_obj), mp_obj_get_int(units_obj));
+    drivetrain_set_drive_velocity(self->cpp_handle, mp_vex_get_float(velocity_obj), mp_obj_get_int(units_obj));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_drive_velocity_obj, mp_drivetrain_set_drive_velocity);
 
 static mp_obj_t mp_drivetrain_set_turn_velocity(mp_obj_t self_ptr, mp_obj_t velocity_obj, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    drivetrain_set_turn_velocity(self->cpp_handle, mp_obj_get_float(velocity_obj), mp_obj_get_int(units_obj));
+    drivetrain_set_turn_velocity(self->cpp_handle, mp_vex_get_float(velocity_obj), mp_obj_get_int(units_obj));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_turn_velocity_obj, mp_drivetrain_set_turn_velocity);
@@ -1360,21 +1372,21 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_drivetrain_set_stopping_obj, mp_drivetrain_s
 
 static mp_obj_t mp_drivetrain_set_timeout(mp_obj_t self_ptr, mp_obj_t value_obj, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    drivetrain_set_timeout(self->cpp_handle, mp_obj_get_float(value_obj), mp_obj_get_int(units_obj));
+    drivetrain_set_timeout(self->cpp_handle, mp_vex_get_float(value_obj), mp_obj_get_int(units_obj));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_timeout_obj, mp_drivetrain_set_timeout);
 
 static mp_obj_t mp_drivetrain_set_heading(mp_obj_t self_ptr, mp_obj_t value_obj, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    drivetrain_set_heading(self->cpp_handle, mp_obj_get_float(value_obj), mp_obj_get_int(units_obj));
+    drivetrain_set_heading(self->cpp_handle, mp_vex_get_float(value_obj), mp_obj_get_int(units_obj));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_heading_obj, mp_drivetrain_set_heading);
 
 static mp_obj_t mp_drivetrain_set_rotation(mp_obj_t self_ptr, mp_obj_t value_obj, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    drivetrain_set_rotation(self->cpp_handle, mp_obj_get_float(value_obj), mp_obj_get_int(units_obj));
+    drivetrain_set_rotation(self->cpp_handle, mp_vex_get_float(value_obj), mp_obj_get_int(units_obj));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_rotation_obj, mp_drivetrain_set_rotation);
@@ -1394,20 +1406,20 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_drivetrain_is_moving_obj, mp_drivetrain_is_m
 static mp_obj_t mp_drivetrain_heading(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : 29;
-    return mp_obj_new_float(drivetrain_heading(self->cpp_handle, units));
+    return mp_vex_new_float(drivetrain_heading(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_heading_obj, 1, 2, mp_drivetrain_heading);
 
 static mp_obj_t mp_drivetrain_rotation(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : 29;
-    return mp_obj_new_float(drivetrain_rotation(self->cpp_handle, units));
+    return mp_vex_new_float(drivetrain_rotation(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_rotation_obj, 1, 2, mp_drivetrain_rotation);
 
 static mp_obj_t mp_drivetrain_velocity(mp_obj_t self_ptr, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(drivetrain_velocity(self->cpp_handle, mp_obj_get_int(units_obj)));
+    return mp_vex_new_float(drivetrain_velocity(self->cpp_handle, mp_obj_get_int(units_obj)));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_drivetrain_velocity_obj, mp_drivetrain_velocity);
 
@@ -1466,7 +1478,7 @@ static mp_obj_t mp_message_link_send(size_t n_args, const mp_obj_t *args) {
     mp_message_link_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     const char *message = mp_obj_str_get_str(args[1]);
     int integer_input = n_args > 2 ? mp_obj_get_int(args[2]) : 0;
-    float float_input = n_args > 3 ? mp_obj_get_float(args[3]) : 0.0f;
+    float float_input = n_args > 3 ? mp_vex_get_float(args[3]) : 0.0f;
     message_link_send(self->cpp_handle, message, integer_input, float_input);
     return mp_const_none;
 }
@@ -1489,7 +1501,7 @@ static mp_obj_t mp_message_link_receive(size_t n_args, const mp_obj_t *args) {
     mp_obj_t values[] = {
         mp_obj_new_str(buffer, (size_t)length),
         mp_obj_new_int(integer_output),
-        mp_obj_new_float(float_output),
+        mp_vex_new_float(float_output),
     };
     return mp_obj_new_tuple(3, values);
 }
@@ -1528,7 +1540,7 @@ static mp_obj_t mp_serial_link_send(size_t n_args, const mp_obj_t *args) {
     mp_serial_link_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     const char *message = mp_obj_str_get_str(args[1]);
     int integer_input = n_args > 2 ? mp_obj_get_int(args[2]) : 0;
-    float float_input = n_args > 3 ? mp_obj_get_float(args[3]) : 0.0f;
+    float float_input = n_args > 3 ? mp_vex_get_float(args[3]) : 0.0f;
     serial_link_send(self->cpp_handle, message, integer_input, float_input);
     return mp_const_none;
 }
@@ -1551,7 +1563,7 @@ static mp_obj_t mp_serial_link_receive(size_t n_args, const mp_obj_t *args) {
     mp_obj_t values[] = {
         mp_obj_new_str(buffer, (size_t)length),
         mp_obj_new_int(integer_output),
-        mp_obj_new_float(float_output),
+        mp_vex_new_float(float_output),
     };
     return mp_obj_new_tuple(3, values);
 }
@@ -1702,7 +1714,7 @@ static mp_obj_t mp_brain_battery_voltage(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = brain_battery_voltage(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_battery_voltage_obj, mp_brain_battery_voltage);
 
@@ -1713,7 +1725,7 @@ static mp_obj_t mp_brain_battery_current(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = brain_battery_current(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_battery_current_obj, mp_brain_battery_current);
 
@@ -1901,7 +1913,7 @@ static mp_obj_t mp_vex_stringify(mp_obj_t value) {
 // VEXcode Python accepts floats for screen coordinates; truncate them like VEXcode.
 static int mp_vex_get_coord(mp_obj_t o) {
     if (mp_obj_is_float(o)) {
-        return (int)mp_obj_get_float(o);
+        return (int)mp_vex_get_float(o);
     }
     return mp_obj_get_int(o);
 }
@@ -2528,7 +2540,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_digital_value_obj, mp_three_wire_
 
 static mp_obj_t mp_three_wire_pwm_value(mp_obj_t self_ptr){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(vex_three_wire_pwm_value(self->cpp_handle));
+    return mp_vex_new_float(vex_three_wire_pwm_value(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_pwm_value_obj, mp_three_wire_pwm_value);
 
@@ -2565,7 +2577,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_pressing_obj, mp_three_wire_press
 
 static mp_obj_t mp_three_wire_acceleration(mp_obj_t self_ptr){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(vex_three_wire_acceleration(self->cpp_handle));
+    return mp_vex_new_float(vex_three_wire_acceleration(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_acceleration_obj, mp_three_wire_acceleration);
 
@@ -2574,7 +2586,7 @@ static mp_obj_t mp_three_wire_brightness(size_t n_args, const mp_obj_t *args){
     if (n_args > 1 && mp_obj_get_int(args[1]) != MP_VEX_PERCENT){
         mp_raise_ValueError("units must be PERCENT");
     }
-    return mp_obj_new_float(vex_three_wire_brightness(self->cpp_handle));
+    return mp_vex_new_float(vex_three_wire_brightness(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_brightness_obj, 1, 2, mp_three_wire_brightness);
 
@@ -2616,7 +2628,7 @@ static mp_obj_t mp_three_wire_angle(size_t n_args, const mp_obj_t *args){
     if (units != MP_VEX_DEGREES && units != MP_VEX_PERCENT){
         mp_raise_ValueError("units must be DEGREES or PERCENT");
     }
-    return mp_obj_new_float(vex_three_wire_angle(self->cpp_handle, units));
+    return mp_vex_new_float(vex_three_wire_angle(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_angle_obj, 1, 2, mp_three_wire_angle);
 
@@ -2624,7 +2636,7 @@ static mp_obj_t mp_three_wire_heading(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     if (units != MP_VEX_DEGREES) mp_raise_ValueError("units must be DEGREES");
-    return mp_obj_new_float(vex_three_wire_heading(self->cpp_handle, units));
+    return mp_vex_new_float(vex_three_wire_heading(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_heading_obj, 1, 2, mp_three_wire_heading);
 
@@ -2632,13 +2644,13 @@ static mp_obj_t mp_three_wire_rotation(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     if (units != MP_VEX_DEGREES) mp_raise_ValueError("units must be DEGREES");
-    return mp_obj_new_float(vex_three_wire_rotation(self->cpp_handle, units));
+    return mp_vex_new_float(vex_three_wire_rotation(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_rotation_obj, 1, 2, mp_three_wire_rotation);
 
 static mp_obj_t mp_three_wire_set_heading(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float value = mp_obj_get_float(args[1]);
+    float value = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
     if (units != MP_VEX_DEGREES) mp_raise_ValueError("units must be DEGREES");
     vex_three_wire_set_heading(self->cpp_handle, value, units);
@@ -2648,7 +2660,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_set_heading_obj, 2, 3, 
 
 static mp_obj_t mp_three_wire_set_rotation(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float value = mp_obj_get_float(args[1]);
+    float value = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
     if (units != MP_VEX_DEGREES) mp_raise_ValueError("units must be DEGREES");
     vex_three_wire_set_rotation(self->cpp_handle, value, units);
@@ -2665,7 +2677,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_calibrate_obj, mp_three_wire_cali
 
 static mp_obj_t mp_three_wire_set_position(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float value = mp_obj_get_float(args[1]);
+    float value = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
     vex_three_wire_set_position(self->cpp_handle, value, units);
@@ -2684,7 +2696,7 @@ static mp_obj_t mp_three_wire_position(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
-    return mp_obj_new_float(vex_three_wire_position(self->cpp_handle, units));
+    return mp_vex_new_float(vex_three_wire_position(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_position_obj, 1, 2, mp_three_wire_position);
 
@@ -2692,7 +2704,7 @@ static mp_obj_t mp_three_wire_velocity(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_RPM;
     mp_vex_check_velocity_units(units, false);
-    return mp_obj_new_float(vex_three_wire_velocity(self->cpp_handle, units));
+    return mp_vex_new_float(vex_three_wire_velocity(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_velocity_obj, 1, 2, mp_three_wire_velocity);
 
@@ -2709,7 +2721,7 @@ static mp_obj_t mp_three_wire_distance(size_t n_args, const mp_obj_t *args){
     if (units != MP_VEX_MM && units != MP_VEX_INCHES){
         mp_raise_ValueError("units must be MM or INCHES");
     }
-    return mp_obj_new_float(vex_three_wire_distance(self->cpp_handle, units));
+    return mp_vex_new_float(vex_three_wire_distance(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_distance_obj, 2, 2, mp_three_wire_distance);
 
@@ -2722,7 +2734,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_three_wire_set_obj, mp_three_wire_set);
 
 static mp_obj_t mp_three_wire_set_state(mp_obj_t self_ptr, mp_obj_t value_obj){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float value = mp_obj_get_float(value_obj);
+    float value = mp_vex_get_float(value_obj);
     if (value < -100.0f || value > 100.0f || value != value){
         mp_raise_ValueError("PWM value must be from -100 to 100");
     }
@@ -2876,7 +2888,7 @@ static mp_obj_t mp_rotation_make_new(const mp_obj_type_t *type, size_t n_args, s
 
 static mp_obj_t mp_rotation_set_position(size_t n_args, const mp_obj_t *args){
     mp_rotation_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float position = mp_obj_get_float(args[1]);
+    float position = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
     vex_rotation_set_position(self->cpp_handle, position, units);
@@ -2888,7 +2900,7 @@ static mp_obj_t mp_rotation_angle(size_t n_args, const mp_obj_t *args){
     mp_rotation_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
-    return mp_obj_new_float(vex_rotation_angle(self->cpp_handle, units));
+    return mp_vex_new_float(vex_rotation_angle(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_rotation_angle_obj, 1, 2, mp_rotation_angle);
 
@@ -2896,7 +2908,7 @@ static mp_obj_t mp_rotation_position(size_t n_args, const mp_obj_t *args){
     mp_rotation_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
-    return mp_obj_new_float(vex_rotation_position(self->cpp_handle, units));
+    return mp_vex_new_float(vex_rotation_position(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_rotation_position_obj, 1, 2, mp_rotation_position);
 
@@ -2904,7 +2916,7 @@ static mp_obj_t mp_rotation_velocity(mp_obj_t self_ptr, mp_obj_t units_obj){
     mp_rotation_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_obj);
     mp_vex_check_velocity_units(units, false);
-    return mp_obj_new_float(vex_rotation_velocity(self->cpp_handle, units));
+    return mp_vex_new_float(vex_rotation_velocity(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_rotation_velocity_obj, mp_rotation_velocity);
 
@@ -2969,7 +2981,7 @@ static mp_obj_t mp_inertial_heading(size_t n_args, const mp_obj_t *args){
     mp_inertial_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
-    return mp_obj_new_float(inertial_heading(self->cpp_handle, units));
+    return mp_vex_new_float(inertial_heading(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_inertial_heading_obj, 1, 2, mp_inertial_heading);
 
@@ -2977,7 +2989,7 @@ static mp_obj_t mp_inertial_rotation(size_t n_args, const mp_obj_t *args){
     mp_inertial_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
-    return mp_obj_new_float(inertial_rotation(self->cpp_handle, units));
+    return mp_vex_new_float(inertial_rotation(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_inertial_rotation_obj, 1, 2, mp_inertial_rotation);
 
@@ -2989,7 +3001,7 @@ static mp_obj_t mp_inertial_gyro_rate(size_t n_args, const mp_obj_t *args){
         mp_raise_ValueError("axis must be XAXIS, YAXIS, or ZAXIS");
     }
     mp_vex_check_velocity_units(units, true);
-    return mp_obj_new_float(inertial_gyro_rate(self->cpp_handle, axis, units));
+    return mp_vex_new_float(inertial_gyro_rate(self->cpp_handle, axis, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_inertial_gyro_rate_obj, 2, 3, mp_inertial_gyro_rate);
 
@@ -3001,13 +3013,13 @@ static mp_obj_t mp_inertial_orientation(size_t n_args, const mp_obj_t *args){
         mp_raise_ValueError("axis must be PITCH, ROLL, or YAW");
     }
     mp_vex_check_angle_units(units);
-    return mp_obj_new_float(inertial_orientation(self->cpp_handle, axis, units));
+    return mp_vex_new_float(inertial_orientation(self->cpp_handle, axis, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_inertial_orientation_obj, 2, 3, mp_inertial_orientation);
 
 static mp_obj_t mp_inertial_set_heading(size_t n_args, const mp_obj_t *args){
     mp_inertial_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float value = mp_obj_get_float(args[1]);
+    float value = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
     inertial_set_heading(self->cpp_handle, value, units);
@@ -3017,7 +3029,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_inertial_set_heading_obj, 2, 3, mp
 
 static mp_obj_t mp_inertial_set_rotation(size_t n_args, const mp_obj_t *args){
     mp_inertial_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float value = mp_obj_get_float(args[1]);
+    float value = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
     inertial_set_rotation(self->cpp_handle, value, units);
@@ -3074,7 +3086,7 @@ static mp_obj_t mp_inertial_acceleration(mp_obj_t self_ptr, mp_obj_t axis_obj){
     if (axis != MP_VEX_AXIS_X && axis != MP_VEX_AXIS_Y && axis != MP_VEX_AXIS_Z){
         mp_raise_ValueError("axis must be XAXIS, YAXIS, or ZAXIS");
     }
-    return mp_obj_new_float(inertial_acceleration(self->cpp_handle, axis));
+    return mp_vex_new_float(inertial_acceleration(self->cpp_handle, axis));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_inertial_acceleration_obj, mp_inertial_acceleration);
 
@@ -3180,13 +3192,13 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_optical_color_obj, mp_optical_color);
 
 static mp_obj_t mp_optical_brightness(mp_obj_t self_ptr){
     mp_optical_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(optical_brightness(self->cpp_handle));
+    return mp_vex_new_float(optical_brightness(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_optical_brightness_obj, mp_optical_brightness);
 
 static mp_obj_t mp_optical_hue(mp_obj_t self_ptr){
     mp_optical_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(optical_hue(self->cpp_handle));
+    return mp_vex_new_float(optical_hue(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_optical_hue_obj, mp_optical_hue);
 
@@ -3241,13 +3253,13 @@ static mp_obj_t mp_distance_object_distance(size_t n_args, const mp_obj_t *args)
     if (units != MP_VEX_MM && units != MP_VEX_INCHES){
         mp_raise_ValueError("units must be MM or INCHES");
     }
-    return mp_obj_new_float(distance_object_distance(self->cpp_handle, units));
+    return mp_vex_new_float(distance_object_distance(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_distance_object_distance_obj, 1, 2, mp_distance_object_distance);
 
 static mp_obj_t mp_distance_object_velocity(mp_obj_t self_ptr){
     mp_distance_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(distance_object_velocity(self->cpp_handle));
+    return mp_vex_new_float(distance_object_velocity(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_distance_object_velocity_obj, mp_distance_object_velocity);
 
@@ -3306,7 +3318,7 @@ static mp_obj_t mp_gps_set_origin(size_t n_args, const mp_obj_t *args){
     mp_gps_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     const int units = mp_obj_get_int(args[3]);
     mp_gps_check_distance_units(units);
-    vex_gps_set_origin(self->cpp_handle, mp_obj_get_float(args[1]), mp_obj_get_float(args[2]), units);
+    vex_gps_set_origin(self->cpp_handle, mp_vex_get_float(args[1]), mp_vex_get_float(args[2]), units);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_gps_set_origin_obj, 4, 4, mp_gps_set_origin);
@@ -3319,8 +3331,8 @@ static mp_obj_t mp_gps_set_location(size_t n_args, const mp_obj_t *args){
     if (heading_units != MP_VEX_DEGREES){
         mp_raise_ValueError("heading_units must be DEGREES");
     }
-    vex_gps_set_location(self->cpp_handle, mp_obj_get_float(args[1]), mp_obj_get_float(args[2]),
-                         distance_units, mp_obj_get_float(args[4]), heading_units);
+    vex_gps_set_location(self->cpp_handle, mp_vex_get_float(args[1]), mp_vex_get_float(args[2]),
+                         distance_units, mp_vex_get_float(args[4]), heading_units);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_gps_set_location_obj, 6, 6, mp_gps_set_location);
@@ -3329,7 +3341,7 @@ static mp_obj_t mp_gps_x_position(mp_obj_t self_ptr, mp_obj_t units_obj){
     mp_gps_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     const int units = mp_obj_get_int(units_obj);
     mp_gps_check_distance_units(units);
-    return mp_obj_new_float(vex_gps_x_position(self->cpp_handle, units));
+    return mp_vex_new_float(vex_gps_x_position(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_gps_x_position_obj, mp_gps_x_position);
 
@@ -3337,13 +3349,13 @@ static mp_obj_t mp_gps_y_position(mp_obj_t self_ptr, mp_obj_t units_obj){
     mp_gps_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     const int units = mp_obj_get_int(units_obj);
     mp_gps_check_distance_units(units);
-    return mp_obj_new_float(vex_gps_y_position(self->cpp_handle, units));
+    return mp_vex_new_float(vex_gps_y_position(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_gps_y_position_obj, mp_gps_y_position);
 
 static mp_obj_t mp_gps_heading(mp_obj_t self_ptr){
     mp_gps_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(vex_gps_heading(self->cpp_handle));
+    return mp_vex_new_float(vex_gps_heading(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_gps_heading_obj, mp_gps_heading);
 
@@ -3353,7 +3365,7 @@ static mp_obj_t mp_gps_acceleration(mp_obj_t self_ptr, mp_obj_t axis_obj){
     if (axis != MP_VEX_AXIS_X && axis != MP_VEX_AXIS_Y && axis != MP_VEX_AXIS_Z){
         mp_raise_ValueError("axis must be XAXIS, YAXIS, or ZAXIS");
     }
-    return mp_obj_new_float(vex_gps_acceleration(self->cpp_handle, axis));
+    return mp_vex_new_float(vex_gps_acceleration(self->cpp_handle, axis));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_gps_acceleration_obj, mp_gps_acceleration);
 
@@ -3367,7 +3379,7 @@ static mp_obj_t mp_gps_gyro_rate(mp_obj_t self_ptr, mp_obj_t axis_obj, mp_obj_t 
     if (units != MP_VEX_DPS && units != MP_VEX_RPM){
         mp_raise_ValueError("units must be DPS or RPM");
     }
-    return mp_obj_new_float(vex_gps_gyro_rate(self->cpp_handle, axis, units));
+    return mp_vex_new_float(vex_gps_gyro_rate(self->cpp_handle, axis, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_gps_gyro_rate_obj, mp_gps_gyro_rate);
 
@@ -3381,7 +3393,7 @@ static mp_obj_t mp_gps_orientation(mp_obj_t self_ptr, mp_obj_t axis_obj, mp_obj_
     if (units != MP_VEX_DEGREES){
         mp_raise_ValueError("units must be DEGREES");
     }
-    return mp_obj_new_float(vex_gps_orientation(self->cpp_handle, axis, units));
+    return mp_vex_new_float(vex_gps_orientation(self->cpp_handle, axis, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_gps_orientation_obj, mp_gps_orientation);
 

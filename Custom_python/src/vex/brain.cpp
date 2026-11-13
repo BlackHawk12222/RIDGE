@@ -16,6 +16,7 @@
 #include <format>
 #include "main.h"
 #include "vex/brain.hpp"
+#include "vex/safe_value.hpp"
 
 extern "C" {
     #include "vex/upng/upng.h"
@@ -28,7 +29,7 @@ float Battery::voltage(VoltageUnits units){
     switch (units)
     {
     case VOLT:
-        output = pros::battery::get_voltage() / 1000.0f;
+        output = vsafe::num(pros::battery::get_voltage()) / 1000.0f;
         break;
     
     default:
@@ -44,7 +45,7 @@ float Battery::current(CurrentUnits units){
     switch (units){
         case CURRENT_AMPS:
         {
-            output = pros::battery::get_current() / 1000.0f;
+            output = vsafe::num(pros::battery::get_current()) / 1000.0f;
             break;
         }
         default:
@@ -57,7 +58,7 @@ float Battery::current(CurrentUnits units){
 }
 
 int Battery::capacity(){
-    return (int)pros::battery::get_capacity();
+    return (int)vsafe::num(pros::battery::get_capacity());
 }
 
 int Battery::temperature(TemperatureUnits units){
@@ -66,7 +67,7 @@ int Battery::temperature(TemperatureUnits units){
     switch (units)
     {
     case TEMPERATURE_PERCENT:
-        output = ((pros::battery::get_temperature() - 20) / (70 - 20)) * 100.0;
+        output = ((vsafe::num(pros::battery::get_temperature()) - 20) / (70 - 20)) * 100.0;
         
         // Constrain boundaries between 0% and 100%
         if (output < 0.0) output = 0.0;
@@ -74,12 +75,12 @@ int Battery::temperature(TemperatureUnits units){
         break;
     case CELSIUS:
     {
-        output = (int)pros::battery::get_temperature();
+        output = (int)vsafe::num(pros::battery::get_temperature());
         break;
     }
     case FAHRENHEIT:
     {
-        output = (int)((pros::battery::get_temperature() * 9.0 / 5.0) + 32.0);
+        output = (int)((vsafe::num(pros::battery::get_temperature()) * 9.0 / 5.0) + 32.0);
         break;
     }
     default:

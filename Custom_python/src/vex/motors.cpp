@@ -1,4 +1,5 @@
 #include <stdexcept>
+#include "vex/safe_value.hpp"
 #include <initializer_list>
 #include <cmath>
 #include "main.h"
@@ -26,7 +27,7 @@ void Motor::timeout(){
                                              : static_cast<int>(TimeoutTime);
     int elapsed_ms = 0;
 
-    while (elapsed_ms < target_ms && std::abs(motor->get_actual_velocity()) > 1.0) {
+    while (elapsed_ms < target_ms && std::abs(vsafe::num(motor->get_actual_velocity())) > 1.0) {
         elapsed_ms += 10;
         pros::delay(10);
     }
@@ -111,7 +112,7 @@ void Motor::spin_for(Direction direction, int angle, AngleUnits units, float vel
                 }, "timeout");
             } 
             if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
+                while (std::abs(vsafe::num(motor->get_actual_velocity())) > 1){
                     pros::delay(10);
                 }
             }
@@ -127,7 +128,7 @@ void Motor::spin_for(Direction direction, int angle, AngleUnits units, float vel
                 }, "timeout");
             } 
             if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
+                while (std::abs(vsafe::num(motor->get_actual_velocity())) > 1){
                     pros::delay(10);
                 }
             }
@@ -203,7 +204,7 @@ void Motor::spin_to_position(int rotation, AngleUnits units, float velocity, Vel
                 }, "timeout");
             } 
             if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
+                while (std::abs(vsafe::num(motor->get_actual_velocity())) > 1){
                     pros::delay(10);
                 }
             }
@@ -219,7 +220,7 @@ void Motor::spin_to_position(int rotation, AngleUnits units, float velocity, Vel
                 }, "timeout");
             } 
             if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
+                while (std::abs(vsafe::num(motor->get_actual_velocity())) > 1){
                     pros::delay(10);
                 }
             }
@@ -297,7 +298,7 @@ void Motor::set_max_torque(float value, TorqueUnits units){
                 break;
             }
 
-            value=(Max_NM/value) * 2500;
+            value = static_cast<float>(vsafe::div(value, Max_NM) * 2500);
             motor->set_current_limit(value);
             break;
         }
@@ -325,7 +326,7 @@ void Motor::set_max_torque(float value, TorqueUnits units){
                 break;
             }
 
-            value=(Max_INLB/value) * 2500;
+            value = static_cast<float>(vsafe::div(value, Max_INLB) * 2500);
             motor->set_current_limit(value);
             break;
         }
@@ -358,11 +359,11 @@ void Motor::reset_position(){
 }
 
 bool Motor::is_done(){
-    return std::abs(motor->get_actual_velocity()) < 1.0f;
+    return std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0f;
 }
 
 bool Motor::is_spinning(){
-    return std::abs(motor->get_actual_velocity()) >= 1.0f;
+    return std::abs(vsafe::num(motor->get_actual_velocity())) >= 1.0f;
 }
 
 float Motor::position(AngleUnits units){
@@ -370,12 +371,12 @@ float Motor::position(AngleUnits units){
     switch (units) {
         case DEGREES:
         {
-            output= (float)(motor->get_position());
+            output= (float)(vsafe::num(motor->get_position()));
             break;
         }
         case TURNS:
         {
-            output = (float)(motor->get_position()) / 360;
+            output = (float)(vsafe::num(motor->get_position())) / 360;
         }
     }
 
@@ -409,17 +410,17 @@ float Motor::velocity(VelocityUnits units){
                 break;
             }   
 
-            output= (float)(motor->get_actual_velocity()) / Max_RPM;
+            output= (float)(vsafe::num(motor->get_actual_velocity())) / Max_RPM;
             break;
         }
         case RPM:
         {
-            output= (float)(motor->get_actual_velocity());
+            output= (float)(vsafe::num(motor->get_actual_velocity()));
             break;
         }
         case DPS:
         {
-            output= (float)(motor->get_actual_velocity()) * 6;  // Includes  * 360 to make DPM then / 60 to make DPS
+            output= (float)(vsafe::num(motor->get_actual_velocity())) * 6;  // Includes  * 360 to make DPM then / 60 to make DPS
             break;
         }
         default:
@@ -434,11 +435,11 @@ float Motor::velocity(VelocityUnits units){
 }
 
 float Motor::current(CurrentUnits units){
-    return (float)(motor->get_actual_velocity()) /1000;
+    return (float)(vsafe::num(motor->get_actual_velocity())) /1000;
 }
 
 float Motor::power(PowerUnits units){
-    return (float)(motor->get_power());
+    return (float)(vsafe::num(motor->get_power()));
 }
 
 float Motor::torque(TorqueUnits units){
@@ -446,13 +447,13 @@ float Motor::torque(TorqueUnits units){
     switch(units){
         case NM:
         {
-            output= (float)(motor->get_torque());
+            output= (float)(vsafe::num(motor->get_torque()));
             break;
         }
         case INLB:
         {
             float NMtoINLB = 8.8507f;
-            output= (float)(motor->get_torque()) / NMtoINLB;
+            output= (float)(vsafe::num(motor->get_torque())) / NMtoINLB;
             break;
         }
     }
@@ -460,11 +461,11 @@ float Motor::torque(TorqueUnits units){
 }
 
 float Motor::efficiency(EfficiencyUnits units){
-    return motor->get_efficiency();
+    return vsafe::num(motor->get_efficiency());
 }
 
 int Motor::temperature(TemperatureUnits units){
-    double raw_temp = motor->get_temperature();
+    double raw_temp = vsafe::num(motor->get_temperature());
     if (!std::isfinite(raw_temp) || raw_temp < 0.0 || raw_temp > 200.0) {
         return 2;
     }
@@ -549,7 +550,7 @@ void MotorGroup::timeout(){
                                              : static_cast<int>(TimeoutTime);
     int elapsed_ms = 0;
 
-    while (elapsed_ms < target_ms && std::abs(motor->get_actual_velocity()) > 1.0) {
+    while (elapsed_ms < target_ms && std::abs(vsafe::num(motor->get_actual_velocity())) > 1.0) {
         elapsed_ms += 10;
         pros::delay(10);
     }
@@ -634,7 +635,7 @@ void MotorGroup::spin_for(Direction direction, int angle, AngleUnits units, floa
                 }, "timeout");
             } 
             if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
+                while (std::abs(vsafe::num(motor->get_actual_velocity())) > 1){
                     pros::delay(10);
                 }
             }
@@ -651,7 +652,7 @@ void MotorGroup::spin_for(Direction direction, int angle, AngleUnits units, floa
                 }, "timeout");
             } 
             if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
+                while (std::abs(vsafe::num(motor->get_actual_velocity())) > 1){
                     pros::delay(10);
                 }
             } 
@@ -724,7 +725,7 @@ void MotorGroup::spin_to_position(int rotation, AngleUnits units, float velocity
                 }, "timeout");
             } 
             if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
+                while (std::abs(vsafe::num(motor->get_actual_velocity())) > 1){
                     pros::delay(10);
                 }
             }
@@ -740,7 +741,7 @@ void MotorGroup::spin_to_position(int rotation, AngleUnits units, float velocity
                 }, "timeout");
             } 
             if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
+                while (std::abs(vsafe::num(motor->get_actual_velocity())) > 1){
                     pros::delay(10);
                 }
             }
@@ -818,7 +819,7 @@ void MotorGroup::set_max_torque(float value, TorqueUnits units){
                 break;
             }
 
-            value=(Max_NM/value) * 2500;
+            value = static_cast<float>(vsafe::div(value, Max_NM) * 2500);
             motor->set_current_limit(value);
             break;
         }
@@ -846,7 +847,7 @@ void MotorGroup::set_max_torque(float value, TorqueUnits units){
                 break;
             }
 
-            value=(Max_INLB/value) * 2500;
+            value = static_cast<float>(vsafe::div(value, Max_INLB) * 2500);
             motor->set_current_limit(value);
             break;
         }
@@ -878,11 +879,11 @@ void MotorGroup::reset_position(){
 }
 
 bool MotorGroup::is_done(){
-    return std::abs(motor->get_actual_velocity()) < 1.0f;
+    return std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0f;
 }
 
 bool MotorGroup::is_spinning(){
-    return std::abs(motor->get_actual_velocity()) >= 1.0f;
+    return std::abs(vsafe::num(motor->get_actual_velocity())) >= 1.0f;
 }
 
 float MotorGroup::position(AngleUnits units){
@@ -890,12 +891,12 @@ float MotorGroup::position(AngleUnits units){
     switch (units) {
         case DEGREES:
         {
-            output= (float)(motor->get_position());
+            output= (float)(vsafe::num(motor->get_position()));
             break;
         }
         case TURNS:
         {
-            output = (float)(motor->get_position()) / 360;
+            output = (float)(vsafe::num(motor->get_position())) / 360;
         }
     }
 
@@ -929,17 +930,17 @@ float MotorGroup::velocity(VelocityUnits units){
                 break;
             }   
 
-            output= (float)(motor->get_actual_velocity()) / Max_RPM;
+            output= (float)(vsafe::num(motor->get_actual_velocity())) / Max_RPM;
             break;
         }
         case RPM:
         {
-            output= (float)(motor->get_actual_velocity());
+            output= (float)(vsafe::num(motor->get_actual_velocity()));
             break;
         }
         case DPS:
         {
-            output= (float)(motor->get_actual_velocity()) * 6;  // Includes  * 360 to make DPM then / 60 to make DPS
+            output= (float)(vsafe::num(motor->get_actual_velocity())) * 6;  // Includes  * 360 to make DPM then / 60 to make DPS
             break;
         }
         default:
@@ -954,11 +955,11 @@ float MotorGroup::velocity(VelocityUnits units){
 }
 
 float MotorGroup::current(CurrentUnits units){
-    return (float)(motor->get_actual_velocity()) /1000;
+    return (float)(vsafe::num(motor->get_actual_velocity())) /1000;
 }
 
 float MotorGroup::power(PowerUnits units){
-    return (float)(motor->get_power());
+    return (float)(vsafe::num(motor->get_power()));
 }
 
 float MotorGroup::torque(TorqueUnits units){
@@ -966,13 +967,13 @@ float MotorGroup::torque(TorqueUnits units){
     switch(units){
         case NM:
         {
-            output= (float)(motor->get_torque());
+            output= (float)(vsafe::num(motor->get_torque()));
             break;
         }
         case INLB:
         {
             float NMtoINLB = 8.8507f;
-            output= (float)(motor->get_torque()) / NMtoINLB;
+            output= (float)(vsafe::num(motor->get_torque())) / NMtoINLB;
             break;
         }
     }
@@ -980,7 +981,7 @@ float MotorGroup::torque(TorqueUnits units){
 }
 
 float MotorGroup::efficiency(EfficiencyUnits units){
-    return motor->get_efficiency();
+    return vsafe::num(motor->get_efficiency());
 }
 
 int MotorGroup::temperature(TemperatureUnits units){
@@ -988,17 +989,17 @@ int MotorGroup::temperature(TemperatureUnits units){
     switch(units){
         case CELSIUS:
         {
-            output= (int)std::round((float)(motor->get_temperature()));
+            output= (int)std::round((float)(vsafe::num(motor->get_temperature())));
             break;
         }
         case FAHRENHEIT:
         {
-            output= (int)std::round((float)(motor->get_temperature()) / 1.8f) + 32;
+            output= (int)std::round((float)(vsafe::num(motor->get_temperature())) / 1.8f) + 32;
             break;
         }
         case TEMPERATURE_PERCENT:
         {
-            output= (int)std::round((float)(motor->get_temperature()) * 0.57143f);
+            output= (int)std::round((float)(vsafe::num(motor->get_temperature())) * 0.57143f);
             break;
         }
         default:
