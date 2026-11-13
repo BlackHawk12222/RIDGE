@@ -13,23 +13,8 @@ from vex import *
 
 brain = Brain()
 
-if brain.sdcard.is_inserted():
+if brain.sdcard.is_inserted() and brain.sdcard.exists("ACPv1"):
     import ACPv1
-
-def autonomous():
-    brain.screen.clear_screen()
-    brain.screen.print("autonomous code")
-    # place automonous code here
-
-def user_control():
-    brain.screen.clear_screen()
-    brain.screen.print("driver control")
-    # place driver control in this while loop
-    while True:
-        wait(20, MSEC)
-
-# create competition instance
-comp = Competition(user_control, autonomous)
 
 # actions to do when the program starts
 brain.screen.clear_screen()
@@ -269,7 +254,6 @@ class robot():
                 right_drive_smart.spin(FORWARD)
             wait(5, MSEC)
 
-
     def autoload(self):
         global Loading, liftUp
         #loads and lifts a cup and pin stack in the intake
@@ -305,6 +289,7 @@ class robot():
                     liftGroup.stop()
                     Intake.stop()
                 Loading = False
+            wait(50, MSEC)
 
     def clawUp(self):
         liftGroup.set_velocity(100,PERCENT)
@@ -314,8 +299,7 @@ class robot():
         liftGroup.spin_to_position(700,DEGREES,100,PERCENT,False)
         Claw.spin_to_position(205,DEGREES)
         while not liftGroup.is_done():
-            wait(5,MSEC)
-
+            wait(10,MSEC)
 
     def clawScore(self):
             Claw.set_velocity(100,PERCENT)
@@ -323,16 +307,11 @@ class robot():
             wait(0.1,SECONDS)
             Claw.spin_to_position(300,DEGREES)
 
-
-
-    
-
-
 class display():
 
-    def __init__(self,object):
-         self.brainObject = object
-         self.BO = self.brainObject
+    def __init__(self, object: Brain):
+         self.brainObject: Brain = object
+         self.BO: Brain = self.brainObject
 
     def drawImage(self,name,x,y):
         self.BO.screen.draw_image_from_file(name,x,y)
@@ -368,9 +347,8 @@ class display():
     def printMotors(self):
         for i in range(len(motorNames)):
             self.BO.screen.print(motorPorts[i]+motorNames[i]+motors[i].temperature(PERCENT))
-            self.BO.next_row()
+            self.BO.screen.next_row()
             
-
 class MotorTicks:
     def __init__(self):
         self.intakeOn = False
@@ -397,7 +375,6 @@ class MotorTicks:
                 Intake.spin(REVERSE)
             else:
                 Intake.stop()
-
 
     def liftTick(self):
         if controller_1.buttonUp.pressing():
@@ -450,9 +427,6 @@ class MC:
                 if m.power(PowerUnits.WATT) == motor.power(PowerUnits.WATT):
                     return(port)
 
-
-
-
 def set_velocity(side, velocity):
 
     #set the drivetrain velocity for the individual sides of the drivetrain; useful for turning
@@ -464,14 +438,11 @@ def set_velocity(side, velocity):
         left_drive_smart.set_velocity(velocity, PERCENT)
         right_drive_smart.set_velocity(velocity, PERCENT)
 
-
-
 def resetDrivetrain():
     right_drive_smart.set_velocity(100,PERCENT)
     left_drive_smart.set_velocity(100,PERCENT)
     left_drive_smart.stop()
     right_drive_smart.stop()
-
 
 def AIM_drive(mm,driveVelocity,err=0):
     mmToDeg = (mm/((69.85*3.14159)/360))/0.75
@@ -490,10 +461,7 @@ def AIM_drive(mm,driveVelocity,err=0):
             resetDrivetrain()
             break
 
-
-
 #BAR SWITCHING LOGIC SCRIPTS VVVVVVVVVVVVVVVVVVV
-
 
 def Check_for_bar():
     #checks if an object (the control bar) is close enough. If it is, check to see if it's our own color, and activate the spin command
@@ -502,15 +470,11 @@ def Check_for_bar():
         check_color_redundancy()
     spin_motor()
 
-
-
 def check_dist():
     #used in Check_for_bar(): initializes Color_flips to 0(do not spin), then records the distance to the object.
     global Dist, Color_Flips
     Color_Flips = 0
     Dist = DistanceSensor.object_distance(MM)
-
-
 
 def check_color_redundancy():
     #used in Check_for_bar(): sets Color_flips to 1(spin motor), then checks to see if the detected object is our color. If it is, set Color_flips to 0(do not spin).
@@ -518,8 +482,6 @@ def check_color_redundancy():
     Color_Flips = 1
     if ColorSensor.color() == Color.BLUE and MyColor == "blue" or ColorSensor.color() == Color.RED and MyColor == "red":
         Color_Flips = 0
-
-
 
 def spin_motor():
     #spins Bar_Switcher if Color_fips is 1(spin motor). Continues to do so until distance is too far away(robot has moved away) or color is correct.
@@ -531,9 +493,7 @@ def spin_motor():
             check_color_redundancy()
     Bar_Switcher.stop()
 
-
 # APF SCRIPTS VVVVVVVVVVVVVVVVVVVVVVVVVVVVV
-
 
 def Do_APF():
     # APF - Artificial Polarity Force. Runs all associated APF scripts . Begins by finding the closest obstacle point, noted in OBSTACLE_POINTS[]
@@ -557,8 +517,6 @@ def Do_APF():
             drivetrain.turn(LEFT)
         else:
             pass
-
-
 
 def Find_Closest_Point():
     global Closest_ID, Closest_Distance, temp
@@ -590,8 +548,6 @@ def Find_Closest_Point():
         temp = Closest_ID
         Parse_all()
 
-
-
 def get_relative_heading(get_relative_heading_heading):
 
     #corrects the input value to be relative to the robot's heading
@@ -619,9 +575,6 @@ def get_relative_heading(get_relative_heading_heading):
     else:
         direction_to_turn = "right"
 
-
-
-
 def directionTo_xy(directionTo_xy__x, directionTo_xy__y):
     #get the distance to the x and y coordinated based on the robot's
     global dx, dy, Direction_To_Point
@@ -638,9 +591,6 @@ def directionTo_xy(directionTo_xy__x, directionTo_xy__y):
     #send it over to get the heading in relation to the robot
     get_relative_heading(Direction_To_Point)
 
-
-
-
 def distanceTo_xy(distanceTo_xy_x, distanceTo_xy_y):
     #uses the Pythagorean theorem to get the distance to a point
     global dx, dy, distance_to_point
@@ -652,8 +602,6 @@ def distanceTo_xy(distanceTo_xy_x, distanceTo_xy_y):
     #set distance_to_point to the output of the calculation
     distance_to_point = math.sqrt(dx * dx + dy * dy)
 
-
-
 def Parse_all():
     global Temp2, i, Coords1, Coords2
     # Parse the both halves of the coordinates (X axis and Y axis) and set Coords1 and Coords2
@@ -661,9 +609,7 @@ def Parse_all():
     Coords1 = int(Coords1)
     Coords2 = int(Coords2)
 
-
 #ODOMETRY SCRIPTS VVVVVVVVVVVVVVVVVVVVVVVVVVV
-
 
 def ODOM_loop():
     global Heading, Vertical_current, Horizontal_current, X_assist_Current, Delta_forward, Delta_sideways, Last_forward, Last_sideways, Forward_movement, Sideways_movement, Change_x, Change_y, PosX, PosY
@@ -699,8 +645,6 @@ def ODOM_loop():
     PosY = PosY + -1 *Change_y
     wait(5, MSEC)
 
-
-
 def offset_accommodation():
     X_ACOM = 0
     #calculate the X_diff, which is subracted from the larger tracking wheel to find how much the robot has actually moved sideways; used to eliminate the X-change scripts picking up in-place rotation
@@ -722,8 +666,6 @@ def offset_accommodation():
 
 #RUNNING SCRIPTS VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
 
-
-
 def color_switching():
     #initialize and run color sensing. Also set drive stopping and set Bar_switcher to 100% velocity
     global MyColor, drivetrain, Bar_Switcher, ColorSensor
@@ -738,9 +680,6 @@ def color_switching():
     while True:
         Check_for_bar()
         wait(5, MSEC)
-
-
-
 
 def vs_setup():
     #show setup progression on the brain screen
@@ -769,9 +708,6 @@ def vs_setup():
         brain.screen.next_row()
         brain.screen.render()
         wait(5, MSEC)
-
-
-
 
 def prog_setup():
     #calibration, scanning, and setup code to run when the program starts
@@ -849,7 +785,6 @@ def prog_setup():
         brain.screen.render()
         wait(5, MSEC)
 
-
 def CC_display_callback():
 
     #connectivity code to show on controller throughout the program
@@ -878,9 +813,6 @@ def CC_display_callback():
         controller_1.screen.print("<")
         wait(0.5, SECONDS)
 
-
-
-
 def draw_button(draw_button_x, draw_button_y, draw_button_width, draw_button_height):
     # Draws a button on the brain screen and checks if it is pressed
     global button_pressed, Auto_Side, MyColor, v, sizeDrawRound, AnimProgress
@@ -895,9 +827,6 @@ def draw_button(draw_button_x, draw_button_y, draw_button_width, draw_button_hei
     if brain.screen.pressing():
         if draw_button_x < brain.screen.x_position() < (draw_button_x + draw_button_width) and draw_button_y < brain.screen.y_position() < (draw_button_y + draw_button_height):
             button_pressed = 1
-
-
-
 
 def bootAnim():
     #User interface and setup complete animation code
@@ -1112,8 +1041,6 @@ def liftTick_callback():
         MT.liftTick()
         MT.grabberTick()
 
-
-
 # Event activation
 CC_display(CC_display_callback)
 
@@ -1161,8 +1088,6 @@ def AIM_turn(d,v=100,p=3):
             drivetrain.turn(LEFT)
         else:
             drivetrain.turn(RIGHT)
-    
-
 
 #Activate auto program; currently, this actually runs in ACPv1
 def auto():
@@ -1194,8 +1119,6 @@ def driver():
     claw  = Thread(K56721.autoload)
     drive = Thread(lambda: K56721.TankDrive(2))
     color_switching()
-    
-
 
 #PROGRAM RUN VVVVVVVVVVVVVVVVVVV
 
@@ -1203,7 +1126,6 @@ K56721 = robot()
 grabber.set(True)
 PROG = Thread( prog_setup )
 VS = Thread( vs_setup )
-
 
 comp = Competition(driver,auto)
 
