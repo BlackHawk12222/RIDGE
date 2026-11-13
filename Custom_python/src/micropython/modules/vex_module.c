@@ -47,6 +47,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_vex_wait_obj, 1, 2, mp_vex_wait);
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_callback_roots);
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_competition_callbacks);
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_pending_competition_event);
+MP_REGISTER_ROOT_POINTER(mp_obj_t vex_competition_thread);
 
 // Report an uncaught exception from a Thread, Event or other callback the way
 // VEXcode V5 Python does: a header naming the function, then the normal
@@ -79,7 +80,23 @@ typedef struct _mp_vex_thread_obj_t{
     mp_uint_t thread_id;
     bool stopped;
     bool done;
+    // The running thread's MicroPython state, so stop() can raise SystemExit
+    // in it. Set and cleared by the thread itself with the GIL held.
+    mp_state_thread_t *state;
 } mp_vex_thread_obj_t;
+
+extern const mp_obj_type_t mp_vex_thread_type;
+
+// Stop a vex Thread like VEXcode's thread.stop(): a thread that hasn't started
+// never runs, and a running one gets SystemExit at its next Python line (after
+// any wait() it is in returns). SystemExit ends a thread silently.
+// Call with the GIL held.
+static void mp_vex_thread_request_stop(mp_vex_thread_obj_t *thread) {
+    thread->stopped = true;
+    if (thread->state != NULL && !thread->done) {
+        thread->state->mp_pending_exception = mp_obj_new_exception(&mp_type_SystemExit);
+    }
+}
 
 mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data) {
     size_t count;
@@ -152,6 +169,7 @@ static void *mp_vex_thread_entry(void *thread_data) {
 
     MP_THREAD_GIL_ENTER();
     mp_thread_start();
+    thread->state = &thread_state;
     if (!thread->stopped) {
         nlr_buf_t nlr;
         if (nlr_push(&nlr) == 0) {
@@ -171,6 +189,7 @@ static void *mp_vex_thread_entry(void *thread_data) {
         }
     }
 
+    thread->state = NULL;
     thread->done = true;
     mp_obj_list_remove(MP_STATE_VM(vex_callback_roots), callback_data);
     mp_thread_finish();
@@ -193,6 +212,40 @@ static mp_obj_t mp_vex_callback_data(mp_obj_t callback, mp_obj_t args, bool no_a
     return callback_data;
 }
 
+// Start callback() in its own vex Thread and return the Thread object.
+static mp_obj_t mp_vex_spawn_thread(mp_obj_t callback) {
+    if (MP_STATE_VM(vex_callback_roots) == MP_OBJ_NULL) {
+        MP_STATE_VM(vex_callback_roots) = mp_obj_new_list(0, NULL);
+    }
+    mp_vex_thread_obj_t *thread = mp_obj_malloc_with_finaliser(mp_vex_thread_obj_t, &mp_vex_thread_type);
+    thread->thread_id = 0;
+    thread->stopped = false;
+    thread->done = false;
+    thread->state = NULL;
+    mp_obj_t callback_items[] = {
+        callback,
+        mp_const_none,
+        mp_const_true,
+        mp_const_true,
+        MP_OBJ_FROM_PTR(thread),
+        MP_OBJ_FROM_PTR(mp_locals_get()),
+        MP_OBJ_FROM_PTR(mp_globals_get()),
+    };
+    mp_obj_t callback_data = mp_obj_new_list(MP_ARRAY_SIZE(callback_items), callback_items);
+    mp_obj_list_append(MP_STATE_VM(vex_callback_roots), callback_data);
+    size_t stack_size = 0;
+    thread->thread_id = mp_thread_create(mp_vex_thread_entry, MP_OBJ_TO_PTR(callback_data), &stack_size);
+    if (thread->thread_id == 0) {
+        mp_obj_list_remove(MP_STATE_VM(vex_callback_roots), callback_data);
+        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("could not create competition thread"));
+    }
+    return MP_OBJ_FROM_PTR(thread);
+}
+
+// Competition callbacks run like VEXcode V5 Python: each mode's function gets
+// its own thread, and a mode change stops the previous mode's thread first.
+// They never run inside the scheduler, so a callback with a while True loop
+// can't take over another thread or block later events.
 static mp_obj_t mp_vex_competition_dispatch(mp_obj_t event_obj) {
     int event = mp_obj_get_int(event_obj);
     if (MP_STATE_VM(vex_competition_callbacks) == MP_OBJ_NULL) {
@@ -218,6 +271,12 @@ static mp_obj_t mp_vex_competition_dispatch(mp_obj_t event_obj) {
             return mp_const_none;
     }
 
+    // A new mode ends the old one (autonomous stops when driver control starts).
+    if (MP_STATE_VM(vex_competition_thread) != MP_OBJ_NULL) {
+        mp_vex_thread_request_stop(MP_OBJ_TO_PTR(MP_STATE_VM(vex_competition_thread)));
+        MP_STATE_VM(vex_competition_thread) = MP_OBJ_NULL;
+    }
+
     mp_obj_tuple_t *callbacks = MP_OBJ_TO_PTR(MP_STATE_VM(vex_competition_callbacks));
     mp_obj_t callback = callbacks->items[callback_index];
     if (callback == mp_const_none) {
@@ -225,10 +284,7 @@ static mp_obj_t mp_vex_competition_dispatch(mp_obj_t event_obj) {
         return mp_const_none;
     }
 
-    mp_obj_t callback_data = mp_vex_callback_data(callback, mp_const_none, true, true);
-    while (!mp_sched_schedule(MP_OBJ_FROM_PTR(&mp_vex_callback_executor_obj), callback_data)) {
-        mp_hal_delay_ms(1);
-    }
+    MP_STATE_VM(vex_competition_thread) = mp_vex_spawn_thread(callback);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_competition_dispatch_obj, mp_vex_competition_dispatch);
@@ -1578,6 +1634,7 @@ static mp_obj_t mp_vex_thread_make_new(const mp_obj_type_t *type, size_t n_args,
     self->thread_id = 0;
     self->stopped = false;
     self->done = false;
+    self->state = NULL;
     bool no_args = n_args == 1;
     mp_obj_t callback_items[] = {
         callback,
@@ -1609,8 +1666,7 @@ static mp_obj_t mp_vex_thread_is_done(mp_obj_t self_ptr) {
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_thread_is_done_obj, mp_vex_thread_is_done);
 
 static mp_obj_t mp_vex_thread_stop(mp_obj_t self_ptr) {
-    mp_vex_thread_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    self->stopped = true;
+    mp_vex_thread_request_stop(MP_OBJ_TO_PTR(self_ptr));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_thread_stop_obj, mp_vex_thread_stop);
@@ -3740,6 +3796,7 @@ static mp_obj_t mp_vex_event_spawn_all(mp_vex_event_obj_t *self) {
         thread_obj->thread_id = 0;
         thread_obj->stopped = false;
         thread_obj->done = false;
+        thread_obj->state = NULL;
 
         mp_obj_t callback_items[] = {
             h_items[0],
