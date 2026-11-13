@@ -157,10 +157,13 @@ mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_callback_executor_obj, mp_vex_callback_executor);
 
+void mp_port_wake_main(void); // main.cpp: wakes the idle MicroPython task
+
 static void mp_vex_callback_trampoline(void *callback_data) {
     while (!mp_sched_schedule(MP_OBJ_FROM_PTR(&mp_vex_callback_executor_obj), MP_OBJ_FROM_PTR(callback_data))) {
         mp_hal_delay_ms(1);
     }
+    mp_port_wake_main();
 }
 
 static void *mp_vex_thread_entry(void *thread_data) {
@@ -677,7 +680,7 @@ static mp_obj_t mp_motor_spin_for(size_t n_args, const mp_obj_t *args) {
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
     int direction = mp_obj_get_int(args[1]);
-    int angle = mp_obj_get_int(args[2]);
+    double angle = mp_vex_get_float(args[2]);
 
     // Defining default values.
     int units = (n_args > 3) ? mp_obj_get_int(args[3])   : 29;      // DEGREES macro value
@@ -692,7 +695,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_for_obj, 3, 7, mp_motor
 
 static mp_obj_t mp_motor_spin_to_position(size_t n_args, const mp_obj_t *args){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    int rotation = mp_obj_get_int(args[1]);
+    double rotation = mp_vex_get_float(args[1]);
 
     int units = (n_args > 2) ? mp_obj_get_int(args[2])   : 29;
     float velocity = (n_args > 3) ? mp_vex_get_float(args[3]) : 601.0f;
@@ -858,15 +861,14 @@ static mp_obj_t mp_motor_efficiency(mp_obj_t self_ptr, mp_obj_t units_t){
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_efficiency_obj, mp_motor_efficiency);
 
-static mp_obj_t mp_motor_temperature(mp_obj_t self_ptr, mp_obj_t units_t){
-    mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    int units = mp_obj_get_int(units_t);
+// units is optional and defaults to CELSIUS (35), like VEXcode.
+static mp_obj_t mp_motor_temperature(size_t n_args, const mp_obj_t *args){
+    mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int units = n_args > 1 ? mp_obj_get_int(args[1]) : 35;
 
-    float output;
-    output = motor_temperature(self -> cpp_handle, units);
-    return mp_obj_new_int(output);
+    return mp_obj_new_int(motor_temperature(self -> cpp_handle, units));
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_temperature_obj, mp_motor_temperature);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_temperature_obj, 1, 2, mp_motor_temperature);
 
 static mp_obj_t mp_motor_get_timeout(mp_obj_t self_ptr){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
@@ -968,7 +970,7 @@ static mp_obj_t mp_motor_group_spin_for(size_t n_args, const mp_obj_t *args) {
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
     int direction = mp_obj_get_int(args[1]);
-    int angle = mp_obj_get_int(args[2]);
+    double angle = mp_vex_get_float(args[2]);
 
     // Defining default values.
     int units = (n_args > 3) ? mp_obj_get_int(args[3])   : 29;      // DEGREES macro value
@@ -983,7 +985,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_for_obj, 3, 7, mp
 
 static mp_obj_t mp_motor_group_spin_to_position(size_t n_args, const mp_obj_t *args){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    int rotation = mp_obj_get_int(args[1]);
+    double rotation = mp_vex_get_float(args[1]);
 
     int units = (n_args > 2) ? mp_obj_get_int(args[2])   : 29;
     float velocity = (n_args > 3) ? mp_vex_get_float(args[3]) : 601.0f;
@@ -1149,15 +1151,14 @@ static mp_obj_t mp_motor_group_efficiency(mp_obj_t self_ptr, mp_obj_t units_t){
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_efficiency_obj, mp_motor_group_efficiency);
 
-static mp_obj_t mp_motor_group_temperature(mp_obj_t self_ptr, mp_obj_t units_t){
-    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    int units = mp_obj_get_int(units_t);
+// units is optional and defaults to CELSIUS (35), like VEXcode.
+static mp_obj_t mp_motor_group_temperature(size_t n_args, const mp_obj_t *args){
+    mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int units = n_args > 1 ? mp_obj_get_int(args[1]) : 35;
 
-    float output;
-    output = motor_group_temperature(self -> cpp_handle, units);
-    return mp_obj_new_int(output);
+    return mp_obj_new_int(motor_group_temperature(self -> cpp_handle, units));
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_temperature_obj, mp_motor_group_temperature);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_temperature_obj, 1, 2, mp_motor_group_temperature);
 
 static mp_obj_t mp_motor_group_get_timeout(mp_obj_t self_ptr){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);

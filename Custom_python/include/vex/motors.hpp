@@ -89,7 +89,7 @@ class Motor {
         bool IsReversed;
         pros::Motor* motor=nullptr;
         float Velocity = 50.0f;
-        VelocityUnits DefaultVelocityUnits=RPM;
+        VelocityUnits DefaultVelocityUnits=VELOCITY_PERCENT;  // VEXcode default: 50%
         BrakeMode DefaultBrakeMode=BRAKE;
         float TimeoutTime = -1.0f;
         TimeUnits TimeoutType = MSEC;
@@ -106,9 +106,9 @@ class Motor {
 
         void spin(Direction direction, float velocity=601.0, VelocityUnits units=RPM);
 
-        void spin_for(Direction direction, int angle, AngleUnits units=DEGREES, float velocity=601.0f, VelocityUnits units_v=RPM, bool wait=true);
+        void spin_for(Direction direction, double angle, AngleUnits units=DEGREES, float velocity=601.0f, VelocityUnits units_v=RPM, bool wait=true);
 
-        void spin_to_position(int rotation, AngleUnits units=DEGREES, float velocity=601.0f, VelocityUnits units_v=RPM, bool wait=true);
+        void spin_to_position(double rotation, AngleUnits units=DEGREES, float velocity=601.0f, VelocityUnits units_v=RPM, bool wait=true);
 
         void stop(BrakeMode mode= NALL);
         
@@ -160,7 +160,7 @@ class MotorGroup{
         bool IsReversed;
         pros::MotorGroup* motor=nullptr;
         float Velocity=50.0f;
-        VelocityUnits DefaultVelocityUnits=RPM;
+        VelocityUnits DefaultVelocityUnits=VELOCITY_PERCENT;  // VEXcode default: 50%
         BrakeMode DefaultBrakeMode=BRAKE;
         float TimeoutTime=-1.0f;
         TimeUnits TimeoutType=MSEC;
@@ -193,9 +193,9 @@ class MotorGroup{
             
         void spin(Direction direction, float velocity=601.0, VelocityUnits units=RPM);
 
-        void spin_for(Direction direction, int angle, AngleUnits units=DEGREES, float velocity=601.0, VelocityUnits units_v=RPM, bool wait=true);
+        void spin_for(Direction direction, double angle, AngleUnits units=DEGREES, float velocity=601.0, VelocityUnits units_v=RPM, bool wait=true);
 
-        void spin_to_position(int rotation, AngleUnits units=DEGREES, float velocity=601.0f, VelocityUnits units_v=RPM, bool wait=true);
+        void spin_to_position(double rotation, AngleUnits units=DEGREES, float velocity=601.0f, VelocityUnits units_v=RPM, bool wait=true);
 
         void stop(BrakeMode mode= NALL);
         

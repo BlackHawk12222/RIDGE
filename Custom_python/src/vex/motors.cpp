@@ -92,14 +92,14 @@ void Motor::spin(Direction direction, float velocity, VelocityUnits units){
     motor->move_velocity(static_cast<std::int32_t>(std::lround(vsafe::num(sign * rpm))));
 }
 
-void Motor::spin_for(Direction direction, int angle, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
+void Motor::spin_for(Direction direction, double angle, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
     // 601 means "no velocity given": use set_velocity()'s value and units.
     if (velocity == 601){
         velocity = Velocity;
         units_v = DefaultVelocityUnits;
     }
 
-    double degrees = static_cast<double>(angle);
+    double degrees = vsafe::num(angle);
     switch (units) {
         case DEGREES: break;
         case TURNS: degrees *= 360.0; break;
@@ -129,14 +129,14 @@ void Motor::spin_for(Direction direction, int angle, AngleUnits units, float vel
     }
 }
 
-void Motor::spin_to_position(int rotation, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
+void Motor::spin_to_position(double rotation, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
     // 601 means "no velocity given": use set_velocity()'s value and units.
     if (velocity == 601){
         velocity = Velocity;
         units_v = DefaultVelocityUnits;
     }
 
-    double degrees = static_cast<double>(rotation);
+    double degrees = vsafe::num(rotation);
     switch (units) {
         case DEGREES: break;
         case TURNS: degrees *= 360.0; break;
@@ -332,7 +332,7 @@ float Motor::torque(TorqueUnits units){
         case INLB:
         {
             float NMtoINLB = 8.8507f;
-            output= (float)(vsafe::num(motor->get_torque())) / NMtoINLB;
+            output= (float)(vsafe::num(motor->get_torque())) * NMtoINLB;
             break;
         }
     }
@@ -348,7 +348,7 @@ int Motor::temperature(TemperatureUnits units){
     switch(units){
         case CELSIUS: return static_cast<int>(std::lround(celsius));
         case FAHRENHEIT: return static_cast<int>(std::lround(celsius * 1.8 + 32.0));
-        case TEMPERATURE_PERCENT: return static_cast<int>(std::lround(celsius * 0.57143));
+        case TEMPERATURE_PERCENT: return static_cast<int>(std::lround(std::clamp((celsius - 20.0) * 2.0, 0.0, 100.0)));  // VEX: 0% = 20 C, 100% = 70 C
         default:
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
             return 0;
@@ -450,14 +450,14 @@ void MotorGroup::spin(Direction direction, float velocity, VelocityUnits units){
     motor->move_velocity(static_cast<std::int32_t>(std::lround(vsafe::num(sign * rpm))));
 }
 
-void MotorGroup::spin_for(Direction direction, int angle, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
+void MotorGroup::spin_for(Direction direction, double angle, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
     // 601 means "no velocity given": use set_velocity()'s value and units.
     if (velocity == 601){
         velocity = Velocity;
         units_v = DefaultVelocityUnits;
     }
 
-    double degrees = static_cast<double>(angle);
+    double degrees = vsafe::num(angle);
     switch (units) {
         case DEGREES: break;
         case TURNS: degrees *= 360.0; break;
@@ -487,14 +487,14 @@ void MotorGroup::spin_for(Direction direction, int angle, AngleUnits units, floa
     }
 }
 
-void MotorGroup::spin_to_position(int rotation, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
+void MotorGroup::spin_to_position(double rotation, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
     // 601 means "no velocity given": use set_velocity()'s value and units.
     if (velocity == 601){
         velocity = Velocity;
         units_v = DefaultVelocityUnits;
     }
 
-    double degrees = static_cast<double>(rotation);
+    double degrees = vsafe::num(rotation);
     switch (units) {
         case DEGREES: break;
         case TURNS: degrees *= 360.0; break;
@@ -689,7 +689,7 @@ float MotorGroup::torque(TorqueUnits units){
         case INLB:
         {
             float NMtoINLB = 8.8507f;
-            output= (float)(vsafe::num(motor->get_torque())) / NMtoINLB;
+            output= (float)(vsafe::num(motor->get_torque())) * NMtoINLB;
             break;
         }
     }
@@ -705,7 +705,7 @@ int MotorGroup::temperature(TemperatureUnits units){
     switch(units){
         case CELSIUS: return static_cast<int>(std::lround(celsius));
         case FAHRENHEIT: return static_cast<int>(std::lround(celsius * 1.8 + 32.0));
-        case TEMPERATURE_PERCENT: return static_cast<int>(std::lround(celsius * 0.57143));
+        case TEMPERATURE_PERCENT: return static_cast<int>(std::lround(std::clamp((celsius - 20.0) * 2.0, 0.0, 100.0)));  // VEX: 0% = 20 C, 100% = 70 C
         default:
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
             return 0;

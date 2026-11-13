@@ -100,11 +100,11 @@ void motor_spin(void* motor_ptr, int direction, float velocity, int units){
     static_cast<Motor*>(motor_ptr)->spin(static_cast<Direction>(direction), velocity, static_cast<VelocityUnits>(units));
 }
 
-void motor_spin_for(void* motor_ptr, int direction, int angle, int units, float velocity, int units_v, bool wait){
+void motor_spin_for(void* motor_ptr, int direction, double angle, int units, float velocity, int units_v, bool wait){
     static_cast<Motor*>(motor_ptr)->spin_for(static_cast<Direction>(direction), angle,static_cast<AngleUnits>(units), velocity, static_cast<VelocityUnits>(units_v), wait);
 }
 
-void motor_spin_to_position(void* motor_ptr, int rotation, int units, float velocity, int units_v, bool wait){
+void motor_spin_to_position(void* motor_ptr, double rotation, int units, float velocity, int units_v, bool wait){
     static_cast<Motor*>(motor_ptr)->spin_to_position(rotation, static_cast<AngleUnits>(units), velocity, static_cast<VelocityUnits>(units_v), wait);
 }
 
@@ -199,11 +199,11 @@ void motor_group_spin(void* motor_ptr, int direction, float velocity, int units)
     static_cast<MotorGroup*>(motor_ptr)->spin(static_cast<Direction>(direction), velocity, static_cast<VelocityUnits>(units));
 }
 
-void motor_group_spin_for(void* motor_ptr, int direction, int angle, int units, float velocity, int units_v, bool wait){
+void motor_group_spin_for(void* motor_ptr, int direction, double angle, int units, float velocity, int units_v, bool wait){
     static_cast<MotorGroup*>(motor_ptr)->spin_for(static_cast<Direction>(direction), angle,static_cast<AngleUnits>(units), velocity, static_cast<VelocityUnits>(units_v), wait);
 }
 
-void motor_group_spin_to_position(void* motor_ptr, int rotation, int units, float velocity, int units_v, bool wait){
+void motor_group_spin_to_position(void* motor_ptr, double rotation, int units, float velocity, int units_v, bool wait){
     static_cast<MotorGroup*>(motor_ptr)->spin_to_position(rotation, static_cast<AngleUnits>(units), velocity, static_cast<VelocityUnits>(units_v), wait);
 }
 
@@ -505,6 +505,7 @@ double vex_timer_time(void* timer_ptr, int units){
 
 extern "C" {
     #include "py/runtime.h"
+    void mp_port_wake_main(void);   // main.cpp
 }
 
 
@@ -520,6 +521,7 @@ void timer_rtos_task(void* params) {
     while (!mp_sched_schedule(MP_OBJ_FROM_PTR(&mp_vex_callback_executor_obj), p->callback_data)) {
         pros::delay(1);
     }
+    mp_port_wake_main();
 
     delete p;
 }

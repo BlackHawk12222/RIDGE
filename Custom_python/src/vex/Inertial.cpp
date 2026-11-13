@@ -5,6 +5,7 @@
 
 Inertial::Inertial(Ports port){
     this -> Sensor = new pros::Imu(static_cast<std::uint8_t>(port));
+    Sensor->set_data_rate(5);   // default is 10 ms
 }
 
 float Inertial::heading(AngleUnits units){

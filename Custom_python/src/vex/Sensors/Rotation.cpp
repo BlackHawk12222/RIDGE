@@ -6,6 +6,7 @@
 Rotation::Rotation(Ports smartport, bool reverse){
     const int port = static_cast<int>(smartport);
     Sensor = new pros::Rotation(static_cast<std::int8_t>(reverse ? -port : port));
+    Sensor->set_data_rate(5);   // default is 10 ms; 5 ms so a 5 ms loop never reads a stale value
 }
 
 void Rotation::set_position(float value, AngleUnits units){
@@ -32,7 +33,8 @@ float Rotation::velocity(VelocityUnits units){
 }
 
 void Rotation::reset_position(){
-    Sensor->reset_position();
+    // VEXcode sets position to 0; PROS reset_position() sets it to the current angle.
+    Sensor->set_position(0);
 }
 
 void Rotation::set_reversed(bool value){

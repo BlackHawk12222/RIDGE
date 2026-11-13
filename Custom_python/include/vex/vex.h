@@ -40,8 +40,8 @@ void motor_destroy(void* motor_ptr);
 int motor_get_port(void* motor_ptr);
 
 void motor_spin(void* motor_ptr, int direction, float velocity, int units);
-void motor_spin_for(void* motor_ptr, int direction, int angle, int units, float velocity, int units_v, bool wait);
-void motor_spin_to_position(void* motor_ptr, int rotation, int units, float velocity, int units_v, bool wait);
+void motor_spin_for(void* motor_ptr, int direction, double angle, int units, float velocity, int units_v, bool wait);
+void motor_spin_to_position(void* motor_ptr, double rotation, int units, float velocity, int units_v, bool wait);
 void motor_stop(void* motor_ptr, int mode);
 void motor_set_position(void* motor_ptr, float position, int units);
 void motor_set_velocity(void* motor_ptr, float velocity, int units);
@@ -68,8 +68,8 @@ void* motor_group_create(void** motor_ptrs, int count);
 void motor_group_destroy(void* motor_ptr);
 
 void motor_group_spin(void* motor_ptr, int direction, float velocity, int units);
-void motor_group_spin_for(void* motor_ptr, int direction, int angle, int units, float velocity, int units_v, bool wait);
-void motor_group_spin_to_position(void* motor_ptr, int rotation, int units, float velocity, int units_v, bool wait);
+void motor_group_spin_for(void* motor_ptr, int direction, double angle, int units, float velocity, int units_v, bool wait);
+void motor_group_spin_to_position(void* motor_ptr, double rotation, int units, float velocity, int units_v, bool wait);
 void motor_group_stop(void* motor_ptr, int mode);
 void motor_group_set_position(void* motor_ptr, float position, int units);
 void motor_group_set_velocity(void* motor_ptr, float velocity, int units);

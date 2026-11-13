@@ -26,6 +26,21 @@ extern "C" {
 
     // Keep ONLY this declaration line here. REMOVE the full function body definition.
     void mp_port_print_last_exception(void);
+    void mp_port_wake_main(void);
+}
+
+// How often the idle MicroPython task takes the GIL to run scheduled callbacks
+// when nothing wakes it sooner. It used to grab the GIL every 2 ms, which kept
+// pulling it away from running Python threads.
+static constexpr std::uint32_t GIL_POLL_MS = 15;
+static pros::task_t python_task = nullptr;
+
+// Wakes the idle MicroPython task right away (competition events, callbacks),
+// so the slow poll doesn't delay them. Safe to call from any task.
+extern "C" void mp_port_wake_main(void) {
+    if (python_task != nullptr) {
+        pros::c::task_notify(python_task);
+    }
 }
 
 enum {
@@ -74,6 +89,7 @@ static void queue_competition_event(int event) {
     }
     unlock_competition_events();
     vex_competition_callback(event);
+    mp_port_wake_main();
 }
 
 static void run_python_script(void* void_ptr) {
@@ -95,7 +111,7 @@ static void run_python_script(void* void_ptr) {
 
     while (true) {
         MP_THREAD_GIL_EXIT();
-        pros::delay(2);
+        pros::c::task_notify_take(true, GIL_POLL_MS);   // sleeps up to 15 ms, or until woken
         MP_THREAD_GIL_ENTER();
         mp_handle_pending(MP_HANDLE_PENDING_CALLBACKS_ONLY);
     }
@@ -157,6 +173,7 @@ void initialize() {
         run_python_script, NULL, 12, 0x4000,
         "MicroPython Script"
     );
+    python_task = task;
     if (task == nullptr) {
         report_status("ERROR: cannot start MicroPython task");
         return;
