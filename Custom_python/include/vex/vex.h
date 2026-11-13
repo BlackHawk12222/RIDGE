@@ -139,7 +139,7 @@ int serial_link_receive(void* link_ptr, int timeout, char* buffer, size_t capaci
 void* vex_timer_create();
 void vex_timer_destroy(void* timer_ptr);
 void vex_timer_clear(void* timer_ptr);
-int vex_timer_time(void* timer_ptr, int units);
+double vex_timer_time(void* timer_ptr, int units);
 void vex_timer_event(void* timer_ptr, mp_obj_t callback_data, int delay_ms);
 mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data);
 
@@ -188,6 +188,8 @@ void brain_screen_draw_line(void* screen_ptr, int start_x, int start_y, int end_
 void brain_screen_draw_rectangle(void* screen_ptr, int x, int y, int width, int height, int color);
 void brain_screen_draw_circle(void* screen_ptr, int x, int y, int radius, int color);
 void brain_screen_render(void* screen_ptr);
+// Red error popup on the brain screen (see Screen::show_error).
+void vex_show_error_popup(const char* text);
 void brain_screen_set_clip_region(void* screen_ptr, int x, int y, int width, int height);
 bool brain_screen_pressing(void* screen_ptr);
 int brain_screen_x_position(void* screen_ptr);

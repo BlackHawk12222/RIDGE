@@ -1,3 +1,5 @@
+#include <math.h>
+#include <stdio.h>
 #include <stdint.h>
 #include "py/builtin.h"
 #include "py/runtime.h"
@@ -6,6 +8,17 @@
 #include "py/mphal.h"
 #include "py/mpthread.h"
 #include "vex/vex.h"
+
+// VEXcode never hands Python infinity or NaN, and a NaN or infinite argument
+// would be undefined behavior once converted to an int for PROS. Both
+// directions map non-finite values to 0.
+static inline mp_obj_t mp_vex_new_float(mp_float_t v) {
+    return mp_obj_new_float(isfinite(v) ? v : (mp_float_t)0);
+}
+static inline mp_float_t mp_vex_get_float(mp_obj_t o) {
+    const mp_float_t v = mp_obj_get_float(o);
+    return isfinite(v) ? v : (mp_float_t)0;
+}
 
 #define MP_VEX_CALL_BLOCKING(wait, ...) \
     do { \
@@ -27,7 +40,7 @@
 
 static mp_obj_t mp_vex_wait(size_t n_args, const mp_obj_t *args) {
     mp_arg_check_num(n_args, 0, 1, 2, false);
-    double duration = mp_obj_get_float(args[0]);
+    double duration = mp_vex_get_float(args[0]);
     if (duration < 0.0) {
         duration = 1.0; // Clamp negative loop remainder to 1 ms
     }
@@ -46,13 +59,56 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_vex_wait_obj, 1, 2, mp_vex_wait);
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_callback_roots);
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_competition_callbacks);
 MP_REGISTER_ROOT_POINTER(mp_obj_t vex_pending_competition_event);
+MP_REGISTER_ROOT_POINTER(mp_obj_t vex_competition_thread);
+
+// Report an uncaught exception from a Thread, Event or other callback the way
+// VEXcode V5 Python does: a header naming the function, then the normal
+// "Traceback (most recent call last):" block, printed to the terminal and
+// shown in a red error box on the brain screen. SystemExit is ignored.
+void mp_port_report_exception(const char *header, mp_obj_t exc); // mp_port.c
+
+static void mp_vex_report_callback_exception(mp_obj_t callback, mp_obj_t exc) {
+    const char *name = NULL;
+    nlr_buf_t nlr;
+    if (nlr_push(&nlr) == 0) {
+        mp_obj_t dest[2];
+        mp_load_method_maybe(callback, MP_QSTR___name__, dest);
+        if (dest[0] != MP_OBJ_NULL && mp_obj_is_str(dest[0])) {
+            name = mp_obj_str_get_str(dest[0]);
+        }
+        nlr_pop();
+    }
+    char header[96];
+    if (name != NULL) {
+        snprintf(header, sizeof(header), "Exception in thread %s:", name);
+    } else {
+        snprintf(header, sizeof(header), "Exception in thread:");
+    }
+    mp_port_report_exception(header, exc);
+}
 
 typedef struct _mp_vex_thread_obj_t{
     mp_obj_base_t base;
     mp_uint_t thread_id;
     bool stopped;
     bool done;
+    // The running thread's MicroPython state, so stop() can raise SystemExit
+    // in it. Set and cleared by the thread itself with the GIL held.
+    mp_state_thread_t *state;
 } mp_vex_thread_obj_t;
+
+extern const mp_obj_type_t mp_vex_thread_type;
+
+// Stop a vex Thread like VEXcode's thread.stop(): a thread that hasn't started
+// never runs, and a running one gets SystemExit at its next Python line (after
+// any wait() it is in returns). SystemExit ends a thread silently.
+// Call with the GIL held.
+static void mp_vex_thread_request_stop(mp_vex_thread_obj_t *thread) {
+    thread->stopped = true;
+    if (thread->state != NULL && !thread->done) {
+        thread->state->mp_pending_exception = mp_obj_new_exception(&mp_type_SystemExit);
+    }
+}
 
 mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data) {
     size_t count;
@@ -88,7 +144,10 @@ mp_obj_t mp_vex_callback_executor(mp_obj_t callback_data) {
         if (thread != NULL) {
             thread->done = true;
         }
-        nlr_raise(nlr.ret_val);
+        // Report here (with the callback's name) instead of re-raising, so the
+        // scheduler doesn't print a second, anonymous copy of the traceback.
+        mp_vex_report_callback_exception(items[0], MP_OBJ_FROM_PTR(nlr.ret_val));
+        result = mp_const_none;
     }
 
     if (thread != NULL) {
@@ -122,6 +181,7 @@ static void *mp_vex_thread_entry(void *thread_data) {
 
     MP_THREAD_GIL_ENTER();
     mp_thread_start();
+    thread->state = &thread_state;
     if (!thread->stopped) {
         nlr_buf_t nlr;
         if (nlr_push(&nlr) == 0) {
@@ -137,11 +197,11 @@ static void *mp_vex_thread_entry(void *thread_data) {
             }
             nlr_pop();
         } else {
-            mp_printf(&mp_plat_print, "Unhandled exception in vex.Thread callback:\n");
-            mp_obj_print_exception(&mp_plat_print, nlr.ret_val);
+            mp_vex_report_callback_exception(items[0], MP_OBJ_FROM_PTR(nlr.ret_val));
         }
     }
 
+    thread->state = NULL;
     thread->done = true;
     mp_obj_list_remove(MP_STATE_VM(vex_callback_roots), callback_data);
     mp_thread_finish();
@@ -164,6 +224,40 @@ static mp_obj_t mp_vex_callback_data(mp_obj_t callback, mp_obj_t args, bool no_a
     return callback_data;
 }
 
+// Start callback() in its own vex Thread and return the Thread object.
+static mp_obj_t mp_vex_spawn_thread(mp_obj_t callback) {
+    if (MP_STATE_VM(vex_callback_roots) == MP_OBJ_NULL) {
+        MP_STATE_VM(vex_callback_roots) = mp_obj_new_list(0, NULL);
+    }
+    mp_vex_thread_obj_t *thread = mp_obj_malloc_with_finaliser(mp_vex_thread_obj_t, &mp_vex_thread_type);
+    thread->thread_id = 0;
+    thread->stopped = false;
+    thread->done = false;
+    thread->state = NULL;
+    mp_obj_t callback_items[] = {
+        callback,
+        mp_const_none,
+        mp_const_true,
+        mp_const_true,
+        MP_OBJ_FROM_PTR(thread),
+        MP_OBJ_FROM_PTR(mp_locals_get()),
+        MP_OBJ_FROM_PTR(mp_globals_get()),
+    };
+    mp_obj_t callback_data = mp_obj_new_list(MP_ARRAY_SIZE(callback_items), callback_items);
+    mp_obj_list_append(MP_STATE_VM(vex_callback_roots), callback_data);
+    size_t stack_size = 0;
+    thread->thread_id = mp_thread_create(mp_vex_thread_entry, MP_OBJ_TO_PTR(callback_data), &stack_size);
+    if (thread->thread_id == 0) {
+        mp_obj_list_remove(MP_STATE_VM(vex_callback_roots), callback_data);
+        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("could not create competition thread"));
+    }
+    return MP_OBJ_FROM_PTR(thread);
+}
+
+// Competition callbacks run like VEXcode V5 Python: each mode's function gets
+// its own thread, and a mode change stops the previous mode's thread first.
+// They never run inside the scheduler, so a callback with a while True loop
+// can't take over another thread or block later events.
 static mp_obj_t mp_vex_competition_dispatch(mp_obj_t event_obj) {
     int event = mp_obj_get_int(event_obj);
     if (MP_STATE_VM(vex_competition_callbacks) == MP_OBJ_NULL) {
@@ -189,6 +283,12 @@ static mp_obj_t mp_vex_competition_dispatch(mp_obj_t event_obj) {
             return mp_const_none;
     }
 
+    // A new mode ends the old one (autonomous stops when driver control starts).
+    if (MP_STATE_VM(vex_competition_thread) != MP_OBJ_NULL) {
+        mp_vex_thread_request_stop(MP_OBJ_TO_PTR(MP_STATE_VM(vex_competition_thread)));
+        MP_STATE_VM(vex_competition_thread) = MP_OBJ_NULL;
+    }
+
     mp_obj_tuple_t *callbacks = MP_OBJ_TO_PTR(MP_STATE_VM(vex_competition_callbacks));
     mp_obj_t callback = callbacks->items[callback_index];
     if (callback == mp_const_none) {
@@ -196,10 +296,7 @@ static mp_obj_t mp_vex_competition_dispatch(mp_obj_t event_obj) {
         return mp_const_none;
     }
 
-    mp_obj_t callback_data = mp_vex_callback_data(callback, mp_const_none, true, true);
-    while (!mp_sched_schedule(MP_OBJ_FROM_PTR(&mp_vex_callback_executor_obj), callback_data)) {
-        mp_hal_delay_ms(1);
-    }
+    MP_STATE_VM(vex_competition_thread) = mp_vex_spawn_thread(callback);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_competition_dispatch_obj, mp_vex_competition_dispatch);
@@ -567,14 +664,14 @@ static mp_obj_t mp_motor_make_new(const mp_obj_type_t *type, size_t n_args, size
 static mp_obj_t mp_motor_spin(size_t n_args, const mp_obj_t *args) {
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float velocity = (n_args > 2) ? mp_obj_get_float(args[2]) : 601.0f;
+    float velocity = (n_args > 2) ? mp_vex_get_float(args[2]) : 601.0f;
     int units = (n_args > 3) ? mp_obj_get_int(args[3]) : 24;  // Default is RPM.
 
     motor_spin(self->cpp_handle, direction, velocity, units);
     return mp_const_none;
 }
 // obj, requred args, total args, function.
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_obj, 1, 4, mp_motor_spin);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_obj, 2, 4, mp_motor_spin);
 
 static mp_obj_t mp_motor_spin_for(size_t n_args, const mp_obj_t *args) {
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -584,7 +681,7 @@ static mp_obj_t mp_motor_spin_for(size_t n_args, const mp_obj_t *args) {
 
     // Defining default values.
     int units = (n_args > 3) ? mp_obj_get_int(args[3])   : 29;      // DEGREES macro value
-    float velocity = (n_args > 4) ? mp_obj_get_float(args[4]) : 601.0f;
+    float velocity = (n_args > 4) ? mp_vex_get_float(args[4]) : 601.0f;
     int units_v = (n_args > 5) ? mp_obj_get_int(args[5])   : 24;      // RPM macro value
     bool wait = (n_args > 6) ? mp_obj_is_true(args[6])   : true;
 
@@ -598,7 +695,7 @@ static mp_obj_t mp_motor_spin_to_position(size_t n_args, const mp_obj_t *args){
     int rotation = mp_obj_get_int(args[1]);
 
     int units = (n_args > 2) ? mp_obj_get_int(args[2])   : 29;
-    float velocity = (n_args > 3) ? mp_obj_get_float(args[3]) : 601.0f;
+    float velocity = (n_args > 3) ? mp_vex_get_float(args[3]) : 601.0f;
     int units_v = (n_args > 4) ? mp_obj_get_int(args[4])   : 24;
     bool wait = (n_args > 5) ? mp_obj_is_true(args[5])   : true;
 
@@ -619,7 +716,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_stop_obj, 1, 2, mp_motor_sto
 
 static mp_obj_t mp_motor_set_position(mp_obj_t self_ptr, mp_obj_t position_t, mp_obj_t units_t){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float position = mp_obj_get_float(position_t);
+    float position = mp_vex_get_float(position_t);
     int units = mp_obj_get_int(units_t);
 
     motor_set_position(self -> cpp_handle, position, units);
@@ -629,7 +726,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_set_position_obj, mp_motor_set_positio
 
 static mp_obj_t mp_motor_set_velosity(mp_obj_t self_ptr, mp_obj_t velosity_t, mp_obj_t units_t){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float velosity = mp_obj_get_float(velosity_t);
+    float velosity = mp_vex_get_float(velosity_t);
     int units = mp_obj_get_int(units_t);
 
     motor_set_velocity(self -> cpp_handle, velosity, units);
@@ -648,7 +745,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_set_stopping_obj, mp_motor_set_stoppin
 
 static mp_obj_t mp_motor_set_max_torque(mp_obj_t self_ptr, mp_obj_t torque_t, mp_obj_t units_t){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float torque = mp_obj_get_float(torque_t);
+    float torque = mp_vex_get_float(torque_t);
     int units = mp_obj_get_int(units_t);
 
     motor_set_max_torque(self -> cpp_handle, torque, units);
@@ -658,7 +755,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_set_max_torque_obj, mp_motor_set_max_t
 
 static mp_obj_t mp_motor_set_timeout(mp_obj_t self_ptr, mp_obj_t value_t, mp_obj_t units_t){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float value = mp_obj_get_float(value_t);
+    float value = mp_vex_get_float(value_t);
     int units = mp_obj_get_int(units_t);
 
     motor_set_timeout(self -> cpp_handle, value, units);
@@ -707,7 +804,7 @@ static mp_obj_t mp_motor_position(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_position(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_position_obj, mp_motor_position);
 
@@ -717,7 +814,7 @@ static mp_obj_t mp_motor_velocity(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_velocity(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_velocity_obj, mp_motor_velocity);
 
@@ -727,7 +824,7 @@ static mp_obj_t mp_motor_current(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_current(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_current_obj, mp_motor_current);
 
@@ -737,7 +834,7 @@ static mp_obj_t mp_motor_power(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_power(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_power_obj, mp_motor_power);
 
@@ -747,7 +844,7 @@ static mp_obj_t mp_motor_torque(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_torque(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_torque_obj, mp_motor_torque);
 
@@ -757,7 +854,7 @@ static mp_obj_t mp_motor_efficiency(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_efficiency(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_efficiency_obj, mp_motor_efficiency);
 
@@ -858,13 +955,14 @@ static mp_obj_t mp_motor_group_make_new(const mp_obj_type_t *type, size_t n_args
 static mp_obj_t mp_motor_group_spin(size_t n_args, const mp_obj_t *args) {
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float velocity = mp_obj_get_float(args[2]);
-    int units = mp_obj_get_int(args[3]);
+    float velocity = (n_args > 2) ? mp_vex_get_float(args[2]) : 601.0f;
+    int units = (n_args > 3) ? mp_obj_get_int(args[3]) : 24;  // Default is RPM.
 
     motor_group_spin(self->cpp_handle, direction, velocity, units);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_obj, 4, 4, mp_motor_group_spin);
+// obj, required args (self + direction), total args, function.
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_obj, 2, 4, mp_motor_group_spin);
 
 static mp_obj_t mp_motor_group_spin_for(size_t n_args, const mp_obj_t *args) {
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -874,7 +972,7 @@ static mp_obj_t mp_motor_group_spin_for(size_t n_args, const mp_obj_t *args) {
 
     // Defining default values.
     int units = (n_args > 3) ? mp_obj_get_int(args[3])   : 29;      // DEGREES macro value
-    float velocity = (n_args > 4) ? mp_obj_get_float(args[4]) : 601.0f;
+    float velocity = (n_args > 4) ? mp_vex_get_float(args[4]) : 601.0f;
     int units_v = (n_args > 5) ? mp_obj_get_int(args[5])   : 24;      // RPM macro value
     bool wait = (n_args > 6) ? mp_obj_is_true(args[6])   : true;
 
@@ -888,7 +986,7 @@ static mp_obj_t mp_motor_group_spin_to_position(size_t n_args, const mp_obj_t *a
     int rotation = mp_obj_get_int(args[1]);
 
     int units = (n_args > 2) ? mp_obj_get_int(args[2])   : 29;
-    float velocity = (n_args > 3) ? mp_obj_get_float(args[3]) : 601.0f;
+    float velocity = (n_args > 3) ? mp_vex_get_float(args[3]) : 601.0f;
     int units_v = (n_args > 4) ? mp_obj_get_int(args[4])   : 24;
     bool wait = (n_args > 5) ? mp_obj_is_true(args[5])   : true;
 
@@ -909,7 +1007,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_stop_obj, 1, 2, mp_mot
 
 static mp_obj_t mp_motor_group_set_position(mp_obj_t self_ptr, mp_obj_t position_t, mp_obj_t units_t){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float position = mp_obj_get_float(position_t);
+    float position = mp_vex_get_float(position_t);
     int units = mp_obj_get_int(units_t);
 
     motor_group_set_position(self -> cpp_handle, position, units);
@@ -919,7 +1017,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_group_set_position_obj, mp_motor_group
 
 static mp_obj_t mp_motor_group_set_velosity(mp_obj_t self_ptr, mp_obj_t velosity_t, mp_obj_t units_t){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float velosity = mp_obj_get_float(velosity_t);
+    float velosity = mp_vex_get_float(velosity_t);
     int units = mp_obj_get_int(units_t);
 
     motor_group_set_velocity(self -> cpp_handle, velosity, units);
@@ -938,7 +1036,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_set_stopping_obj, mp_motor_group
 
 static mp_obj_t mp_motor_group_set_max_torque(mp_obj_t self_ptr, mp_obj_t torque_t, mp_obj_t units_t){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float torque = mp_obj_get_float(torque_t);
+    float torque = mp_vex_get_float(torque_t);
     int units = mp_obj_get_int(units_t);
 
     motor_group_set_max_torque(self -> cpp_handle, torque, units);
@@ -948,7 +1046,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mp_motor_group_set_max_torque_obj, mp_motor_gro
 
 static mp_obj_t mp_motor_group_set_timeout(mp_obj_t self_ptr, mp_obj_t value_t, mp_obj_t units_t){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float value = mp_obj_get_float(value_t);
+    float value = mp_vex_get_float(value_t);
     int units = mp_obj_get_int(units_t);
 
     motor_group_set_timeout(self -> cpp_handle, value, units);
@@ -997,7 +1095,7 @@ static mp_obj_t mp_motor_group_position(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_group_position(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_position_obj, mp_motor_group_position);
 
@@ -1007,7 +1105,7 @@ static mp_obj_t mp_motor_group_velocity(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_group_velocity(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_velocity_obj, mp_motor_group_velocity);
 
@@ -1017,7 +1115,7 @@ static mp_obj_t mp_motor_group_current(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_group_current(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_current_obj, mp_motor_group_current);
 
@@ -1027,7 +1125,7 @@ static mp_obj_t mp_motor_group_power(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_group_power(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_power_obj, mp_motor_group_power);
 
@@ -1037,7 +1135,7 @@ static mp_obj_t mp_motor_group_torque(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_group_torque(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_torque_obj, mp_motor_group_torque);
 
@@ -1047,7 +1145,7 @@ static mp_obj_t mp_motor_group_efficiency(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = motor_group_efficiency(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_efficiency_obj, mp_motor_group_efficiency);
 
@@ -1157,11 +1255,11 @@ static mp_obj_t mp_drivetrain_make_new(const mp_obj_type_t *type, size_t n_args,
     void *left_ptr = mp_drivetrain_extract_side(args[0], &left_is_group);
     void *right_ptr = mp_drivetrain_extract_side(args[1], &right_is_group);
 
-    float wheel_travel = n_args > 2 ? mp_obj_get_float(args[2]) : 300.0f;
-    float track_width = n_args > 3 ? mp_obj_get_float(args[3]) : 320.0f;
-    float wheel_base = n_args > 4 ? mp_obj_get_float(args[4]) : 320.0f;
+    float wheel_travel = n_args > 2 ? mp_vex_get_float(args[2]) : 300.0f;
+    float track_width = n_args > 3 ? mp_vex_get_float(args[3]) : 320.0f;
+    float wheel_base = n_args > 4 ? mp_vex_get_float(args[4]) : 320.0f;
     int units = n_args > 5 ? mp_obj_get_int(args[5]) : 40;
-    float gear_ratio = n_args > 6 ? mp_obj_get_float(args[6]) : 1.0f;
+    float gear_ratio = n_args > 6 ? mp_vex_get_float(args[6]) : 1.0f;
     if (wheel_travel <= 0.0f || track_width <= 0.0f || wheel_base <= 0.0f || gear_ratio <= 0.0f) {
         mp_raise_ValueError("drivetrain dimensions and gear ratio must be positive");
     }
@@ -1176,7 +1274,7 @@ static mp_obj_t mp_drivetrain_make_new(const mp_obj_type_t *type, size_t n_args,
 static mp_obj_t mp_drivetrain_drive(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float velocity = n_args > 2 ? mp_obj_get_float(args[2]) : -1.0f;
+    float velocity = n_args > 2 ? mp_vex_get_float(args[2]) : -1.0f;
     int units = n_args > 3 ? mp_obj_get_int(args[3]) : 23;
     drivetrain_drive(self->cpp_handle, direction, velocity, units);
     return mp_const_none;
@@ -1186,9 +1284,9 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_drive_obj, 2, 4, mp_dri
 static mp_obj_t mp_drivetrain_drive_for(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float distance = mp_obj_get_float(args[2]);
+    float distance = mp_vex_get_float(args[2]);
     int units = n_args > 3 ? mp_obj_get_int(args[3]) : 40;
-    float velocity = n_args > 4 ? mp_obj_get_float(args[4]) : -1.0f;
+    float velocity = n_args > 4 ? mp_vex_get_float(args[4]) : -1.0f;
     int velocity_units = n_args > 5 ? mp_obj_get_int(args[5]) : 23;
     bool wait = n_args > 6 ? mp_obj_is_true(args[6]) : true;
     drivetrain_drive_for(self->cpp_handle, direction, distance, units, velocity, velocity_units, wait);
@@ -1199,7 +1297,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_drive_for_obj, 3, 7, mp
 static mp_obj_t mp_drivetrain_turn(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float velocity = n_args > 2 ? mp_obj_get_float(args[2]) : -1.0f;
+    float velocity = n_args > 2 ? mp_vex_get_float(args[2]) : -1.0f;
     int units = n_args > 3 ? mp_obj_get_int(args[3]) : 23;
     drivetrain_turn(self->cpp_handle, direction, velocity, units);
     return mp_const_none;
@@ -1209,9 +1307,9 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_obj, 2, 4, mp_driv
 static mp_obj_t mp_drivetrain_turn_for(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int direction = mp_obj_get_int(args[1]);
-    float angle = mp_obj_get_float(args[2]);
+    float angle = mp_vex_get_float(args[2]);
     int units = n_args > 3 ? mp_obj_get_int(args[3]) : 29;
-    float velocity = n_args > 4 ? mp_obj_get_float(args[4]) : -1.0f;
+    float velocity = n_args > 4 ? mp_vex_get_float(args[4]) : -1.0f;
     int velocity_units = n_args > 5 ? mp_obj_get_int(args[5]) : 23;
     bool wait = n_args > 6 ? mp_obj_is_true(args[6]) : true;
     drivetrain_turn_for(self->cpp_handle, direction, angle, units, velocity, velocity_units, wait);
@@ -1221,9 +1319,9 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_for_obj, 3, 7, mp_
 
 static mp_obj_t mp_drivetrain_turn_to_heading(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float heading = mp_obj_get_float(args[1]);
+    float heading = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : 29;
-    float velocity = n_args > 3 ? mp_obj_get_float(args[3]) : -1.0f;
+    float velocity = n_args > 3 ? mp_vex_get_float(args[3]) : -1.0f;
     int velocity_units = n_args > 4 ? mp_obj_get_int(args[4]) : 23;
     bool wait = n_args > 5 ? mp_obj_is_true(args[5]) : true;
     drivetrain_turn_to_heading(self->cpp_handle, heading, units, velocity, velocity_units, wait);
@@ -1233,9 +1331,9 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_to_heading_obj, 2,
 
 static mp_obj_t mp_drivetrain_turn_to_rotation(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float rotation = mp_obj_get_float(args[1]);
+    float rotation = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : 29;
-    float velocity = n_args > 3 ? mp_obj_get_float(args[3]) : -1.0f;
+    float velocity = n_args > 3 ? mp_vex_get_float(args[3]) : -1.0f;
     int velocity_units = n_args > 4 ? mp_obj_get_int(args[4]) : 23;
     bool wait = n_args > 5 ? mp_obj_is_true(args[5]) : true;
     drivetrain_turn_to_rotation(self->cpp_handle, rotation, units, velocity, velocity_units, wait);
@@ -1253,14 +1351,14 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_stop_obj, 1, 2, mp_driv
 
 static mp_obj_t mp_drivetrain_set_drive_velocity(mp_obj_t self_ptr, mp_obj_t velocity_obj, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    drivetrain_set_drive_velocity(self->cpp_handle, mp_obj_get_float(velocity_obj), mp_obj_get_int(units_obj));
+    drivetrain_set_drive_velocity(self->cpp_handle, mp_vex_get_float(velocity_obj), mp_obj_get_int(units_obj));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_drive_velocity_obj, mp_drivetrain_set_drive_velocity);
 
 static mp_obj_t mp_drivetrain_set_turn_velocity(mp_obj_t self_ptr, mp_obj_t velocity_obj, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    drivetrain_set_turn_velocity(self->cpp_handle, mp_obj_get_float(velocity_obj), mp_obj_get_int(units_obj));
+    drivetrain_set_turn_velocity(self->cpp_handle, mp_vex_get_float(velocity_obj), mp_obj_get_int(units_obj));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_turn_velocity_obj, mp_drivetrain_set_turn_velocity);
@@ -1274,21 +1372,21 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_drivetrain_set_stopping_obj, mp_drivetrain_s
 
 static mp_obj_t mp_drivetrain_set_timeout(mp_obj_t self_ptr, mp_obj_t value_obj, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    drivetrain_set_timeout(self->cpp_handle, mp_obj_get_float(value_obj), mp_obj_get_int(units_obj));
+    drivetrain_set_timeout(self->cpp_handle, mp_vex_get_float(value_obj), mp_obj_get_int(units_obj));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_timeout_obj, mp_drivetrain_set_timeout);
 
 static mp_obj_t mp_drivetrain_set_heading(mp_obj_t self_ptr, mp_obj_t value_obj, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    drivetrain_set_heading(self->cpp_handle, mp_obj_get_float(value_obj), mp_obj_get_int(units_obj));
+    drivetrain_set_heading(self->cpp_handle, mp_vex_get_float(value_obj), mp_obj_get_int(units_obj));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_heading_obj, mp_drivetrain_set_heading);
 
 static mp_obj_t mp_drivetrain_set_rotation(mp_obj_t self_ptr, mp_obj_t value_obj, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    drivetrain_set_rotation(self->cpp_handle, mp_obj_get_float(value_obj), mp_obj_get_int(units_obj));
+    drivetrain_set_rotation(self->cpp_handle, mp_vex_get_float(value_obj), mp_obj_get_int(units_obj));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_drivetrain_set_rotation_obj, mp_drivetrain_set_rotation);
@@ -1308,20 +1406,20 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_drivetrain_is_moving_obj, mp_drivetrain_is_m
 static mp_obj_t mp_drivetrain_heading(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : 29;
-    return mp_obj_new_float(drivetrain_heading(self->cpp_handle, units));
+    return mp_vex_new_float(drivetrain_heading(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_heading_obj, 1, 2, mp_drivetrain_heading);
 
 static mp_obj_t mp_drivetrain_rotation(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : 29;
-    return mp_obj_new_float(drivetrain_rotation(self->cpp_handle, units));
+    return mp_vex_new_float(drivetrain_rotation(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_rotation_obj, 1, 2, mp_drivetrain_rotation);
 
 static mp_obj_t mp_drivetrain_velocity(mp_obj_t self_ptr, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(drivetrain_velocity(self->cpp_handle, mp_obj_get_int(units_obj)));
+    return mp_vex_new_float(drivetrain_velocity(self->cpp_handle, mp_obj_get_int(units_obj)));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_drivetrain_velocity_obj, mp_drivetrain_velocity);
 
@@ -1380,7 +1478,7 @@ static mp_obj_t mp_message_link_send(size_t n_args, const mp_obj_t *args) {
     mp_message_link_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     const char *message = mp_obj_str_get_str(args[1]);
     int integer_input = n_args > 2 ? mp_obj_get_int(args[2]) : 0;
-    float float_input = n_args > 3 ? mp_obj_get_float(args[3]) : 0.0f;
+    float float_input = n_args > 3 ? mp_vex_get_float(args[3]) : 0.0f;
     message_link_send(self->cpp_handle, message, integer_input, float_input);
     return mp_const_none;
 }
@@ -1403,7 +1501,7 @@ static mp_obj_t mp_message_link_receive(size_t n_args, const mp_obj_t *args) {
     mp_obj_t values[] = {
         mp_obj_new_str(buffer, (size_t)length),
         mp_obj_new_int(integer_output),
-        mp_obj_new_float(float_output),
+        mp_vex_new_float(float_output),
     };
     return mp_obj_new_tuple(3, values);
 }
@@ -1442,7 +1540,7 @@ static mp_obj_t mp_serial_link_send(size_t n_args, const mp_obj_t *args) {
     mp_serial_link_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     const char *message = mp_obj_str_get_str(args[1]);
     int integer_input = n_args > 2 ? mp_obj_get_int(args[2]) : 0;
-    float float_input = n_args > 3 ? mp_obj_get_float(args[3]) : 0.0f;
+    float float_input = n_args > 3 ? mp_vex_get_float(args[3]) : 0.0f;
     serial_link_send(self->cpp_handle, message, integer_input, float_input);
     return mp_const_none;
 }
@@ -1465,7 +1563,7 @@ static mp_obj_t mp_serial_link_receive(size_t n_args, const mp_obj_t *args) {
     mp_obj_t values[] = {
         mp_obj_new_str(buffer, (size_t)length),
         mp_obj_new_int(integer_output),
-        mp_obj_new_float(float_output),
+        mp_vex_new_float(float_output),
     };
     return mp_obj_new_tuple(3, values);
 }
@@ -1506,9 +1604,12 @@ static mp_obj_t mp_timer_time(size_t n_args, const mp_obj_t *args){
 
     int units = (n_args > 1) ? mp_obj_get_int(args[1]) : VEX_TIME_UNITS_MSEC;
 
-    int output;
-    output = vex_timer_time(self -> cpp_handle, units);
-    return mp_obj_new_int(output);
+    const double output = vex_timer_time(self -> cpp_handle, units);
+    // Seconds come back as a float (1.9 s stays 1.9); milliseconds stay an int.
+    if (units == VEX_TIME_UNITS_MSEC) {
+        return mp_obj_new_int((mp_int_t)output);
+    }
+    return mp_vex_new_float((mp_float_t)output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_timer_time_obj, 1, 2, mp_timer_time);
 
@@ -1549,6 +1650,7 @@ static mp_obj_t mp_vex_thread_make_new(const mp_obj_type_t *type, size_t n_args,
     self->thread_id = 0;
     self->stopped = false;
     self->done = false;
+    self->state = NULL;
     bool no_args = n_args == 1;
     mp_obj_t callback_items[] = {
         callback,
@@ -1580,8 +1682,7 @@ static mp_obj_t mp_vex_thread_is_done(mp_obj_t self_ptr) {
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_thread_is_done_obj, mp_vex_thread_is_done);
 
 static mp_obj_t mp_vex_thread_stop(mp_obj_t self_ptr) {
-    mp_vex_thread_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    self->stopped = true;
+    mp_vex_thread_request_stop(MP_OBJ_TO_PTR(self_ptr));
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_vex_thread_stop_obj, mp_vex_thread_stop);
@@ -1616,7 +1717,7 @@ static mp_obj_t mp_brain_battery_voltage(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = brain_battery_voltage(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_battery_voltage_obj, mp_brain_battery_voltage);
 
@@ -1627,7 +1728,7 @@ static mp_obj_t mp_brain_battery_current(mp_obj_t self_ptr, mp_obj_t units_t){
 
     float output;
     output = brain_battery_current(self -> cpp_handle, units);
-    return mp_obj_new_float(output);
+    return mp_vex_new_float(output);
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_battery_current_obj, mp_brain_battery_current);
 
@@ -1667,376 +1768,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &mp_brain_battery_locals_dict
 );
 
-/* Defining class brain.screen for micropython module. */
 
-static mp_obj_t mp_vex_stringify(mp_obj_t value) {
-    vstr_t buffer;
-    mp_print_t print;
-    vstr_init_print(&buffer, 16, &print);
-    mp_obj_print_helper(&print, value, PRINT_STR);
-    return mp_obj_new_str_from_utf8_vstr(&buffer);
-}
-
-static mp_obj_t mp_brain_screen_print(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args) {
-    enum { ARG_text, ARG_sep, ARG_precision };
-    static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_text, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_sep, MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_precision, MP_ARG_INT, {.u_int = 2} },
-    };
-    mp_arg_val_t values[MP_ARRAY_SIZE(allowed_args)];
-    mp_arg_parse_all(n_args - 1, args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, values);
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    mp_obj_t text_obj = mp_vex_stringify(values[ARG_text].u_obj);
-    const char *text = mp_obj_str_get_str(text_obj);
-    const char *sep = values[ARG_sep].u_obj == MP_OBJ_NULL
-        ? ""
-        : mp_obj_str_get_str(values[ARG_sep].u_obj);
-    int precision = values[ARG_precision].u_int;
-
-    brain_screen_print(self -> cpp_handle, text, sep, precision);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_KW(mp_brain_screen_print_obj, 1, mp_brain_screen_print);
-
-static mp_obj_t mp_brain_screen_set_cursor(mp_obj_t self_ptr, mp_obj_t row_t, mp_obj_t col_t){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    int row = mp_obj_get_int(row_t);
-    int col = mp_obj_get_int(col_t);
-
-    brain_screen_set_cursor(self -> cpp_handle, row, col);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_set_cursor_obj, mp_brain_screen_set_cursor);
-
-static mp_obj_t mp_brain_screen_next_row(mp_obj_t self_ptr){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    brain_screen_next_row(self -> cpp_handle);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_next_row_obj, mp_brain_screen_next_row);
-
-static mp_obj_t mp_brain_screen_clear_row(size_t n_args, const mp_obj_t *args){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-
-    int row = mp_obj_get_int(args[1]);
-    int color = (n_args > 2) ? mp_color_get_value(args[2]) : 0;
-
-    brain_screen_clear_row(self -> cpp_handle, row, color);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_clear_row_obj, 2, 3 , mp_brain_screen_clear_row);
-
-static mp_obj_t mp_brain_screen_row(mp_obj_t self_ptr){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    int output = 0;
-
-    output = brain_screen_row(self -> cpp_handle);
-    return mp_obj_new_int(output);
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_row_obj, mp_brain_screen_row);
-
-static mp_obj_t mp_brain_screen_column(mp_obj_t self_ptr){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    int output = 0;
-
-    output = brain_screen_column(self -> cpp_handle);
-    return mp_obj_new_int(output);
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_column_obj, mp_brain_screen_column);
-
-static mp_obj_t mp_brain_screen_print_at(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args) {
-    enum { ARG_text, ARG_x, ARG_y, ARG_sep, ARG_precision, ARG_opaque };
-    static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_text, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_x, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0} },
-        { MP_QSTR_y, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0} },
-        { MP_QSTR_sep, MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_precision, MP_ARG_INT, {.u_int = 2} },
-        { MP_QSTR_opaque, MP_ARG_BOOL, {.u_bool = true} },
-    };
-    mp_arg_val_t values[MP_ARRAY_SIZE(allowed_args)];
-    mp_arg_parse_all(n_args - 1, args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, values);
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    mp_obj_t text_obj = mp_vex_stringify(values[ARG_text].u_obj);
-    const char *text = mp_obj_str_get_str(text_obj);
-    int x = values[ARG_x].u_int;
-    int y = values[ARG_y].u_int;
-    const char *sep = values[ARG_sep].u_obj == MP_OBJ_NULL
-        ? " "
-        : mp_obj_str_get_str(values[ARG_sep].u_obj);
-    int precision = values[ARG_precision].u_int;
-    bool opaque = values[ARG_opaque].u_bool;
-
-    brain_screen_print_at(self -> cpp_handle, text, x, y, sep, precision, opaque);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_KW(mp_brain_screen_print_at_obj, 1, mp_brain_screen_print_at);
-
-static mp_obj_t mp_brain_screen_get_string_width(mp_obj_t self_ptr, mp_obj_t string_t){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    const char* text = mp_obj_str_get_str(string_t);
-
-    int output = 0;
-
-    output = brain_screen_get_string_width(self -> cpp_handle, text);
-    return mp_obj_new_int(output);
-}
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_get_string_width_obj, mp_brain_screen_get_string_width);
-
-static mp_obj_t mp_brain_screen_get_string_height(mp_obj_t self_ptr, mp_obj_t string_t){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    const char* text = mp_obj_str_get_str(string_t);
-
-    int output = 0;
-
-    output = brain_screen_get_string_height(self -> cpp_handle, text);
-    return mp_obj_new_int(output);
-}
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_get_string_height_obj, mp_brain_screen_get_string_height);
-
-static mp_obj_t mp_brain_screen_clear_line(mp_obj_t self_ptr, mp_obj_t line_t){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    int line = mp_obj_get_int(line_t);
-
-    brain_screen_clear_line(self -> cpp_handle, line);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_clear_line_obj, mp_brain_screen_clear_line);
-
-static mp_obj_t mp_brain_screen_new_line(mp_obj_t self_ptr){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    brain_screen_new_line(self -> cpp_handle);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_new_line_obj, mp_brain_screen_new_line);
-
-static mp_obj_t mp_brain_screen_clear_screen(size_t n_args, const mp_obj_t *args){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    int color = (n_args > 1) ? mp_color_get_value(args[1]) : 0; // Default to BLACK (0)
-
-    brain_screen_clear_screen(self->cpp_handle, color);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_clear_screen_obj, 1, 2, mp_brain_screen_clear_screen);
-
-static mp_obj_t mp_brain_screen_set_font(mp_obj_t self_ptr, mp_obj_t font_t){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    int font = mp_obj_get_int(font_t);
-
-    brain_screen_set_font(self -> cpp_handle, font);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_font_obj, mp_brain_screen_set_font);
-
-static mp_obj_t mp_brain_screen_set_pen_width(mp_obj_t self_ptr, mp_obj_t value_t){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    int value = mp_obj_get_int(value_t);
-
-    brain_screen_set_pen_width(self -> cpp_handle, value);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_pen_width_obj, mp_brain_screen_set_pen_width);
-
-static mp_obj_t mp_brain_screen_set_pen_color(mp_obj_t self_ptr, mp_obj_t color_t){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    int color = mp_color_get_value(color_t);
-
-    brain_screen_set_pen_color(self -> cpp_handle, color);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_pen_color_obj, mp_brain_screen_set_pen_color);
-
-static mp_obj_t mp_brain_screen_set_fill_color(mp_obj_t self_ptr, mp_obj_t color_t){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    int color = mp_color_get_value(color_t);
-
-    brain_screen_set_fill_color(self -> cpp_handle, color);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_fill_color_obj, mp_brain_screen_set_fill_color);
-
-static mp_obj_t mp_brain_screen_set_origin(mp_obj_t self_ptr, mp_obj_t x_t, mp_obj_t y_t){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    int x = mp_obj_get_int(x_t);
-    int y = mp_obj_get_int(y_t);
-
-    brain_screen_set_origin(self -> cpp_handle, x, y);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_set_origin_obj, mp_brain_screen_set_origin);
-
-static mp_obj_t mp_brain_screen_draw_pixel(mp_obj_t self_ptr, mp_obj_t x_t, mp_obj_t y_t){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    int x = mp_obj_get_int(x_t);
-    int y = mp_obj_get_int(y_t);
-
-    brain_screen_draw_pixel(self -> cpp_handle, x, y);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_draw_pixel_obj, mp_brain_screen_draw_pixel);
-
-static mp_obj_t mp_brain_screen_draw_line(size_t n_args, const mp_obj_t *args){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-
-    int start_x = mp_obj_get_int(args[1]);
-    int start_y = mp_obj_get_int(args[2]);
-    int end_x = mp_obj_get_int(args[3]);
-    int end_y = mp_obj_get_int(args[4]);
-
-    brain_screen_draw_line(self -> cpp_handle, start_x, start_y, end_x, end_y);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_line_obj, 5, 5, mp_brain_screen_draw_line);
-
-static mp_obj_t mp_brain_screen_draw_rectangle(size_t n_args, const mp_obj_t *args){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-
-    int x = mp_obj_get_int(args[1]);
-    int y = mp_obj_get_int(args[2]);
-    int width = mp_obj_get_int(args[3]);
-    int height = mp_obj_get_int(args[4]);
-    int color = (n_args > 5) ? mp_color_get_value(args[5]) : 0; // Default color is BLACK
-
-    brain_screen_draw_rectangle(self -> cpp_handle, x, y, width, height, color);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_rectangle_obj, 5, 6,mp_brain_screen_draw_rectangle);
-
-static mp_obj_t mp_brain_screen_draw_circle(size_t n_args, const mp_obj_t *args){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    int x = mp_obj_get_int(args[1]);
-    int y = mp_obj_get_int(args[2]);
-    int radius = mp_obj_get_int(args[3]);
-    int color = mp_color_get_value(args[4]);
-
-    brain_screen_draw_circle(self->cpp_handle, x, y, radius, color);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_circle_obj, 5, 5, mp_brain_screen_draw_circle);
-
-static mp_obj_t mp_brain_screen_render(mp_obj_t self_ptr){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    brain_screen_render(self -> cpp_handle);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_render_obj, mp_brain_screen_render);
-
-static mp_obj_t mp_brain_screen_set_clip_region(size_t n_args, const mp_obj_t *args){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-
-    int x = mp_obj_get_int(args[1]);
-    int y = mp_obj_get_int(args[2]);
-    int width = mp_obj_get_int(args[3]);
-    int height = mp_obj_get_int(args[4]);
-
-    brain_screen_set_clip_region(self -> cpp_handle, x, y, width, height);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_set_clip_region_obj, 5, 5, mp_brain_screen_set_clip_region);
-
-static mp_obj_t mp_brain_screen_pressing(mp_obj_t self_ptr){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    bool output = false;
-
-    output = brain_screen_pressing(self -> cpp_handle);
-    return output ? mp_const_true : mp_const_false;
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_pressing_obj, mp_brain_screen_pressing);
-
-static mp_obj_t mp_brain_screen_x_position(mp_obj_t self_ptr){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    int output = 0;
-
-    output = brain_screen_x_position(self -> cpp_handle);
-    return mp_obj_new_int(output);
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_x_position_obj, mp_brain_screen_x_position);
-
-static mp_obj_t mp_brain_screen_y_position(mp_obj_t self_ptr){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-
-    int output = 0;
-
-    output = brain_screen_y_position(self -> cpp_handle);
-    return mp_obj_new_int(output);
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_y_position_obj, mp_brain_screen_y_position);
-
-static mp_obj_t mp_brain_screen_pressed(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    mp_obj_t callback_data = mp_vex_callback_data(callback, args, false, false);
-
-    brain_screen_pressed(self -> cpp_handle, mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_pressed_obj, mp_brain_screen_pressed);
-
-static mp_obj_t mp_brain_screen_released(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    mp_obj_t callback_data = mp_vex_callback_data(callback, args, false, false);
-
-    brain_screen_released(self -> cpp_handle, mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_released_obj, mp_brain_screen_released);
-
-static const mp_rom_map_elem_t mp_brain_screen_locals_dict_table[] = {
-    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
-    { MP_ROM_QSTR(MP_QSTR_print), MP_ROM_PTR(&mp_brain_screen_print_obj) },
-    { MP_ROM_QSTR(MP_QSTR_set_cursor), MP_ROM_PTR(&mp_brain_screen_set_cursor_obj) },
-    { MP_ROM_QSTR(MP_QSTR_next_row), MP_ROM_PTR(&mp_brain_screen_next_row_obj) },
-    { MP_ROM_QSTR(MP_QSTR_clear_row), MP_ROM_PTR(&mp_brain_screen_clear_row_obj) },
-    { MP_ROM_QSTR(MP_QSTR_row), MP_ROM_PTR(&mp_brain_screen_row_obj) },
-    { MP_ROM_QSTR(MP_QSTR_column), MP_ROM_PTR(&mp_brain_screen_column_obj) },
-    { MP_ROM_QSTR(MP_QSTR_print_at), MP_ROM_PTR(&mp_brain_screen_print_at_obj) },
-    { MP_ROM_QSTR(MP_QSTR_get_string_width), MP_ROM_PTR(&mp_brain_screen_get_string_width_obj) },
-    { MP_ROM_QSTR(MP_QSTR_get_string_height), MP_ROM_PTR(&mp_brain_screen_get_string_height_obj) },
-    { MP_ROM_QSTR(MP_QSTR_clear_line), MP_ROM_PTR(&mp_brain_screen_clear_line_obj) },
-    { MP_ROM_QSTR(MP_QSTR_new_line), MP_ROM_PTR(&mp_brain_screen_new_line_obj) },
-    { MP_ROM_QSTR(MP_QSTR_clear_screen), MP_ROM_PTR(&mp_brain_screen_clear_screen_obj) },
-    { MP_ROM_QSTR(MP_QSTR_set_font), MP_ROM_PTR(&mp_brain_screen_set_font_obj) },
-    { MP_ROM_QSTR(MP_QSTR_set_pen_width), MP_ROM_PTR(&mp_brain_screen_set_pen_width_obj) },
-    { MP_ROM_QSTR(MP_QSTR_set_pen_color), MP_ROM_PTR(&mp_brain_screen_set_pen_color_obj) },
-    { MP_ROM_QSTR(MP_QSTR_set_fill_color), MP_ROM_PTR(&mp_brain_screen_set_fill_color_obj) },
-    { MP_ROM_QSTR(MP_QSTR_set_origin), MP_ROM_PTR(&mp_brain_screen_set_origin_obj) },
-    { MP_ROM_QSTR(MP_QSTR_draw_pixel), MP_ROM_PTR(&mp_brain_screen_draw_pixel_obj) },
-    { MP_ROM_QSTR(MP_QSTR_draw_line), MP_ROM_PTR(&mp_brain_screen_draw_line_obj) },
-    { MP_ROM_QSTR(MP_QSTR_draw_rectangle), MP_ROM_PTR(&mp_brain_screen_draw_rectangle_obj) },
-    { MP_ROM_QSTR(MP_QSTR_draw_circle), MP_ROM_PTR(&mp_brain_screen_draw_circle_obj) },
-    { MP_ROM_QSTR(MP_QSTR_render), MP_ROM_PTR(&mp_brain_screen_render_obj) },
-    { MP_ROM_QSTR(MP_QSTR_set_clip_region), MP_ROM_PTR(&mp_brain_screen_set_clip_region_obj) },
-    { MP_ROM_QSTR(MP_QSTR_pressing), MP_ROM_PTR(&mp_brain_screen_pressing_obj) },
-    { MP_ROM_QSTR(MP_QSTR_x_position), MP_ROM_PTR(&mp_brain_screen_x_position_obj) },
-    { MP_ROM_QSTR(MP_QSTR_y_position), MP_ROM_PTR(&mp_brain_screen_y_position_obj) },
-    { MP_ROM_QSTR(MP_QSTR_pressed), MP_ROM_PTR(&mp_brain_screen_pressed_obj) },
-    { MP_ROM_QSTR(MP_QSTR_released), MP_ROM_PTR(&mp_brain_screen_released_obj) },
-};
-static MP_DEFINE_CONST_DICT(mp_brain_screen_locals_dict, mp_brain_screen_locals_dict_table);
-
-MP_DEFINE_CONST_OBJ_TYPE(
-    mp_brain_screen_type,
-    MP_QSTR_screen,
-    MP_TYPE_FLAG_NONE,
-    locals_dict, &mp_brain_screen_locals_dict 
-);
 
 static mp_obj_t mp_brain_sdcard_loadfile(size_t n_args, const mp_obj_t *args){
     mp_brain_sdcard_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -2170,6 +1902,388 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_TYPE_FLAG_NONE,
     locals_dict, &mp_brain_sdcard_locals_dict
 );
+
+/* Defining class brain.screen for micropython module. */
+
+static mp_obj_t mp_vex_stringify(mp_obj_t value) {
+    vstr_t buffer;
+    mp_print_t print;
+    vstr_init_print(&buffer, 16, &print);
+    mp_obj_print_helper(&print, value, PRINT_STR);
+    return mp_obj_new_str_from_utf8_vstr(&buffer);
+}
+
+// VEXcode Python accepts floats for screen coordinates; truncate them like VEXcode.
+static int mp_vex_get_coord(mp_obj_t o) {
+    if (mp_obj_is_float(o)) {
+        return (int)mp_vex_get_float(o);
+    }
+    return mp_obj_get_int(o);
+}
+
+static mp_obj_t mp_brain_screen_print(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args) {
+    enum { ARG_text, ARG_sep, ARG_precision };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_text, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_sep, MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_precision, MP_ARG_INT, {.u_int = 2} },
+    };
+    mp_arg_val_t values[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args - 1, args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, values);
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_obj_t text_obj = mp_vex_stringify(values[ARG_text].u_obj);
+    const char *text = mp_obj_str_get_str(text_obj);
+    const char *sep = values[ARG_sep].u_obj == MP_OBJ_NULL
+        ? ""
+        : mp_obj_str_get_str(values[ARG_sep].u_obj);
+    int precision = values[ARG_precision].u_int;
+
+    brain_screen_print(self -> cpp_handle, text, sep, precision);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_KW(mp_brain_screen_print_obj, 1, mp_brain_screen_print);
+
+static mp_obj_t mp_brain_screen_set_cursor(mp_obj_t self_ptr, mp_obj_t row_t, mp_obj_t col_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int row = mp_vex_get_coord(row_t);
+    int col = mp_vex_get_coord(col_t);
+
+    brain_screen_set_cursor(self -> cpp_handle, row, col);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_set_cursor_obj, mp_brain_screen_set_cursor);
+
+static mp_obj_t mp_brain_screen_next_row(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    brain_screen_next_row(self -> cpp_handle);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_next_row_obj, mp_brain_screen_next_row);
+
+static mp_obj_t mp_brain_screen_clear_row(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    int row = mp_vex_get_coord(args[1]);
+    int color = (n_args > 2) ? mp_color_get_value(args[2]) : 0;
+
+    brain_screen_clear_row(self -> cpp_handle, row, color);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_clear_row_obj, 2, 3 , mp_brain_screen_clear_row);
+
+static mp_obj_t mp_brain_screen_row(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int output = 0;
+
+    output = brain_screen_row(self -> cpp_handle);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_row_obj, mp_brain_screen_row);
+
+static mp_obj_t mp_brain_screen_column(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int output = 0;
+
+    output = brain_screen_column(self -> cpp_handle);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_column_obj, mp_brain_screen_column);
+
+static mp_obj_t mp_brain_screen_print_at(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args) {
+    enum { ARG_text, ARG_x, ARG_y, ARG_sep, ARG_precision, ARG_opaque };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_text, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_x, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_y, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_sep, MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_precision, MP_ARG_INT, {.u_int = 2} },
+        { MP_QSTR_opaque, MP_ARG_BOOL, {.u_bool = true} },
+    };
+    mp_arg_val_t values[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args - 1, args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, values);
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_obj_t text_obj = mp_vex_stringify(values[ARG_text].u_obj);
+    const char *text = mp_obj_str_get_str(text_obj);
+    int x = mp_vex_get_coord(values[ARG_x].u_obj);
+    int y = mp_vex_get_coord(values[ARG_y].u_obj);
+    const char *sep = values[ARG_sep].u_obj == MP_OBJ_NULL
+        ? " "
+        : mp_obj_str_get_str(values[ARG_sep].u_obj);
+    int precision = values[ARG_precision].u_int;
+    bool opaque = values[ARG_opaque].u_bool;
+
+    brain_screen_print_at(self -> cpp_handle, text, x, y, sep, precision, opaque);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_KW(mp_brain_screen_print_at_obj, 1, mp_brain_screen_print_at);
+
+static mp_obj_t mp_brain_screen_get_string_width(mp_obj_t self_ptr, mp_obj_t string_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    const char* text = mp_obj_str_get_str(string_t);
+
+    int output = 0;
+
+    output = brain_screen_get_string_width(self -> cpp_handle, text);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_get_string_width_obj, mp_brain_screen_get_string_width);
+
+static mp_obj_t mp_brain_screen_get_string_height(mp_obj_t self_ptr, mp_obj_t string_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    const char* text = mp_obj_str_get_str(string_t);
+
+    int output = 0;
+
+    output = brain_screen_get_string_height(self -> cpp_handle, text);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_get_string_height_obj, mp_brain_screen_get_string_height);
+
+static mp_obj_t mp_brain_screen_clear_line(mp_obj_t self_ptr, mp_obj_t line_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int line = mp_vex_get_coord(line_t);
+
+    brain_screen_clear_line(self -> cpp_handle, line);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_clear_line_obj, mp_brain_screen_clear_line);
+
+static mp_obj_t mp_brain_screen_new_line(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    brain_screen_new_line(self -> cpp_handle);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_new_line_obj, mp_brain_screen_new_line);
+
+static mp_obj_t mp_brain_screen_clear_screen(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int color = (n_args > 1) ? mp_color_get_value(args[1]) : 0; // Default to BLACK (0)
+
+    brain_screen_clear_screen(self->cpp_handle, color);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_clear_screen_obj, 1, 2, mp_brain_screen_clear_screen);
+
+static mp_obj_t mp_brain_screen_set_font(mp_obj_t self_ptr, mp_obj_t font_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int font = mp_vex_get_coord(font_t);
+
+    brain_screen_set_font(self -> cpp_handle, font);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_font_obj, mp_brain_screen_set_font);
+
+static mp_obj_t mp_brain_screen_set_pen_width(mp_obj_t self_ptr, mp_obj_t value_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int value = mp_vex_get_coord(value_t);
+
+    brain_screen_set_pen_width(self -> cpp_handle, value);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_pen_width_obj, mp_brain_screen_set_pen_width);
+
+static mp_obj_t mp_brain_screen_set_pen_color(mp_obj_t self_ptr, mp_obj_t color_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int color = mp_color_get_value(color_t);
+
+    brain_screen_set_pen_color(self -> cpp_handle, color);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_pen_color_obj, mp_brain_screen_set_pen_color);
+
+static mp_obj_t mp_brain_screen_set_fill_color(mp_obj_t self_ptr, mp_obj_t color_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int color = mp_color_get_value(color_t);
+
+    brain_screen_set_fill_color(self -> cpp_handle, color);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_screen_set_fill_color_obj, mp_brain_screen_set_fill_color);
+
+static mp_obj_t mp_brain_screen_set_origin(mp_obj_t self_ptr, mp_obj_t x_t, mp_obj_t y_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int x = mp_vex_get_coord(x_t);
+    int y = mp_vex_get_coord(y_t);
+
+    brain_screen_set_origin(self -> cpp_handle, x, y);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_set_origin_obj, mp_brain_screen_set_origin);
+
+static mp_obj_t mp_brain_screen_draw_pixel(mp_obj_t self_ptr, mp_obj_t x_t, mp_obj_t y_t){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int x = mp_vex_get_coord(x_t);
+    int y = mp_vex_get_coord(y_t);
+
+    brain_screen_draw_pixel(self -> cpp_handle, x, y);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_draw_pixel_obj, mp_brain_screen_draw_pixel);
+
+static mp_obj_t mp_brain_screen_draw_line(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    int start_x = mp_vex_get_coord(args[1]);
+    int start_y = mp_vex_get_coord(args[2]);
+    int end_x = mp_vex_get_coord(args[3]);
+    int end_y = mp_vex_get_coord(args[4]);
+
+    brain_screen_draw_line(self -> cpp_handle, start_x, start_y, end_x, end_y);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_line_obj, 5, 5, mp_brain_screen_draw_line);
+
+static mp_obj_t mp_brain_screen_draw_rectangle(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    int x = mp_vex_get_coord(args[1]);
+    int y = mp_vex_get_coord(args[2]);
+    int width = mp_vex_get_coord(args[3]);
+    int height = mp_vex_get_coord(args[4]);
+    int color = (n_args > 5) ? mp_color_get_value(args[5]) : -1; // -1 = use set_fill_color()
+
+    brain_screen_draw_rectangle(self -> cpp_handle, x, y, width, height, color);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_rectangle_obj, 5, 6,mp_brain_screen_draw_rectangle);
+
+static mp_obj_t mp_brain_screen_draw_circle(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    int x = mp_vex_get_coord(args[1]);
+    int y = mp_vex_get_coord(args[2]);
+    int radius = mp_vex_get_coord(args[3]);
+    int color = (n_args > 4) ? mp_color_get_value(args[4]) : -1; // -1 = use set_fill_color()
+
+    brain_screen_draw_circle(self->cpp_handle, x, y, radius, color);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_draw_circle_obj, 4, 5, mp_brain_screen_draw_circle);
+
+static mp_obj_t mp_brain_screen_render(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    brain_screen_render(self -> cpp_handle);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_render_obj, mp_brain_screen_render);
+
+static mp_obj_t mp_brain_screen_set_clip_region(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+
+    int x = mp_vex_get_coord(args[1]);
+    int y = mp_vex_get_coord(args[2]);
+    int width = mp_vex_get_coord(args[3]);
+    int height = mp_vex_get_coord(args[4]);
+
+    brain_screen_set_clip_region(self -> cpp_handle, x, y, width, height);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_set_clip_region_obj, 5, 5, mp_brain_screen_set_clip_region);
+
+static mp_obj_t mp_brain_screen_pressing(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    bool output = false;
+
+    output = brain_screen_pressing(self -> cpp_handle);
+    return output ? mp_const_true : mp_const_false;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_pressing_obj, mp_brain_screen_pressing);
+
+static mp_obj_t mp_brain_screen_x_position(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int output = 0;
+
+    output = brain_screen_x_position(self -> cpp_handle);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_x_position_obj, mp_brain_screen_x_position);
+
+static mp_obj_t mp_brain_screen_y_position(mp_obj_t self_ptr){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+
+    int output = 0;
+
+    output = brain_screen_y_position(self -> cpp_handle);
+    return mp_obj_new_int(output);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_y_position_obj, mp_brain_screen_y_position);
+
+static mp_obj_t mp_brain_screen_pressed(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_obj_t callback_data = mp_vex_callback_data(callback, args, false, false);
+
+    brain_screen_pressed(self -> cpp_handle, mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_pressed_obj, mp_brain_screen_pressed);
+
+static mp_obj_t mp_brain_screen_released(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    mp_obj_t callback_data = mp_vex_callback_data(callback, args, false, false);
+
+    brain_screen_released(self -> cpp_handle, mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_released_obj, mp_brain_screen_released);
+
+static const mp_rom_map_elem_t mp_brain_screen_locals_dict_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
+    { MP_ROM_QSTR(MP_QSTR_print), MP_ROM_PTR(&mp_brain_screen_print_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_cursor), MP_ROM_PTR(&mp_brain_screen_set_cursor_obj) },
+    { MP_ROM_QSTR(MP_QSTR_next_row), MP_ROM_PTR(&mp_brain_screen_next_row_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clear_row), MP_ROM_PTR(&mp_brain_screen_clear_row_obj) },
+    { MP_ROM_QSTR(MP_QSTR_row), MP_ROM_PTR(&mp_brain_screen_row_obj) },
+    { MP_ROM_QSTR(MP_QSTR_column), MP_ROM_PTR(&mp_brain_screen_column_obj) },
+    { MP_ROM_QSTR(MP_QSTR_print_at), MP_ROM_PTR(&mp_brain_screen_print_at_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_string_width), MP_ROM_PTR(&mp_brain_screen_get_string_width_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_string_height), MP_ROM_PTR(&mp_brain_screen_get_string_height_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clear_line), MP_ROM_PTR(&mp_brain_screen_clear_line_obj) },
+    { MP_ROM_QSTR(MP_QSTR_new_line), MP_ROM_PTR(&mp_brain_screen_new_line_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clear_screen), MP_ROM_PTR(&mp_brain_screen_clear_screen_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_font), MP_ROM_PTR(&mp_brain_screen_set_font_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_pen_width), MP_ROM_PTR(&mp_brain_screen_set_pen_width_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_pen_color), MP_ROM_PTR(&mp_brain_screen_set_pen_color_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_fill_color), MP_ROM_PTR(&mp_brain_screen_set_fill_color_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_origin), MP_ROM_PTR(&mp_brain_screen_set_origin_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_pixel), MP_ROM_PTR(&mp_brain_screen_draw_pixel_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_line), MP_ROM_PTR(&mp_brain_screen_draw_line_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_rectangle), MP_ROM_PTR(&mp_brain_screen_draw_rectangle_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_circle), MP_ROM_PTR(&mp_brain_screen_draw_circle_obj) },
+    { MP_ROM_QSTR(MP_QSTR_render), MP_ROM_PTR(&mp_brain_screen_render_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_clip_region), MP_ROM_PTR(&mp_brain_screen_set_clip_region_obj) },
+    { MP_ROM_QSTR(MP_QSTR_pressing), MP_ROM_PTR(&mp_brain_screen_pressing_obj) },
+    { MP_ROM_QSTR(MP_QSTR_x_position), MP_ROM_PTR(&mp_brain_screen_x_position_obj) },
+    { MP_ROM_QSTR(MP_QSTR_y_position), MP_ROM_PTR(&mp_brain_screen_y_position_obj) },
+    { MP_ROM_QSTR(MP_QSTR_pressed), MP_ROM_PTR(&mp_brain_screen_pressed_obj) },
+    { MP_ROM_QSTR(MP_QSTR_released), MP_ROM_PTR(&mp_brain_screen_released_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_image_from_file), MP_ROM_PTR(&mp_brain_sdcard_draw_image_from_file_obj) },
+};
+static MP_DEFINE_CONST_DICT(mp_brain_screen_locals_dict, mp_brain_screen_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_brain_screen_type,
+    MP_QSTR_screen,
+    MP_TYPE_FLAG_NONE,
+    locals_dict, &mp_brain_screen_locals_dict 
+);
+
+
 
 static void mp_brain_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     // CRITICAL SAFETY GUARD: If self_in is uninstantiated metadata type, reject immediately
@@ -2429,7 +2543,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_digital_value_obj, mp_three_wire_
 
 static mp_obj_t mp_three_wire_pwm_value(mp_obj_t self_ptr){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(vex_three_wire_pwm_value(self->cpp_handle));
+    return mp_vex_new_float(vex_three_wire_pwm_value(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_pwm_value_obj, mp_three_wire_pwm_value);
 
@@ -2466,7 +2580,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_pressing_obj, mp_three_wire_press
 
 static mp_obj_t mp_three_wire_acceleration(mp_obj_t self_ptr){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(vex_three_wire_acceleration(self->cpp_handle));
+    return mp_vex_new_float(vex_three_wire_acceleration(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_acceleration_obj, mp_three_wire_acceleration);
 
@@ -2475,7 +2589,7 @@ static mp_obj_t mp_three_wire_brightness(size_t n_args, const mp_obj_t *args){
     if (n_args > 1 && mp_obj_get_int(args[1]) != MP_VEX_PERCENT){
         mp_raise_ValueError("units must be PERCENT");
     }
-    return mp_obj_new_float(vex_three_wire_brightness(self->cpp_handle));
+    return mp_vex_new_float(vex_three_wire_brightness(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_brightness_obj, 1, 2, mp_three_wire_brightness);
 
@@ -2517,7 +2631,7 @@ static mp_obj_t mp_three_wire_angle(size_t n_args, const mp_obj_t *args){
     if (units != MP_VEX_DEGREES && units != MP_VEX_PERCENT){
         mp_raise_ValueError("units must be DEGREES or PERCENT");
     }
-    return mp_obj_new_float(vex_three_wire_angle(self->cpp_handle, units));
+    return mp_vex_new_float(vex_three_wire_angle(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_angle_obj, 1, 2, mp_three_wire_angle);
 
@@ -2525,7 +2639,7 @@ static mp_obj_t mp_three_wire_heading(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     if (units != MP_VEX_DEGREES) mp_raise_ValueError("units must be DEGREES");
-    return mp_obj_new_float(vex_three_wire_heading(self->cpp_handle, units));
+    return mp_vex_new_float(vex_three_wire_heading(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_heading_obj, 1, 2, mp_three_wire_heading);
 
@@ -2533,13 +2647,13 @@ static mp_obj_t mp_three_wire_rotation(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     if (units != MP_VEX_DEGREES) mp_raise_ValueError("units must be DEGREES");
-    return mp_obj_new_float(vex_three_wire_rotation(self->cpp_handle, units));
+    return mp_vex_new_float(vex_three_wire_rotation(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_rotation_obj, 1, 2, mp_three_wire_rotation);
 
 static mp_obj_t mp_three_wire_set_heading(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float value = mp_obj_get_float(args[1]);
+    float value = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
     if (units != MP_VEX_DEGREES) mp_raise_ValueError("units must be DEGREES");
     vex_three_wire_set_heading(self->cpp_handle, value, units);
@@ -2549,7 +2663,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_set_heading_obj, 2, 3, 
 
 static mp_obj_t mp_three_wire_set_rotation(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float value = mp_obj_get_float(args[1]);
+    float value = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
     if (units != MP_VEX_DEGREES) mp_raise_ValueError("units must be DEGREES");
     vex_three_wire_set_rotation(self->cpp_handle, value, units);
@@ -2566,7 +2680,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_three_wire_calibrate_obj, mp_three_wire_cali
 
 static mp_obj_t mp_three_wire_set_position(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float value = mp_obj_get_float(args[1]);
+    float value = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
     vex_three_wire_set_position(self->cpp_handle, value, units);
@@ -2585,7 +2699,7 @@ static mp_obj_t mp_three_wire_position(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
-    return mp_obj_new_float(vex_three_wire_position(self->cpp_handle, units));
+    return mp_vex_new_float(vex_three_wire_position(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_position_obj, 1, 2, mp_three_wire_position);
 
@@ -2593,7 +2707,7 @@ static mp_obj_t mp_three_wire_velocity(size_t n_args, const mp_obj_t *args){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_RPM;
     mp_vex_check_velocity_units(units, false);
-    return mp_obj_new_float(vex_three_wire_velocity(self->cpp_handle, units));
+    return mp_vex_new_float(vex_three_wire_velocity(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_velocity_obj, 1, 2, mp_three_wire_velocity);
 
@@ -2610,7 +2724,7 @@ static mp_obj_t mp_three_wire_distance(size_t n_args, const mp_obj_t *args){
     if (units != MP_VEX_MM && units != MP_VEX_INCHES){
         mp_raise_ValueError("units must be MM or INCHES");
     }
-    return mp_obj_new_float(vex_three_wire_distance(self->cpp_handle, units));
+    return mp_vex_new_float(vex_three_wire_distance(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_three_wire_distance_obj, 2, 2, mp_three_wire_distance);
 
@@ -2623,7 +2737,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_three_wire_set_obj, mp_three_wire_set);
 
 static mp_obj_t mp_three_wire_set_state(mp_obj_t self_ptr, mp_obj_t value_obj){
     mp_three_wire_device_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    float value = mp_obj_get_float(value_obj);
+    float value = mp_vex_get_float(value_obj);
     if (value < -100.0f || value > 100.0f || value != value){
         mp_raise_ValueError("PWM value must be from -100 to 100");
     }
@@ -2777,7 +2891,7 @@ static mp_obj_t mp_rotation_make_new(const mp_obj_type_t *type, size_t n_args, s
 
 static mp_obj_t mp_rotation_set_position(size_t n_args, const mp_obj_t *args){
     mp_rotation_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float position = mp_obj_get_float(args[1]);
+    float position = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
     vex_rotation_set_position(self->cpp_handle, position, units);
@@ -2789,7 +2903,7 @@ static mp_obj_t mp_rotation_angle(size_t n_args, const mp_obj_t *args){
     mp_rotation_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
-    return mp_obj_new_float(vex_rotation_angle(self->cpp_handle, units));
+    return mp_vex_new_float(vex_rotation_angle(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_rotation_angle_obj, 1, 2, mp_rotation_angle);
 
@@ -2797,7 +2911,7 @@ static mp_obj_t mp_rotation_position(size_t n_args, const mp_obj_t *args){
     mp_rotation_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
-    return mp_obj_new_float(vex_rotation_position(self->cpp_handle, units));
+    return mp_vex_new_float(vex_rotation_position(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_rotation_position_obj, 1, 2, mp_rotation_position);
 
@@ -2805,7 +2919,7 @@ static mp_obj_t mp_rotation_velocity(mp_obj_t self_ptr, mp_obj_t units_obj){
     mp_rotation_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_obj);
     mp_vex_check_velocity_units(units, false);
-    return mp_obj_new_float(vex_rotation_velocity(self->cpp_handle, units));
+    return mp_vex_new_float(vex_rotation_velocity(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_rotation_velocity_obj, mp_rotation_velocity);
 
@@ -2870,7 +2984,7 @@ static mp_obj_t mp_inertial_heading(size_t n_args, const mp_obj_t *args){
     mp_inertial_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
-    return mp_obj_new_float(inertial_heading(self->cpp_handle, units));
+    return mp_vex_new_float(inertial_heading(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_inertial_heading_obj, 1, 2, mp_inertial_heading);
 
@@ -2878,7 +2992,7 @@ static mp_obj_t mp_inertial_rotation(size_t n_args, const mp_obj_t *args){
     mp_inertial_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     int units = n_args > 1 ? mp_obj_get_int(args[1]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
-    return mp_obj_new_float(inertial_rotation(self->cpp_handle, units));
+    return mp_vex_new_float(inertial_rotation(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_inertial_rotation_obj, 1, 2, mp_inertial_rotation);
 
@@ -2890,7 +3004,7 @@ static mp_obj_t mp_inertial_gyro_rate(size_t n_args, const mp_obj_t *args){
         mp_raise_ValueError("axis must be XAXIS, YAXIS, or ZAXIS");
     }
     mp_vex_check_velocity_units(units, true);
-    return mp_obj_new_float(inertial_gyro_rate(self->cpp_handle, axis, units));
+    return mp_vex_new_float(inertial_gyro_rate(self->cpp_handle, axis, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_inertial_gyro_rate_obj, 2, 3, mp_inertial_gyro_rate);
 
@@ -2902,13 +3016,13 @@ static mp_obj_t mp_inertial_orientation(size_t n_args, const mp_obj_t *args){
         mp_raise_ValueError("axis must be PITCH, ROLL, or YAW");
     }
     mp_vex_check_angle_units(units);
-    return mp_obj_new_float(inertial_orientation(self->cpp_handle, axis, units));
+    return mp_vex_new_float(inertial_orientation(self->cpp_handle, axis, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_inertial_orientation_obj, 2, 3, mp_inertial_orientation);
 
 static mp_obj_t mp_inertial_set_heading(size_t n_args, const mp_obj_t *args){
     mp_inertial_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float value = mp_obj_get_float(args[1]);
+    float value = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
     inertial_set_heading(self->cpp_handle, value, units);
@@ -2918,7 +3032,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_inertial_set_heading_obj, 2, 3, mp
 
 static mp_obj_t mp_inertial_set_rotation(size_t n_args, const mp_obj_t *args){
     mp_inertial_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    float value = mp_obj_get_float(args[1]);
+    float value = mp_vex_get_float(args[1]);
     int units = n_args > 2 ? mp_obj_get_int(args[2]) : MP_VEX_DEGREES;
     mp_vex_check_angle_units(units);
     inertial_set_rotation(self->cpp_handle, value, units);
@@ -2975,7 +3089,7 @@ static mp_obj_t mp_inertial_acceleration(mp_obj_t self_ptr, mp_obj_t axis_obj){
     if (axis != MP_VEX_AXIS_X && axis != MP_VEX_AXIS_Y && axis != MP_VEX_AXIS_Z){
         mp_raise_ValueError("axis must be XAXIS, YAXIS, or ZAXIS");
     }
-    return mp_obj_new_float(inertial_acceleration(self->cpp_handle, axis));
+    return mp_vex_new_float(inertial_acceleration(self->cpp_handle, axis));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_inertial_acceleration_obj, mp_inertial_acceleration);
 
@@ -3081,13 +3195,13 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mp_optical_color_obj, mp_optical_color);
 
 static mp_obj_t mp_optical_brightness(mp_obj_t self_ptr){
     mp_optical_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(optical_brightness(self->cpp_handle));
+    return mp_vex_new_float(optical_brightness(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_optical_brightness_obj, mp_optical_brightness);
 
 static mp_obj_t mp_optical_hue(mp_obj_t self_ptr){
     mp_optical_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(optical_hue(self->cpp_handle));
+    return mp_vex_new_float(optical_hue(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_optical_hue_obj, mp_optical_hue);
 
@@ -3142,13 +3256,13 @@ static mp_obj_t mp_distance_object_distance(size_t n_args, const mp_obj_t *args)
     if (units != MP_VEX_MM && units != MP_VEX_INCHES){
         mp_raise_ValueError("units must be MM or INCHES");
     }
-    return mp_obj_new_float(distance_object_distance(self->cpp_handle, units));
+    return mp_vex_new_float(distance_object_distance(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_distance_object_distance_obj, 1, 2, mp_distance_object_distance);
 
 static mp_obj_t mp_distance_object_velocity(mp_obj_t self_ptr){
     mp_distance_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(distance_object_velocity(self->cpp_handle));
+    return mp_vex_new_float(distance_object_velocity(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_distance_object_velocity_obj, mp_distance_object_velocity);
 
@@ -3207,7 +3321,7 @@ static mp_obj_t mp_gps_set_origin(size_t n_args, const mp_obj_t *args){
     mp_gps_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     const int units = mp_obj_get_int(args[3]);
     mp_gps_check_distance_units(units);
-    vex_gps_set_origin(self->cpp_handle, mp_obj_get_float(args[1]), mp_obj_get_float(args[2]), units);
+    vex_gps_set_origin(self->cpp_handle, mp_vex_get_float(args[1]), mp_vex_get_float(args[2]), units);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_gps_set_origin_obj, 4, 4, mp_gps_set_origin);
@@ -3220,8 +3334,8 @@ static mp_obj_t mp_gps_set_location(size_t n_args, const mp_obj_t *args){
     if (heading_units != MP_VEX_DEGREES){
         mp_raise_ValueError("heading_units must be DEGREES");
     }
-    vex_gps_set_location(self->cpp_handle, mp_obj_get_float(args[1]), mp_obj_get_float(args[2]),
-                         distance_units, mp_obj_get_float(args[4]), heading_units);
+    vex_gps_set_location(self->cpp_handle, mp_vex_get_float(args[1]), mp_vex_get_float(args[2]),
+                         distance_units, mp_vex_get_float(args[4]), heading_units);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_gps_set_location_obj, 6, 6, mp_gps_set_location);
@@ -3230,7 +3344,7 @@ static mp_obj_t mp_gps_x_position(mp_obj_t self_ptr, mp_obj_t units_obj){
     mp_gps_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     const int units = mp_obj_get_int(units_obj);
     mp_gps_check_distance_units(units);
-    return mp_obj_new_float(vex_gps_x_position(self->cpp_handle, units));
+    return mp_vex_new_float(vex_gps_x_position(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_gps_x_position_obj, mp_gps_x_position);
 
@@ -3238,13 +3352,13 @@ static mp_obj_t mp_gps_y_position(mp_obj_t self_ptr, mp_obj_t units_obj){
     mp_gps_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     const int units = mp_obj_get_int(units_obj);
     mp_gps_check_distance_units(units);
-    return mp_obj_new_float(vex_gps_y_position(self->cpp_handle, units));
+    return mp_vex_new_float(vex_gps_y_position(self->cpp_handle, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_gps_y_position_obj, mp_gps_y_position);
 
 static mp_obj_t mp_gps_heading(mp_obj_t self_ptr){
     mp_gps_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    return mp_obj_new_float(vex_gps_heading(self->cpp_handle));
+    return mp_vex_new_float(vex_gps_heading(self->cpp_handle));
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_gps_heading_obj, mp_gps_heading);
 
@@ -3254,7 +3368,7 @@ static mp_obj_t mp_gps_acceleration(mp_obj_t self_ptr, mp_obj_t axis_obj){
     if (axis != MP_VEX_AXIS_X && axis != MP_VEX_AXIS_Y && axis != MP_VEX_AXIS_Z){
         mp_raise_ValueError("axis must be XAXIS, YAXIS, or ZAXIS");
     }
-    return mp_obj_new_float(vex_gps_acceleration(self->cpp_handle, axis));
+    return mp_vex_new_float(vex_gps_acceleration(self->cpp_handle, axis));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_gps_acceleration_obj, mp_gps_acceleration);
 
@@ -3268,7 +3382,7 @@ static mp_obj_t mp_gps_gyro_rate(mp_obj_t self_ptr, mp_obj_t axis_obj, mp_obj_t 
     if (units != MP_VEX_DPS && units != MP_VEX_RPM){
         mp_raise_ValueError("units must be DPS or RPM");
     }
-    return mp_obj_new_float(vex_gps_gyro_rate(self->cpp_handle, axis, units));
+    return mp_vex_new_float(vex_gps_gyro_rate(self->cpp_handle, axis, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_gps_gyro_rate_obj, mp_gps_gyro_rate);
 
@@ -3282,7 +3396,7 @@ static mp_obj_t mp_gps_orientation(mp_obj_t self_ptr, mp_obj_t axis_obj, mp_obj_
     if (units != MP_VEX_DEGREES){
         mp_raise_ValueError("units must be DEGREES");
     }
-    return mp_obj_new_float(vex_gps_orientation(self->cpp_handle, axis, units));
+    return mp_vex_new_float(vex_gps_orientation(self->cpp_handle, axis, units));
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mp_gps_orientation_obj, mp_gps_orientation);
 
@@ -3698,6 +3812,7 @@ static mp_obj_t mp_vex_event_spawn_all(mp_vex_event_obj_t *self) {
         thread_obj->thread_id = 0;
         thread_obj->stopped = false;
         thread_obj->done = false;
+        thread_obj->state = NULL;
 
         mp_obj_t callback_items[] = {
             h_items[0],
@@ -3884,6 +3999,7 @@ static const mp_rom_map_elem_t mp_color_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ORANGE), MP_ROM_INT(0xFFA500) },
     { MP_ROM_QSTR(MP_QSTR_PURPLE), MP_ROM_INT(0x800080) },
     { MP_ROM_QSTR(MP_QSTR_CYAN), MP_ROM_INT(0x00FFFF) },
+    { MP_ROM_QSTR(MP_QSTR_TRANSPARENT), MP_ROM_INT(0x1000000) }, // bit 24 = draw nothing
 };
 static MP_DEFINE_CONST_DICT(mp_color_locals_dict, mp_color_locals_dict_table);
 
@@ -3989,7 +4105,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_FontType), MP_ROM_PTR(&mp_font_type) },
     { MP_ROM_QSTR(MP_QSTR_AxisType), MP_ROM_PTR(&mp_axis_type) },
     { MP_ROM_QSTR(MP_QSTR_TurnType), MP_ROM_PTR(&mp_turn_type) },
-    { MP_ROM_QSTR(MP_QSTR_LEDStateType), MP_ROM_PTR(&mp_led_state_type) },
+    { MP_ROM_QSTR(MP_QSTR_LedStateType), MP_ROM_PTR(&mp_led_state_type) },
     { MP_ROM_QSTR(MP_QSTR_ObjectSizeType), MP_ROM_PTR(&mp_object_size_type) },
     { MP_ROM_QSTR(MP_QSTR_Color), MP_ROM_PTR(&mp_color_type) },
     { MP_ROM_QSTR(MP_QSTR_DistanceUnits), MP_ROM_PTR(&mp_distance_units_type) },
@@ -4075,6 +4191,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ORANGE),      MP_ROM_INT(0xFFA500) },
     { MP_ROM_QSTR(MP_QSTR_PURPLE),      MP_ROM_INT(0x800080) },
     { MP_ROM_QSTR(MP_QSTR_CYAN),        MP_ROM_INT(0x00FFFF) },
+    { MP_ROM_QSTR(MP_QSTR_TRANSPARENT), MP_ROM_INT(0x1000000) },
     
 };
 static MP_DEFINE_CONST_DICT(vex_module_globals, vex_module_globals_table);

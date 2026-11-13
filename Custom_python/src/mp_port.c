@@ -11,6 +11,9 @@
 #include "py/obj.h"
 #include "py/mpprint.h"
 #include "py/stream.h"
+#include "py/mphal.h"
+
+void vex_show_error_popup(const char *text);
 
 typedef struct _mp_vex_file_obj_t {
     mp_obj_base_t base;
@@ -225,10 +228,50 @@ const mp_obj_module_t mp_module_errno = { .base = { &mp_type_module } };
 #endif
 
 
+// Text sink for one error report. Never allocates (the error may be a
+// MemoryError) and silently drops what doesn't fit.
+typedef struct {
+    char buf[2048];
+    size_t len;
+} mp_port_error_text_t;
+
+static void mp_port_error_text_strn(void *data, const char *str, size_t len) {
+    mp_port_error_text_t *t = data;
+    size_t room = sizeof(t->buf) - 1 - t->len;
+    if (len > room) {
+        len = room;
+    }
+    memcpy(t->buf + t->len, str, len);
+    t->len += len;
+    t->buf[t->len] = '\0';
+}
+
+// Report an uncaught exception like VEXcode V5 Python: the traceback goes to
+// the terminal and into a red error box on the brain screen. header may be NULL.
+// SystemExit is ignored. Call with the GIL held.
+void mp_port_report_exception(const char *header, mp_obj_t exc) {
+    if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(mp_obj_get_type(exc)), MP_OBJ_FROM_PTR(&mp_type_SystemExit))) {
+        return;
+    }
+    static mp_port_error_text_t text;   // GIL held, so one report at a time
+    text.len = 0;
+    text.buf[0] = '\0';
+    mp_print_t print = { &text, mp_port_error_text_strn };
+    if (header != NULL) {
+        mp_printf(&print, "%s\n", header);
+    }
+    mp_obj_print_exception(&print, exc);
+    mp_hal_stdout_tx_strn(text.buf, text.len);
+    vex_show_error_popup(text.buf);
+}
+
 int mp_do_str(const char *src, int input_kind) {
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
-        qstr source_name = qstr_from_str("<stdin>");
+        // Name the frozen script "main.py" so tracebacks read
+        //   File "main.py", line 12, in <module>
+        // like VEXcode V5 Python, instead of "<stdin>".
+        qstr source_name = qstr_from_str("main.py");
         mp_lexer_t *lex = mp_lexer_new_from_str_len(source_name, src, strlen(src), 0);
         if (lex == NULL) {
             printf("Error: MicroPython failed to allocate lexer for the script string!\n");
@@ -248,8 +291,11 @@ int mp_do_str(const char *src, int input_kind) {
         nlr_pop(); // Code executed successfully! Pop the safety buffer.
         return 1;
     } else {
-        printf("MicroPython script error:\n");
-        mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
+        mp_obj_t exc = MP_OBJ_FROM_PTR(nlr.ret_val);
+        if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(mp_obj_get_type(exc)), MP_OBJ_FROM_PTR(&mp_type_SystemExit))) {
+            return 1; // sys.exit() is a normal way to end the program
+        }
+        mp_port_report_exception(NULL, exc);
         return 0;
     }
 }

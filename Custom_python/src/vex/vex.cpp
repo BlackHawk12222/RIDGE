@@ -498,7 +498,7 @@ void vex_timer_clear(void* timer_ptr){
     static_cast<Timer*>(timer_ptr)->clear();
 }
 
-int vex_timer_time(void* timer_ptr, int units){
+double vex_timer_time(void* timer_ptr, int units){
     return static_cast<Timer*>(timer_ptr)->time(static_cast<TimeUnits>(units));
 }
 #include <map>
@@ -654,6 +654,10 @@ void brain_screen_draw_circle(void* screen_ptr, int x, int y, int radius, int co
 
 void brain_screen_render(void* screen_ptr){
     static_cast<Screen*>(screen_ptr) -> render();
+}
+
+void vex_show_error_popup(const char* text){
+    Screen::show_error(text == nullptr ? "" : text);
 }
 
 void brain_screen_set_clip_region(void* screen_ptr, int x, int y, int width, int height){

@@ -1,20 +1,21 @@
 #include "vex/Sensors/Distance.hpp"
+#include "vex/safe_value.hpp"
 
 Distance::Distance(Ports port){
     Sensor = new pros::Distance(static_cast<std::uint8_t>(port));
 }
 
 float Distance::object_distance(DistanceUnits units){
-    const float millimeters = static_cast<float>(Sensor->get_distance());
+    const float millimeters = static_cast<float>(vsafe::num(Sensor->get_distance()));
     return units == INCHES ? millimeters / 25.4f : millimeters;
 }
 
 float Distance::object_velocity(){
-    return static_cast<float>(Sensor->get_object_velocity());
+    return static_cast<float>(vsafe::num(Sensor->get_object_velocity()));
 }
 
 ObjectSize Distance::object_size(){
-    const int size = Sensor->get_object_size();
+    const int size = vsafe::num(Sensor->get_object_size());
     if (size < 0){
         return static_cast<ObjectSize>(size);
     }
@@ -31,6 +32,6 @@ ObjectSize Distance::object_size(){
 }
 
 bool Distance::is_object_detected(){
-    const int millimeters = Sensor->get_distance();
+    const int millimeters = vsafe::num(Sensor->get_distance());
     return millimeters >= 20 && millimeters <= 2000;
 }

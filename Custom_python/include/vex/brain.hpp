@@ -6,6 +6,9 @@
 #include <sstream>
 #include <map>
 #include <deque>
+#include <functional>
+#include <cstdint>
+#include <atomic>
 #include "main.h"
 #include "vex/font_init.h"
 #include "timer.hpp"
@@ -88,158 +91,137 @@ class Battery{
 };
 
 class Screen{
+    public:
+        static constexpr int WIDTH = 480;
+        static constexpr int HEIGHT = 272;
+        // Passed as a color to draw_rectangle/draw_circle to mean "use set_fill_color()".
+        static constexpr std::uint32_t USE_FILL = 0xFFFFFFFFu;
+
+        // Starts the LVGL backend. Call once from initialize(); later calls do nothing.
+        // Drawing calls also start it on first use.
+        static void init();
+
+        // Shows an error box on top of everything on the brain screen, like the
+        // red error popup VEXcode V5 Python shows for an uncaught exception.
+        // Safe to call from any task. Tap the box to hide it; a new error
+        // shows it again. Only the last lines fit, so the error line is kept.
+        static void show_error(const std::string& text);
+
+        void print(std::string text, std::string sep = "", int precision = 2);
+        void set_cursor(int row, int col);
+        void next_row();
+        void clear_row(int row=-1, Color color= Color(0)); // Default color is BLACK.
+        int row();
+        int column();
+        void print_at(std::string text, int x, int y, std::string sep=" ", int precision=2, bool opaque=true);
+        int get_string_width(std::string string);
+        int get_string_height(std::string string);
+        void clear_line(int line);
+        void new_line();
+        void clear_screen(Color color= Color(0)); // Default color is BLACK.
+        void set_font(Font font);
+        void set_pen_width(int value);
+        void set_pen_color(Color color);
+        void set_fill_color(Color color);
+        void set_origin(int x, int y);
+        void draw_pixel(int x, int y);
+        void draw_line(int start_x, int start_y, int end_x, int end_y);
+        void draw_rectangle(int x, int y, int width, int height, Color color = Color(USE_FILL));
+        void draw_circle(int x, int y, int radius, Color color = Color(USE_FILL));
+        // Blits 0xRRGGBB pixels (row-major, width*height). Used by SdCard images.
+        void draw_buffer(const std::uint32_t* pixels, int x, int y, int width, int height);
+        void render();
+        void set_clip_region(int x, int y, int width, int height);
+        bool pressing();
+        int x_position();
+        int y_position();
+
+        template<typename Func, typename... Args>
+        void pressed(Func callback, Args... args) {
+            set_touch_callback(true, [=]() { std::invoke(callback, args...); });
+        }
+
+        template<typename Func, typename... Args>
+        void released(Func callback, Args... args){
+            set_touch_callback(false, [=]() { std::invoke(callback, args...); });
+        }
+
     private:
-        pros::screen_touch_status_s_t status = pros::screen::touch_status();
+        enum class Op : std::uint8_t { Text, Rect, Circle, Line, Pixel, Blit, Clear };
+
+        // One drawing command. Built on the caller's thread, executed on the LVGL thread.
+        struct Cmd {
+            Op op = Op::Clear;
+            std::int16_t x = 0, y = 0;     // Line: start. Circle: center.
+            std::int16_t w = 0, h = 0;     // Line: end x/y. Circle: w = radius.
+            std::int16_t cx1 = 0, cy1 = 0, cx2 = WIDTH - 1, cy2 = HEIGHT - 1; // clip, inclusive
+            std::uint32_t pen = 0xFFFFFF;
+            std::uint32_t fill = 0x000000;
+            std::uint8_t pen_width = 1;
+            bool opaque = false;
+            const lv_font_t* font = nullptr;
+            std::string text;
+            std::vector<std::uint32_t> pixels;
+        };
+
+        // Per-object drawing state (caller's thread only).
         Font font = MONO20;
-        int ScreenX = 0;
-        int ScreenY = 0;
-        int XPos = 0;
-        int YPos = 0;
-        int YOffset = 0;
+        int ScreenX = 1;              // 1-based column, like VEXcode
+        int ScreenY = 1;              // 1-based row, like VEXcode
         int XOffset = 0;
-        int PenWidth = 0;
-        pros::Color PenColor = pros::Color::white;
-        uint32_t BackgroundColor = 0;
-        bool Render = false;
-
-        std::vector<int> YBuffer;
-        std::vector<int> XBuffer;
-        std::vector<std::string> StringBuffer;
-        std::vector<bool> OpaqueBuffer;
-        std::map<std::pair<int, int>, lv_obj_t*> TextLabels;
-
-        static inline std::function<void()> current_callback_pressed = nullptr;
-
-        static void pros_callback_bridge_pressed() {
-            if (current_callback_pressed) {
-                current_callback_pressed(); 
-            }
-        }
-
-        static inline std::function<void()> current_callback_released = nullptr;
-
-        static void pros_callback_bridge_released() {
-            if (current_callback_released) {
-                current_callback_released(); 
-            }
-        }
+        int YOffset = 0;
+        int PenWidth = 1;
+        std::uint32_t PenColor = 0xFFFFFF;
+        std::uint32_t FillColor = 0x000000;
+        std::uint32_t BackgroundColor = 0x000000;
+        std::int16_t ClipX1 = 0, ClipY1 = 0, ClipX2 = WIDTH - 1, ClipY2 = HEIGHT - 1;
+        bool Render = false;          // true after the first render(): double-buffered
+        std::vector<Cmd> Frame;       // commands waiting for the next render()
 
         bool is_number(const std::string& str);
         const lv_font_t* current_font() const;
         int font_height() const;
         int character_width() const;
         std::string format_text(const std::string& text, const std::string& sep, int precision);
-        void draw_text(const std::string& text, int x, int y, bool opaque);
-        void delete_text_labels(int x, int y, int width, int height);
+        Cmd make_cmd(Op op) const;
+        void submit(Cmd&& cmd);
 
-        enum class LvglCmdType {
-            DrawText,
-            DeleteArea,
-            ClearAll
-        };
-        
-        struct LvglCmd {
-            LvglCmdType type;
-            std::string text;
-            int x = 0;
-            int y = 0;
-            int width = 0;
-            int height = 0;
-            bool opaque = true;
-            const lv_font_t* font_ptr = nullptr;
-            uint32_t pen_color = 0xFFFFFF;
-            uint32_t bg_color = 0x000000;
-        };
-        
-        pros::Mutex lvgl_queue_mutex_;
-        std::deque<LvglCmd> lvgl_queue_;
-        pros::Task* lvgl_worker_task_ = nullptr;
-        
-        void ensure_lvgl_worker();
-        void process_lvgl_queue();
-        void apply_draw_text_lvgl(const LvglCmd& cmd);
-        void apply_delete_area_lvgl(const LvglCmd& cmd);
-        void apply_clear_all_lvgl();
-
-    public:
-        void print(std::string text, std::string sep = "", int precision = 2);
-
-        void set_cursor(int row, int col);
-
-        void next_row();
-
-        void clear_row(int row=-1, Color color= Color(0)); // Default color is BLACK.
-
-        int row();
-
-        int column();
-
-        void print_at(std::string text, int x, int y, std::string sep=" ", int precision=2, bool opaque=true);
-
-        int get_string_width(std::string string);
-
-        int get_string_height(std::string string);
-
-        void clear_line(int line);
-
-        void new_line();
-
-        void clear_screen(Color color= Color(0)); // Default color is BLACK.
-
-        void set_font(Font font);
-
-        void set_pen_width(int value);
-
-        void set_pen_color(Color color);
-
-        void set_fill_color(Color color);
-
-        void set_origin(int x, int y);
-
-        void draw_pixel(int x, int y);
-
-        void draw_line(int start_x, int start_y, int end_x, int end_y);
-
-        void draw_rectangle(int x, int y, int width, int height, Color color);
-
-        void draw_circle(int x, int y, int radius, Color color);
-
-        void render();
-
-        void set_clip_region(int x, int y, int width, int height);
-
-        bool pressing();
-
-        int x_position();
-
-        int y_position();
-
-        template<typename Func, typename... Args>
-        void pressed(Func callback, Args... args) {
-            // Bind the function and its arguments into a single parameterless lambda
-            current_callback_pressed = [=]() {
-                std::invoke(callback, args...); 
-            };
-
-            // Pass the static bridge function pointer to PROS
-            pros::screen::touch_callback(pros_callback_bridge_pressed, pros::E_TOUCH_PRESSED);
-        }
-
-        template<typename Func, typename... Args>
-        void released(Func callback, Args... args){
-
-            // Bind the function and its arguments into a single parameterless lambda
-            current_callback_released = [=]() {
-                std::invoke(callback, args...); 
-            };
-
-            // Pass the static bridge function pointer to PROS
-            pros::screen::touch_callback(pros_callback_bridge_released, pros::E_TOUCH_RELEASED);
-        }
+        // Shared LVGL backend (one physical screen).
+        static inline std::vector<Cmd> queue_;                 // guarded by queue_mutex()
+        static inline lv_obj_t* canvas_ = nullptr;             // LVGL thread only
+        static inline lv_draw_buf_t* buf_ = nullptr;           // LVGL thread only
+        static inline std::atomic<bool> started_{false};
+        static inline std::atomic<int> touch_x_{0};
+        static inline std::atomic<int> touch_y_{0};
+        static inline std::atomic<bool> touch_down_{false};
+        static inline std::atomic<std::uint32_t> press_events_{0};
+        static inline std::atomic<std::uint32_t> release_events_{0};
+        static inline std::function<void()> on_pressed_;       // guarded by callback_mutex()
+        static inline std::function<void()> on_released_;      // guarded by callback_mutex()
+        static inline pros::Task* callback_task_ = nullptr;
+        static pros::Mutex& queue_mutex();
+        static pros::Mutex& callback_mutex();
+        static void enqueue(Cmd&& cmd);
+        static void enqueue_frame(std::vector<Cmd>& frame);
+        static void lvgl_tick(lv_timer_t* timer);
+        static inline std::string error_text_;                 // guarded by queue_mutex()
+        static inline std::atomic<bool> error_pending_{false};
+        static inline std::string error_shown_;                // LVGL thread only
+        static inline bool error_active_ = false;              // LVGL thread only
+        static inline lv_area_t error_area_{};                 // LVGL thread only
+        static bool update_error_box();
+        static void draw_error_box();
+        static void dismiss_error_box();
+        static void create_canvas();
+        static void execute(std::vector<Cmd>& work);
+        static void poll_touch();
+        static void set_touch_callback(bool on_press, std::function<void()> fn);
 };
 
 class SdCard{
     private:
+        Screen* screen = nullptr;
+        friend class Brain;
         // --- Private Helper: Safe Bare-Metal BMP Decoder ---
         void draw_bmp(std::ifstream& file, int x_offset, int y_offset);
         
@@ -267,6 +249,7 @@ class SdCard{
 
 class Brain{
     public:
+        Brain() { sdcard.screen = &screen; }
         ThreeWirePort three_wire_port;
         Screen screen;
         SdCard sdcard;

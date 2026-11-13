@@ -5,5 +5,6 @@ mp_obj_list_t mp_sys_argv_obj;
 mp_obj_t sys_mutable[MP_SYS_MUTABLE_NUM];
 mp_obj_t vex_callback_roots;
 mp_obj_t vex_competition_callbacks;
+mp_obj_t vex_competition_thread;
 mp_obj_t vex_pending_competition_event;
 mp_sched_item_t sched_queue[(32)];

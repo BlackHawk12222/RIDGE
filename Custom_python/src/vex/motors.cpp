@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <stdexcept>
+#include "vex/safe_value.hpp"
 #include <initializer_list>
 #include <cmath>
 #include "main.h"
@@ -9,6 +11,37 @@ extern "C"{
     #include "py/obj.h"
 }
 
+// Max RPM of a V5 motor cartridge; 200 (green) when unknown.
+static double motor_max_rpm(pros::MotorGears gearing){
+    switch (gearing){
+        case pros::MotorGears::ratio_6_to_1: return 600.0;
+        case pros::MotorGears::ratio_18_to_1: return 200.0;
+        case pros::MotorGears::ratio_36_to_1: return 100.0;
+        default: return 200.0;
+    }
+}
+
+// VEX GearSetting values (8, 18, 36) are not PROS gearset values (2, 1, 0).
+static pros::v5::MotorGears to_pros_gears(GearSetting gears){
+    switch (gears){
+        case RATIO_6_1: return pros::v5::MotorGears::ratio_6_to_1;
+        case RATIO_36_1: return pros::v5::MotorGears::ratio_36_to_1;
+        case RATIO_18_1:
+        default: return pros::v5::MotorGears::ratio_18_to_1;
+    }
+}
+
+// VEX velocity to PROS RPM. False for units that are not a speed.
+static bool velocity_to_rpm(double velocity, VelocityUnits units, double max_rpm, double& rpm){
+    switch (units){
+        case RPM: rpm = velocity; return true;
+        case VELOCITY_PERCENT: rpm = velocity * max_rpm / 100.0; return true;
+        case DPS: rpm = velocity / 6.0; return true;
+        case VELOCITY_VOLT: rpm = velocity * max_rpm / 12.0; return true;
+        default: return false;
+    }
+}
+
 Motor::Motor(Ports port, GearSetting gears, bool reversed){
     PortNum = port;
     Ratio = gears;
@@ -16,243 +49,144 @@ Motor::Motor(Ports port, GearSetting gears, bool reversed){
 
     std::int8_t active_port = IsReversed ? -static_cast<std::int8_t>(PortNum) : static_cast<std::int8_t>(PortNum);
 
-    this->motor = new pros::Motor(active_port, static_cast<pros::v5::MotorGears>(Ratio));
+    this->motor = new pros::Motor(active_port, to_pros_gears(Ratio));
     this->BASE = this->motor;
 }
 
 
+// Called after every timed command. A later command bumps CommandGen, so an
+// old timeout never stops a newer movement.
 void Motor::timeout(){
-    int target_ms = (TimeoutType == SECONDS) ? static_cast<int>(TimeoutTime * 1000.0f)
-                                             : static_cast<int>(TimeoutTime);
-    int elapsed_ms = 0;
-
-    while (elapsed_ms < target_ms && std::abs(motor->get_actual_velocity()) > 1.0) {
-        elapsed_ms += 10;
-        pros::delay(10);
+    const std::uint32_t gen = ++CommandGen;
+    if (TimeoutTime < 0.0f) {
+        return;
     }
-
-    motor->brake();
+    const int ms = get_timeout();
+    pros::Task([this, gen, ms]() {
+        pros::delay(ms);
+        if (CommandGen == gen) {
+            motor->brake();
+        }
+    }, "timeout");
 }
 
 
 void Motor::spin(Direction direction, float velocity, VelocityUnits units){
+    // 601 means "no velocity given": use set_velocity()'s value and units.
     if (velocity == 601){
         velocity = Velocity;
+        units = DefaultVelocityUnits;
     }
-    bool reverse = direction == REVERSE;
-    velocity = reverse ? -velocity : velocity;
+    const double sign = direction == REVERSE ? -1.0 : 1.0;
+    ++CommandGen;
 
-    switch(units) {
-        case RPM:
-        {
-            motor->move_velocity(velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            break;
-        }
-        case VELOCITY_VOLT:
-        {
-            velocity*=10;
-            motor->move(velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            }
-            break;
-        }
-        case VELOCITY_PERCENT:
-        {
-            velocity*= static_cast<int>(motor->get_gearing());
-            motor->move_velocity(velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            }
-            break;
-        }
-        case DPS:{
-            velocity/=360;
-            motor->move_velocity(velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            }
-            break;
-        }
-        default:
-        {
-            mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            break;
-        }
+    if (units == VELOCITY_VOLT){
+        motor->move_voltage(static_cast<std::int32_t>(std::lround(vsafe::num(sign * velocity * 1000.0))));
+        return;
     }
-    
+    double rpm = 0.0;
+    if (!velocity_to_rpm(velocity, units, motor_max_rpm(motor->get_gearing()), rpm)){
+        mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
+        return;
+    }
+    motor->move_velocity(static_cast<std::int32_t>(std::lround(vsafe::num(sign * rpm))));
 }
 
 void Motor::spin_for(Direction direction, int angle, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
+    // 601 means "no velocity given": use set_velocity()'s value and units.
     if (velocity == 601){
         velocity = Velocity;
+        units_v = DefaultVelocityUnits;
     }
-    bool reverse = direction == REVERSE;
-    velocity = reverse ? -velocity : velocity;
 
-    switch(units) {
-        case RPM:
-        {
-            motor->move_relative(angle, velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
-                    pros::delay(10);
-                }
-            }
-            break;
-        }
-        case VELOCITY_PERCENT:
-        {
-            velocity*= static_cast<int>(motor->get_gearing());
-            motor->move_relative(angle, velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
-                    pros::delay(10);
-                }
-            }
-            break;
-        }
+    double degrees = static_cast<double>(angle);
+    switch (units) {
+        case DEGREES: break;
+        case TURNS: degrees *= 360.0; break;
         default:
-        {
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::spin_for");
-            break;
-        }
+            return;
+    }
+
+    double rpm = 0.0;
+    if (!velocity_to_rpm(velocity, units_v, motor_max_rpm(motor->get_gearing()), rpm)){
+        mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
+        return;
+    }
+    rpm = vsafe::num(std::abs(rpm));
+
+    // PROS move_relative takes direction from the sign of the distance, not the speed.
+    if (direction == REVERSE){
+        degrees = -degrees;
+    }
+
+    const double target = vsafe::num(motor->get_position()) + degrees;
+    motor->move_relative(degrees, static_cast<std::int32_t>(std::lround(rpm)));
+    timeout();
+
+    if (wait && degrees != 0.0 && rpm > 0.0){
+        wait_for_position(target);
     }
 }
 
 void Motor::spin_to_position(int rotation, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
-    /*fix to make units_v work and use switch statments*/
-    
-    if (velocity > 600.0 || velocity < -600.0) {
+    // 601 means "no velocity given": use set_velocity()'s value and units.
+    if (velocity == 601){
         velocity = Velocity;
+        units_v = DefaultVelocityUnits;
     }
 
-    switch (units_v){
-        case RPM:
-        {
-            break;
-        }
-        case VELOCITY_PERCENT:
-        {
-            float Max_RPM=1.0;
-            switch (motor->get_gearing())
-            {
-            case pros::MotorGear::ratio_6_to_1:
-            {
-                Max_RPM=6;
-                break;
-            }   
-            case pros::MotorGear::ratio_18_to_1:
-            {
-                Max_RPM=2;
-                break;
-            }
-            case pros::MotorGear::ratio_36_to_1:
-            {
-                Max_RPM=1;
-                break;
-            }
-            default:
-                break;
-            }
-            velocity/=Max_RPM;
-            break;
-        }
-        case DPS:
-        {
-            velocity*=6;  // Includes  * 360 to make DPM then / 60 to make DPS
-            break;
-        }
+    double degrees = static_cast<double>(rotation);
+    switch (units) {
+        case DEGREES: break;
+        case TURNS: degrees *= 360.0; break;
         default:
-        {
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::spin_to_position");
-            break;
-        }
+            return;
     }
 
-    switch (units){
-        case DEGREES:
-        {
-            motor->move_absolute(rotation, velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
-                    pros::delay(10);
-                }
-            }
+    double rpm = 0.0;
+    if (!velocity_to_rpm(velocity, units_v, motor_max_rpm(motor->get_gearing()), rpm)){
+        mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
+        return;
+    }
+    rpm = vsafe::num(std::abs(rpm));
+
+    motor->move_absolute(degrees, static_cast<std::int32_t>(std::lround(rpm)));
+    timeout();
+
+    if (wait && rpm > 0.0){
+        wait_for_position(degrees);
+    }
+}
+
+// Blocks until the motor is within 3 degrees of target, or has stopped
+// moving after starting (stalled, or stopped by its timeout).
+void Motor::wait_for_position(double target){
+    int elapsed_ms = 0;
+    while (std::abs(vsafe::num(motor->get_position()) - target) > 3.0){
+        if (elapsed_ms > 150 && std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0){
             break;
         }
-        case TURNS:
-        {
-            rotation/=360;
-            motor->move_absolute(rotation, velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout();
-                }, "timeout");
-            } 
-            if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
-                    pros::delay(10);
-                }
-            }
-            break;
-        }
-        default:
-        {
-            mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::spin_to_position");
-            break;
-        }
+        pros::delay(10);
+        elapsed_ms += 10;
     }
 }
 
 void Motor::stop(BrakeMode mode){
-    if (mode != NALL) {
-        motor->set_brake_mode((pros::v5::MotorBrake)mode);
-        motor->brake();
-    }else{
-        motor->set_brake_mode((pros::v5::MotorBrake)DefaultBrakeMode);
-        motor->brake();
-    }
+    ++CommandGen;
+    const BrakeMode brake_mode = mode != NALL ? mode : DefaultBrakeMode;
+    motor->set_brake_mode(static_cast<pros::v5::MotorBrake>(brake_mode));
+    motor->brake();
 }
 
 void Motor::set_position(float position, AngleUnits units){
     if (units == DEGREES){
         motor->set_zero_position(position);
     }else if (units == TURNS){
-        position/=360.0;
-        motor->set_zero_position(position);
+        motor->set_zero_position(position * 360.0);
     }else{
         mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-        throw std::runtime_error("Given Invalid Input in Motor::set_position");
     }
 }
 
@@ -266,82 +200,27 @@ void Motor::set_stopping(BrakeMode mode){
 }
 
 void Motor::set_max_torque(float value, TorqueUnits units){
-    switch (units){
-        case TORQUE_AMPS:
-        {
-            value/=1000;
-            motor->set_current_limit(value);
-            break;
-        }
-        case NM:
-        {
-            double Max_NM=1.0;
-            switch (motor->get_gearing())
-            {
-            case pros::MotorGear::ratio_6_to_1:
-            {
-                Max_NM=0.35;
-                break;
-            }   
-            case pros::MotorGear::ratio_18_to_1:
-            {
-                Max_NM=1.05;
-                break;
-            }
-            case pros::MotorGear::ratio_36_to_1:
-            {
-                Max_NM=2.1;
-                break;
-            }
-            default:
-                break;
-            }
-
-            value=(Max_NM/value) * 2500;
-            motor->set_current_limit(value);
-            break;
-        }
-        case INLB:
-        {
-            double Max_INLB=1.0;
-            switch (motor->get_gearing())
-            {
-            case pros::MotorGear::ratio_6_to_1:
-            {
-                Max_INLB=3.1f;
-                break;
-            }   
-            case pros::MotorGear::ratio_18_to_1:
-            {
-                Max_INLB=9.29;
-                break;
-            }
-            case pros::MotorGear::ratio_36_to_1:
-            {
-                Max_INLB=18.59;
-                break;
-            }
-            default:
-                break;
-            }
-
-            value=(Max_INLB/value) * 2500;
-            motor->set_current_limit(value);
-            break;
-        }
-        case TORQUE_PERCENT:
-        {
-            value*=25; // (Percent /100) * 2500
-            motor->set_current_limit(value);
-            break;
-        }
-        default:
-        {
-            mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::set_max_torque");
-            break;
-        }
+    double max_nm = 1.05;
+    double max_inlb = 9.29;
+    switch (motor->get_gearing()){
+        case pros::MotorGear::ratio_6_to_1: max_nm = 0.35; max_inlb = 3.1; break;
+        case pros::MotorGear::ratio_36_to_1: max_nm = 2.1; max_inlb = 18.59; break;
+        default: break;
     }
+
+    // PROS takes a current limit in mA; 2500 mA is the V5 maximum.
+    double limit_ma = 0.0;
+    switch (units){
+        case TORQUE_AMPS: limit_ma = value * 1000.0; break;
+        case NM: limit_ma = vsafe::div(value, max_nm) * 2500.0; break;
+        case INLB: limit_ma = vsafe::div(value, max_inlb) * 2500.0; break;
+        case TORQUE_PERCENT: limit_ma = value * 25.0; break;
+        default:
+            mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
+            return;
+    }
+    limit_ma = std::clamp(vsafe::num(limit_ma), 0.0, 2500.0);
+    motor->set_current_limit(static_cast<std::int32_t>(std::lround(limit_ma)));
 }
 
 void Motor::set_timeout(float value, TimeUnits units){
@@ -358,11 +237,11 @@ void Motor::reset_position(){
 }
 
 bool Motor::is_done(){
-    return std::abs(motor->get_actual_velocity()) < 1.0f;
+    return std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0f;
 }
 
 bool Motor::is_spinning(){
-    return std::abs(motor->get_actual_velocity()) >= 1.0f;
+    return std::abs(vsafe::num(motor->get_actual_velocity())) >= 1.0f;
 }
 
 float Motor::position(AngleUnits units){
@@ -370,12 +249,12 @@ float Motor::position(AngleUnits units){
     switch (units) {
         case DEGREES:
         {
-            output= (float)(motor->get_position());
+            output= (float)(vsafe::num(motor->get_position()));
             break;
         }
         case TURNS:
         {
-            output = (float)(motor->get_position()) / 360;
+            output = (float)(vsafe::num(motor->get_position())) / 360;
         }
     }
 
@@ -409,17 +288,17 @@ float Motor::velocity(VelocityUnits units){
                 break;
             }   
 
-            output= (float)(motor->get_actual_velocity()) / Max_RPM;
+            output= (float)(vsafe::num(motor->get_actual_velocity())) / Max_RPM;
             break;
         }
         case RPM:
         {
-            output= (float)(motor->get_actual_velocity());
+            output= (float)(vsafe::num(motor->get_actual_velocity()));
             break;
         }
         case DPS:
         {
-            output= (float)(motor->get_actual_velocity()) * 6;  // Includes  * 360 to make DPM then / 60 to make DPS
+            output= (float)(vsafe::num(motor->get_actual_velocity())) * 6;  // Includes  * 360 to make DPM then / 60 to make DPS
             break;
         }
         default:
@@ -434,11 +313,12 @@ float Motor::velocity(VelocityUnits units){
 }
 
 float Motor::current(CurrentUnits units){
-    return (float)(motor->get_actual_velocity()) /1000;
+    // PROS reports mA.
+    return static_cast<float>(vsafe::num(motor->get_current_draw()) / 1000.0);
 }
 
 float Motor::power(PowerUnits units){
-    return (float)(motor->get_power());
+    return (float)(vsafe::num(motor->get_power()));
 }
 
 float Motor::torque(TorqueUnits units){
@@ -446,13 +326,13 @@ float Motor::torque(TorqueUnits units){
     switch(units){
         case NM:
         {
-            output= (float)(motor->get_torque());
+            output= (float)(vsafe::num(motor->get_torque()));
             break;
         }
         case INLB:
         {
             float NMtoINLB = 8.8507f;
-            output= (float)(motor->get_torque()) / NMtoINLB;
+            output= (float)(vsafe::num(motor->get_torque())) / NMtoINLB;
             break;
         }
     }
@@ -460,31 +340,19 @@ float Motor::torque(TorqueUnits units){
 }
 
 float Motor::efficiency(EfficiencyUnits units){
-    return motor->get_efficiency();
+    return vsafe::num(motor->get_efficiency());
 }
 
 int Motor::temperature(TemperatureUnits units){
-    double raw_temp = motor->get_temperature();
-    if (!std::isfinite(raw_temp) || raw_temp < 0.0 || raw_temp > 200.0) {
-        return 2;
-    }
-
-    int output = 0;
+    const double celsius = vsafe::num(motor->get_temperature());
     switch(units){
-        case CELSIUS:
-            output = (int)std::round(raw_temp);
-            break;
-        case FAHRENHEIT:
-            output = (int)std::round((raw_temp * 1.8) + 32.0);
-            break;
-        case TEMPERATURE_PERCENT:
-            output = (int)std::round(raw_temp * 0.57143);
-            break;
+        case CELSIUS: return static_cast<int>(std::lround(celsius));
+        case FAHRENHEIT: return static_cast<int>(std::lround(celsius * 1.8 + 32.0));
+        case TEMPERATURE_PERCENT: return static_cast<int>(std::lround(celsius * 0.57143));
         default:
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::temperature");
+            return 0;
     }
-    return output;
 }
 
 
@@ -544,236 +412,139 @@ MotorGroup::MotorGroup(Motor** motor_array, int count){
     this -> Count=count;
 }
     
+// Called after every timed command. A later command bumps CommandGen, so an
+// old timeout never stops a newer movement.
 void MotorGroup::timeout(){
-    int target_ms = (TimeoutType == SECONDS) ? static_cast<int>(TimeoutTime * 1000.0f)
-                                             : static_cast<int>(TimeoutTime);
-    int elapsed_ms = 0;
-
-    while (elapsed_ms < target_ms && std::abs(motor->get_actual_velocity()) > 1.0) {
-        elapsed_ms += 10;
-        pros::delay(10);
+    const std::uint32_t gen = ++CommandGen;
+    if (TimeoutTime < 0.0f) {
+        return;
     }
-
-    motor->brake();
+    const int ms = get_timeout();
+    pros::Task([this, gen, ms]() {
+        pros::delay(ms);
+        if (CommandGen == gen) {
+            motor->brake();
+        }
+    }, "timeout");
 }
 
 
 void MotorGroup::spin(Direction direction, float velocity, VelocityUnits units){
+    // 601 means "no velocity given": use set_velocity()'s value and units.
     if (velocity == 601){
         velocity = Velocity;
+        units = DefaultVelocityUnits;
     }
-    bool reverse = direction == REVERSE;
-    velocity = reverse ? -velocity : velocity;
+    const double sign = direction == REVERSE ? -1.0 : 1.0;
+    ++CommandGen;
 
-    switch(units) {
-        case RPM:
-        {
-            motor->move_velocity(velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            break;
-        }
-        case VOLT:
-        {
-            velocity*=10;
-            motor->move(velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            }
-            break;        
-        }
-        case VELOCITY_PERCENT:
-        {
-            velocity*= static_cast<int>(motor->get_gearing());
-            motor->move_velocity(velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout();
-                }, "timeout");
-            }  
-            break;
-        }
-        case DPS:{
-            velocity/=360;
-            motor->move_velocity(velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            break;
-        }
-        default:
-        {
-            mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            break;
-        }
+    if (units == VELOCITY_VOLT){
+        motor->move_voltage(static_cast<std::int32_t>(std::lround(vsafe::num(sign * velocity * 1000.0))));
+        return;
     }
-    
+    double rpm = 0.0;
+    if (!velocity_to_rpm(velocity, units, motor_max_rpm(motor->get_gearing()), rpm)){
+        mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
+        return;
+    }
+    motor->move_velocity(static_cast<std::int32_t>(std::lround(vsafe::num(sign * rpm))));
 }
 
 void MotorGroup::spin_for(Direction direction, int angle, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
+    // 601 means "no velocity given": use set_velocity()'s value and units.
     if (velocity == 601){
         velocity = Velocity;
+        units_v = DefaultVelocityUnits;
     }
-    bool reverse = direction == REVERSE;
-    velocity = reverse ? -velocity : velocity;
 
-    switch(units) {
-        case RPM:
-        {
-            motor->move_relative(angle, velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
-                    pros::delay(10);
-                }
-            }
-            
-            break;
-        }
-        case VELOCITY_PERCENT:
-        {
-            velocity*= static_cast<int>(motor->get_gearing());
-            motor->move_relative(angle, velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
-                    pros::delay(10);
-                }
-            } 
-            break;
-        }
+    double degrees = static_cast<double>(angle);
+    switch (units) {
+        case DEGREES: break;
+        case TURNS: degrees *= 360.0; break;
         default:
-        {
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            break;
-        }
+            return;
+    }
+
+    double rpm = 0.0;
+    if (!velocity_to_rpm(velocity, units_v, motor_max_rpm(motor->get_gearing()), rpm)){
+        mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
+        return;
+    }
+    rpm = vsafe::num(std::abs(rpm));
+
+    // PROS move_relative takes direction from the sign of the distance, not the speed.
+    if (direction == REVERSE){
+        degrees = -degrees;
+    }
+
+    const double target = vsafe::num(motor->get_position()) + degrees;
+    motor->move_relative(degrees, static_cast<std::int32_t>(std::lround(rpm)));
+    timeout();
+
+    if (wait && degrees != 0.0 && rpm > 0.0){
+        wait_for_position(target);
     }
 }
 
 void MotorGroup::spin_to_position(int rotation, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
-    if (velocity > 600.0 || velocity < -600.0) {
+    // 601 means "no velocity given": use set_velocity()'s value and units.
+    if (velocity == 601){
         velocity = Velocity;
+        units_v = DefaultVelocityUnits;
     }
 
-    switch (units_v){
-        case RPM:
-        {
-            break;
-        }
-        case VELOCITY_PERCENT:
-        {
-            float Max_RPM=1.0;
-            switch (motor->get_gearing())
-            {
-            case pros::MotorGear::ratio_6_to_1:
-            {
-                Max_RPM=6;
-                break;
-            }   
-            case pros::MotorGear::ratio_18_to_1:
-            {
-                Max_RPM=2;
-                break;
-            }
-            case pros::MotorGear::ratio_36_to_1:
-            {
-                Max_RPM=1;
-                break;
-            }
-            default:
-                break;
-            }
-            velocity/=Max_RPM;
-            break;
-        }
-        case DPS:
-        {
-            velocity*=6;  // Includes  * 360 to make DPM then / 60 to make DPS
-            break;
-        }
+    double degrees = static_cast<double>(rotation);
+    switch (units) {
+        case DEGREES: break;
+        case TURNS: degrees *= 360.0; break;
         default:
-        {
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::spin_to_position");
-            break;
-        }
+            return;
     }
 
-    switch (units){
-        case DEGREES:
-        {
-            motor->move_absolute(rotation, velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
-                    pros::delay(10);
-                }
-            }
+    double rpm = 0.0;
+    if (!velocity_to_rpm(velocity, units_v, motor_max_rpm(motor->get_gearing()), rpm)){
+        mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
+        return;
+    }
+    rpm = vsafe::num(std::abs(rpm));
+
+    motor->move_absolute(degrees, static_cast<std::int32_t>(std::lround(rpm)));
+    timeout();
+
+    if (wait && rpm > 0.0){
+        wait_for_position(degrees);
+    }
+}
+
+// Blocks until the motor is within 3 degrees of target, or has stopped
+// moving after starting (stalled, or stopped by its timeout).
+void MotorGroup::wait_for_position(double target){
+    int elapsed_ms = 0;
+    while (std::abs(vsafe::num(motor->get_position()) - target) > 3.0){
+        if (elapsed_ms > 150 && std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0){
             break;
         }
-        case TURNS:
-        {
-            rotation/=360;
-            motor->move_absolute(rotation, velocity);
-            if (TimeoutTime != -1.0f) {
-                pros::Task timeout([this]() {
-                    this->timeout(); // Or simply timeout();
-                }, "timeout");
-            } 
-            if (wait){
-                while (std::abs(motor->get_actual_velocity()) > 1){
-                    pros::delay(10);
-                }
-            }
-            break;
-        }
-        default:
-        {
-            mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::spin_to_position");
-            break;
-        }
+        pros::delay(10);
+        elapsed_ms += 10;
     }
 }
 
 void MotorGroup::stop(BrakeMode mode){
-    if (mode != NALL) { 
-        motor->set_brake_mode((pros::v5::MotorBrake)mode);
-        motor->brake();
-    }else{
-        motor->set_brake_mode((pros::v5::MotorBrake)DefaultBrakeMode);
-        motor->brake();
-    }
+    ++CommandGen;
+    const BrakeMode brake_mode = mode != NALL ? mode : DefaultBrakeMode;
+    motor->set_brake_mode_all(static_cast<pros::v5::MotorBrake>(brake_mode));
+    motor->brake();
 }
 
 void MotorGroup::set_position(float position, AngleUnits units){
     if (units == DEGREES){
-        motor->set_zero_position(position);
+        motor->set_zero_position_all(position);
     }else if (units == TURNS){
-        position/=360.0;
-        motor->set_zero_position(position);
+        motor->set_zero_position_all(position * 360.0);
     }else{
         mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-        throw std::runtime_error("Given Invalid Input in Motor::set_position");
     }
 }
 
@@ -787,82 +558,27 @@ void MotorGroup::set_stopping(BrakeMode mode){
 }
 
 void MotorGroup::set_max_torque(float value, TorqueUnits units){
-    switch (units){
-        case TORQUE_AMPS:
-        {
-            value/=1000;
-            motor->set_current_limit(value);
-            break;
-        }
-        case NM:
-        {
-            double Max_NM=1.0;
-            switch (motor->get_gearing())
-            {
-            case pros::MotorGear::ratio_6_to_1:
-            {
-                Max_NM=0.35;
-                break;
-            }   
-            case pros::MotorGear::ratio_18_to_1:
-            {
-                Max_NM=1.05;
-                break;
-            }
-            case pros::MotorGear::ratio_36_to_1:
-            {
-                Max_NM=2.1;
-                break;
-            }
-            default:
-                break;
-            }
-
-            value=(Max_NM/value) * 2500;
-            motor->set_current_limit(value);
-            break;
-        }
-        case INLB:
-        {
-            double Max_INLB=1.0;
-            switch (motor->get_gearing())
-            {
-            case pros::MotorGear::ratio_6_to_1:
-            {
-                Max_INLB=3.1f;
-                break;
-            }   
-            case pros::MotorGear::ratio_18_to_1:
-            {
-                Max_INLB=9.29;
-                break;
-            }
-            case pros::MotorGear::ratio_36_to_1:
-            {
-                Max_INLB=18.59;
-                break;
-            }
-            default:
-                break;
-            }
-
-            value=(Max_INLB/value) * 2500;
-            motor->set_current_limit(value);
-            break;
-        }
-        case TORQUE_PERCENT:
-        {
-            value*=25; // (Percent /100) * 2500
-            motor->set_current_limit(value);
-            break;
-        }
-        default:
-        {
-            mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::set_max_torque");
-            break;
-        }
+    double max_nm = 1.05;
+    double max_inlb = 9.29;
+    switch (motor->get_gearing()){
+        case pros::MotorGear::ratio_6_to_1: max_nm = 0.35; max_inlb = 3.1; break;
+        case pros::MotorGear::ratio_36_to_1: max_nm = 2.1; max_inlb = 18.59; break;
+        default: break;
     }
+
+    // PROS takes a current limit in mA; 2500 mA is the V5 maximum.
+    double limit_ma = 0.0;
+    switch (units){
+        case TORQUE_AMPS: limit_ma = value * 1000.0; break;
+        case NM: limit_ma = vsafe::div(value, max_nm) * 2500.0; break;
+        case INLB: limit_ma = vsafe::div(value, max_inlb) * 2500.0; break;
+        case TORQUE_PERCENT: limit_ma = value * 25.0; break;
+        default:
+            mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
+            return;
+    }
+    limit_ma = std::clamp(vsafe::num(limit_ma), 0.0, 2500.0);
+    motor->set_current_limit_all(static_cast<std::int32_t>(std::lround(limit_ma)));
 }
 
 void MotorGroup::set_timeout(float value, TimeUnits units){
@@ -870,19 +586,19 @@ void MotorGroup::set_timeout(float value, TimeUnits units){
 }
 
 void MotorGroup::set_reversed(bool value){
-    motor->set_reversed(value);
+    motor->set_reversed_all(value);
 }
 
 void MotorGroup::reset_position(){
-    motor->tare_position();
+    motor->tare_position_all();
 }
 
 bool MotorGroup::is_done(){
-    return std::abs(motor->get_actual_velocity()) < 1.0f;
+    return std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0f;
 }
 
 bool MotorGroup::is_spinning(){
-    return std::abs(motor->get_actual_velocity()) >= 1.0f;
+    return std::abs(vsafe::num(motor->get_actual_velocity())) >= 1.0f;
 }
 
 float MotorGroup::position(AngleUnits units){
@@ -890,12 +606,12 @@ float MotorGroup::position(AngleUnits units){
     switch (units) {
         case DEGREES:
         {
-            output= (float)(motor->get_position());
+            output= (float)(vsafe::num(motor->get_position()));
             break;
         }
         case TURNS:
         {
-            output = (float)(motor->get_position()) / 360;
+            output = (float)(vsafe::num(motor->get_position())) / 360;
         }
     }
 
@@ -929,17 +645,17 @@ float MotorGroup::velocity(VelocityUnits units){
                 break;
             }   
 
-            output= (float)(motor->get_actual_velocity()) / Max_RPM;
+            output= (float)(vsafe::num(motor->get_actual_velocity())) / Max_RPM;
             break;
         }
         case RPM:
         {
-            output= (float)(motor->get_actual_velocity());
+            output= (float)(vsafe::num(motor->get_actual_velocity()));
             break;
         }
         case DPS:
         {
-            output= (float)(motor->get_actual_velocity()) * 6;  // Includes  * 360 to make DPM then / 60 to make DPS
+            output= (float)(vsafe::num(motor->get_actual_velocity())) * 6;  // Includes  * 360 to make DPM then / 60 to make DPS
             break;
         }
         default:
@@ -954,11 +670,12 @@ float MotorGroup::velocity(VelocityUnits units){
 }
 
 float MotorGroup::current(CurrentUnits units){
-    return (float)(motor->get_actual_velocity()) /1000;
+    // PROS reports mA.
+    return static_cast<float>(vsafe::num(motor->get_current_draw()) / 1000.0);
 }
 
 float MotorGroup::power(PowerUnits units){
-    return (float)(motor->get_power());
+    return (float)(vsafe::num(motor->get_power()));
 }
 
 float MotorGroup::torque(TorqueUnits units){
@@ -966,13 +683,13 @@ float MotorGroup::torque(TorqueUnits units){
     switch(units){
         case NM:
         {
-            output= (float)(motor->get_torque());
+            output= (float)(vsafe::num(motor->get_torque()));
             break;
         }
         case INLB:
         {
             float NMtoINLB = 8.8507f;
-            output= (float)(motor->get_torque()) / NMtoINLB;
+            output= (float)(vsafe::num(motor->get_torque())) / NMtoINLB;
             break;
         }
     }
@@ -980,35 +697,19 @@ float MotorGroup::torque(TorqueUnits units){
 }
 
 float MotorGroup::efficiency(EfficiencyUnits units){
-    return motor->get_efficiency();
+    return vsafe::num(motor->get_efficiency());
 }
 
 int MotorGroup::temperature(TemperatureUnits units){
-    unsigned short int output=0;
+    const double celsius = vsafe::num(motor->get_temperature());
     switch(units){
-        case CELSIUS:
-        {
-            output= (int)std::round((float)(motor->get_temperature()));
-            break;
-        }
-        case FAHRENHEIT:
-        {
-            output= (int)std::round((float)(motor->get_temperature()) / 1.8f) + 32;
-            break;
-        }
-        case TEMPERATURE_PERCENT:
-        {
-            output= (int)std::round((float)(motor->get_temperature()) * 0.57143f);
-            break;
-        }
+        case CELSIUS: return static_cast<int>(std::lround(celsius));
+        case FAHRENHEIT: return static_cast<int>(std::lround(celsius * 1.8 + 32.0));
+        case TEMPERATURE_PERCENT: return static_cast<int>(std::lround(celsius * 0.57143));
         default:
-        {
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
-            throw std::runtime_error("Given Invalid Input in Motor::temperature");
-            break;
-        }
+            return 0;
     }
-    return output;
 }
 
 int MotorGroup::get_timeout(){
