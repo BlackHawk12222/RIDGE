@@ -3,7 +3,40 @@
 
 namespace frozen_py {
 
-constexpr const char* main_py = R"PY_EOF(# ---------------------------------------------------------------------------- #
+constexpr const char* main_py = R"PY_EOF(#region VEXcode Generated Robot Configuration
+from vex import *
+import ACPv1
+
+# Brain should be defined by default
+brain=Brain()
+
+# Robot configuration code
+controller_1 = Controller(PRIMARY)
+controller_interface = Controller(PARTNER)
+Right1 = Motor(Ports.PORT17, GearSetting.RATIO_6_1, False)
+Right2 = Motor(Ports.PORT18, GearSetting.RATIO_6_1, False)
+left1 = Motor(Ports.PORT19, GearSetting.RATIO_6_1, True)
+left2 = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)
+inertial = Inertial(Ports.PORT7)
+Xodom = Rotation(Ports.PORT5)
+
+# add a small delay to make sure we don't print in the middle of the REPL header
+wait(200, MSEC)
+# clear the console to make sure we don't have the REPL in the console
+print("\033[2J")
+
+#Future aton test
+def aton():
+    pass
+
+# Aton Functions
+comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
+
+while True:
+    wait(20, MSEC) # fail over
+)PY_EOF";
+
+constexpr const char* main_ridge_py = R"PY_EOF(# ---------------------------------------------------------------------------- #
 #                                                                              #
 # 	Module:       main.py                                                      #
 # 	Author:       Kyle V                                                       #
@@ -22,21 +55,6 @@ if brain.sdcard.is_inserted():
     import ACPv1
 
 import math
-
-# def autonomous():
-#     brain.screen.clear_screen()
-#     brain.screen.print("autonomous code")
-#     # place automonous code here
-
-# def user_control():
-#     brain.screen.clear_screen()
-#     brain.screen.print("driver control")
-#     # place driver control in this while loop
-#     while True:
-#         wait(20, MSEC)
-
-# # create competition instance
-# comp = Competition(user_control, autonomous)
 
 # actions to do when the program starts
 brain.screen.clear_screen()
@@ -120,63 +138,6 @@ print("\033[2J")
 # define variables used for controlling motors based on controller inputs
 drivetrain_l_needs_to_be_stopped_controller_1 = False
 drivetrain_r_needs_to_be_stopped_controller_1 = False
-
-# define a task that will handle monitoring inputs from controller_1
-# def rc_auto_loop_function_controller_1():
-#      global drivetrain_l_needs_to_be_stopped_controller_1, drivetrain_r_needs_to_be_stopped_controller_1, remote_control_code_enabled
-#      # process the controller input every 20 milliseconds
-#      # update the motors based on the input values
-#      while True:
-#          if remote_control_code_enabled:
-            
-#              # calculate the drivetrain motor velocities from the controller joystick axies
-#              # left = axis3 + axis1
-#              # right = axis3 - axis1
-#              drivetrain_left_side_speed = controller_1.axis3.position() + controller_1.axis1.position()
-#              drivetrain_right_side_speed = controller_1.axis3.position() - controller_1.axis1.position()
-            
-#              # check if the value is inside of the deadband range
-#              if drivetrain_left_side_speed < 5 and drivetrain_left_side_speed > -5:
-#                  # check if the left motor has already been stopped
-#                  if drivetrain_l_needs_to_be_stopped_controller_1:
-#                      # stop the left drive motor
-#                      left_drive_smart.stop()
-#                      # tell the code that the left motor has been stopped
-#                      drivetrain_l_needs_to_be_stopped_controller_1 = False
-#              else:
-#                  # reset the toggle so that the deadband code knows to stop the left motor next
-#                  # time the input is in the deadband range
-#                  drivetrain_l_needs_to_be_stopped_controller_1 = True
-#              # check if the value is inside of the deadband range
-#              if drivetrain_right_side_speed < 5 and drivetrain_right_side_speed > -5:
-#                  # check if the right motor has already been stopped
-#                  if drivetrain_r_needs_to_be_stopped_controller_1:
-#                     # stop the right drive motor
-#                      right_drive_smart.stop()
-#                      # tell the code that the right motor has been stopped
-#                      drivetrain_r_needs_to_be_stopped_controller_1 = False
-#              else:
-#                  # reset the toggle so that the deadband code knows to stop the right motor next
-#                  # time the input is in the deadband range
-#                  drivetrain_r_needs_to_be_stopped_controller_1 = True
-            
-#              # only tell the left drive motor to spin if the values are not in the deadband range
-#              if drivetrain_l_needs_to_be_stopped_controller_1:
-#                  left_drive_smart.set_velocity(drivetrain_left_side_speed, PERCENT)
-#                  left_drive_smart.spin(FORWARD)
-#              # only tell the right drive motor to spin if the values are not in the deadband range
-#              if drivetrain_r_needs_to_be_stopped_controller_1:
-#                  right_drive_smart.set_velocity(drivetrain_right_side_speed, PERCENT)
-#                  right_drive_smart.spin(FORWARD)
-#          # wait before repeating the process
-#          wait(20, MSEC)
-
-# define variable for remote controller enable/disable
-# remote_control_code_enabled = True
-
-#rc_auto_loop_thread_controller_1 = Thread(rc_auto_loop_function_controller_1)
-
-#endregion VEXcode Generated Robot Configuration
 
 screen_precision = 0
 console_precision = 0
@@ -270,7 +231,6 @@ class robot():
                 right_drive_smart.spin(FORWARD)
             wait(5, MSEC)
 
-
     def autoload(self):
         global Loading, liftUp
         #loads and lifts a cup and pin stack in the intake
@@ -350,7 +310,6 @@ class display():
             self.BO.screen.print(motorPorts[i]+motorNames[i]+motors[i].temperature(PERCENT))
             self.BO.screen.next_row()
             
-
 class MotorTicks:
     def __init__(self):
         self.intakeOn = False
@@ -647,8 +606,6 @@ def ODOM_loop():
     PosY = PosY + -1 *Change_y
     wait(5, MSEC)
 
-
-
 def offset_accommodation():
     X_ACOM = 0
     #calculate the X_diff, which is subracted from the larger tracking wheel to find how much the robot has actually moved sideways; used to eliminate the X-change scripts picking up in-place rotation
@@ -669,8 +626,6 @@ def offset_accommodation():
     oldX_diff += X_diff
 
 #RUNNING SCRIPTS VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
-
-
 
 def color_switching():
     #initialize and run color sensing. Also set drive stopping and set Bar_switcher to 100% velocity
@@ -791,7 +746,6 @@ def prog_setup():
         brain.screen.print(str("XDIFF ") + str(X_diff))
         brain.screen.render()
         wait(5, MSEC)
-
 
 def CC_display_callback():
 
@@ -1163,9 +1117,10 @@ struct PyModule {
     const char* source;
 };
 
-constexpr size_t MODULE_COUNT = 2;
+constexpr size_t MODULE_COUNT = 3;
 constexpr PyModule MODULES[] = {
     {"main.py", main_py},
+    {"main_ridge.py", main_ridge_py},
     {"main_test.py", main_test_py},
 };
 
