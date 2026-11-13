@@ -1,4 +1,5 @@
 #include "vex/Inerital.hpp"
+#include "vex/safe_value.hpp"
 
 #include <cmath>
 
@@ -7,7 +8,7 @@ Inertial::Inertial(Ports port){
 }
 
 float Inertial::heading(AngleUnits units){
-    float degrees = static_cast<float>(Sensor->get_heading());
+    float degrees = static_cast<float>(vsafe::num(Sensor->get_heading()));
     if (TurnDirection == LEFT){
         degrees = std::fmod(360.0f - degrees, 360.0f);
     }
@@ -15,7 +16,7 @@ float Inertial::heading(AngleUnits units){
 }
 
 float Inertial::rotation(AngleUnits units){
-    float degrees = static_cast<float>(Sensor->get_rotation());
+    float degrees = static_cast<float>(vsafe::num(Sensor->get_rotation()));
     if (TurnDirection == LEFT){
         degrees = -degrees;
     }
@@ -26,10 +27,10 @@ float Inertial::gyro_rate(AxisType axis, VelocityUnits units){
     const pros::imu_gyro_s_t rate = Sensor->get_gyro_rate();
     float degrees_per_second;
     switch (axis){
-        case XAXIS: degrees_per_second = static_cast<float>(rate.x); break;
-        case YAXIS: degrees_per_second = static_cast<float>(rate.y); break;
-        case ZAXIS: degrees_per_second = static_cast<float>(rate.z); break;
-        default: return NAN;
+        case XAXIS: degrees_per_second = vsafe::fnum(rate.x); break;
+        case YAXIS: degrees_per_second = vsafe::fnum(rate.y); break;
+        case ZAXIS: degrees_per_second = vsafe::fnum(rate.z); break;
+        default: return 0.0f;
     }
 
     switch (units){
@@ -43,10 +44,10 @@ float Inertial::orientation(AxisType axis, AngleUnits units){
     const pros::euler_s_t orientation = Sensor->get_euler();
     float degrees;
     switch (axis){
-        case PITCH: degrees = static_cast<float>(orientation.pitch); break;
-        case ROLL: degrees = static_cast<float>(orientation.roll); break;
-        case YAW: degrees = static_cast<float>(orientation.yaw); break;
-        default: return NAN;
+        case PITCH: degrees = vsafe::fnum(orientation.pitch); break;
+        case ROLL: degrees = vsafe::fnum(orientation.roll); break;
+        case YAW: degrees = vsafe::fnum(orientation.yaw); break;
+        default: return 0.0f;
     }
     return units == TURNS ? degrees / 360.0f : degrees;
 }
@@ -68,7 +69,12 @@ void Inertial::set_rotation(float value, AngleUnits units){
 }
 
 void Inertial::calibrate(){
-    Sensor->reset(true);
+    // Non-blocking like VEXcode. Wait only until the IMU reports it has
+    // started, so is_calibrating() is true right after this returns.
+    Sensor->reset(false);
+    for (int i = 0; i < 20 && Sensor->get_status() != pros::ImuStatus::calibrating; ++i){
+        pros::delay(5);
+    }
 }
 
 void Inertial::reset_heading(){
@@ -90,10 +96,10 @@ bool Inertial::installed(){
 float Inertial::acceleration(AxisType type){
     const pros::imu_accel_s_t value = Sensor->get_accel();
     switch (type){
-        case XAXIS: return static_cast<float>(value.x);
-        case YAXIS: return static_cast<float>(value.y);
-        case ZAXIS: return static_cast<float>(value.z);
-        default: return NAN;
+        case XAXIS: return vsafe::fnum(value.x);
+        case YAXIS: return vsafe::fnum(value.y);
+        case ZAXIS: return vsafe::fnum(value.z);
+        default: return 0.0f;
     }
 }
 

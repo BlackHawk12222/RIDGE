@@ -158,6 +158,19 @@ static void do_load_from_lexer(mp_module_context_t *context, mp_lexer_t *lex) {
     mp_store_attr(MP_OBJ_FROM_PTR(&context->module), MP_QSTR___file__, MP_OBJ_NEW_QSTR(source_name));
     #endif
 
+    #ifdef MICROPY_PORT_SOURCE_NAME_STRIP_PREFIX
+    // Show SD-card modules in tracebacks by their project path
+    // ("ACPv1/CLEARv2/CLA.py") rather than the mount path ("/usd/ACPv1/...").
+    // __file__ above keeps the real path so file access still works.
+    {
+        const char *full_name = qstr_str(lex->source_name);
+        size_t prefix_len = strlen(MICROPY_PORT_SOURCE_NAME_STRIP_PREFIX);
+        if (strncmp(full_name, MICROPY_PORT_SOURCE_NAME_STRIP_PREFIX, prefix_len) == 0 && full_name[prefix_len] != '\0') {
+            lex->source_name = qstr_from_str(full_name + prefix_len);
+        }
+    }
+    #endif
+
     // parse, compile and execute the module in its context
     mp_obj_dict_t *mod_globals = context->module.globals;
     mp_parse_compile_execute(lex, MP_PARSE_FILE_INPUT, mod_globals, mod_globals);

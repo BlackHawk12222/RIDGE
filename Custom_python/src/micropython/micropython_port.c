@@ -149,7 +149,13 @@ size_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
     if (str == NULL || len == 0) {
         return 0;
     }
-    return fwrite(str, 1, len, stdout);
+    size_t written = fwrite(str, 1, len, stdout);
+    // stdout is buffered: flush at each line end so print() output and
+    // tracebacks reach the terminal right away, even if the program then hangs.
+    if (memchr(str, '\n', len) != NULL) {
+        fflush(stdout);
+    }
+    return written;
 }
 
 // Concrete implementation mapping to the underlying PROS API delay clock

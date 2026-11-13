@@ -60,6 +60,9 @@ typedef long mp_off_t;
 #define MICROPY_PY_SYS_PATH_ARGV_DEFAULTS (1)
 #define MICROPY_ENABLE_COMPILER (1)
 
+// Debugging: tracebacks show SD modules without the "/usd/" mount prefix.
+#define MICROPY_PORT_SOURCE_NAME_STRIP_PREFIX "/usd/"
+
 // No stdin implementation is provided by this port.
 #define MICROPY_PY_BUILTINS_INPUT       (0)
 #define MICROPY_PY_SYS_STDFILES         (0)

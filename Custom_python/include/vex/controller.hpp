@@ -3,6 +3,8 @@
 
 #include <tuple>
 #include <utility>
+#include <array>
+#include <string>
 
 #include "main.h"
 
@@ -11,14 +13,30 @@ enum ControllerType{
     PARTNER=51
 };
 
+// The V5 controller screen is 3 rows x 19 columns and its radio link only takes
+// about one text update every 50 ms. Writing faster floods the link (lag, missed
+// text, dropped connection). So print/clear only change a local copy of the
+// screen, and one background task sends a changed row at most every 55 ms.
+// Rows and columns are 1-based, like VEXcode.
 class ControllerScreen{
+    public:
+        static constexpr int ROWS = 3;
+        static constexpr int COLS = 19;
+
     private:
         pros::Controller* ControllerObj = nullptr;
 
-        int ScreenRow = 0;
-        int ScreenColumn = 0;
-        
+        int ScreenRow = 1;
+        int ScreenColumn = 1;
+
+        pros::Mutex Lock;                          // guards Wanted
+        std::array<std::string, ROWS> Wanted;      // what the screen should show
+        std::array<std::string, ROWS> Shown;       // what we last sent (flush task only)
+        pros::Task* Flusher = nullptr;
+
         bool is_number(const std::string& str);
+        void write(int row, int column, const std::string& text);
+        void flush_loop();
 
     public:
         ControllerScreen(pros::Controller* controller);

@@ -5,13 +5,13 @@ void Timer::clear(){
     TimeSub=pros::millis();
 }
 
-unsigned int Timer::time(TimeUnits units){
-    unsigned int elapsed = pros::millis() - TimeSub;
+double Timer::time(TimeUnits units){
+    const unsigned int elapsed = pros::millis() - TimeSub;
     switch (units){
         case MSEC:
             return elapsed;
         case SECONDS:
-            return elapsed / 1000;
+            return elapsed / 1000.0;
         default:
             return elapsed;
     }

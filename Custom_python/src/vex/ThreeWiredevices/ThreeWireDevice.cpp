@@ -1,4 +1,5 @@
 #include "vex/ThreeWireDevices/ThreeWireDevice.hpp"
+#include "vex/safe_value.hpp"
 
 #include "pros/rtos.hpp"
 
@@ -81,9 +82,9 @@ ThreeWireDevice::~ThreeWireDevice() {
 
 int ThreeWireDevice::value(int units) {
     if (kind_ == DigitalIn || kind_ == Bumper || kind_ == Limit) {
-        return digital_in_->get_value();
+        return vsafe::num(digital_in_->get_value());
     }
-    const int raw = analog_->get_value();
+    const int raw = vsafe::num(analog_->get_value());
     if (units == 23) {
         return raw * 100 / 4095;
     }
@@ -101,19 +102,19 @@ float ThreeWireDevice::pwm_value() const {
 }
 
 bool ThreeWireDevice::pressing() {
-    return digital_in_->get_value() != 0;
+    return vsafe::num(digital_in_->get_value()) != 0;
 }
 
 float ThreeWireDevice::acceleration() {
-    return (analog_->get_value() * (5.0f / 4095.0f) - 2.5f) / 0.8f;
+    return (vsafe::num(analog_->get_value()) * (5.0f / 4095.0f) - 2.5f) / 0.8f;
 }
 
 float ThreeWireDevice::brightness() {
-    return analog_->get_value() * 100.0f / 4095.0f;
+    return vsafe::num(analog_->get_value()) * 100.0f / 4095.0f;
 }
 
 int ThreeWireDevice::reflectivity() {
-    return analog_->get_value() * 100 / 4095;
+    return vsafe::num(analog_->get_value()) * 100 / 4095;
 }
 
 bool ThreeWireDevice::is_object_detected() {
@@ -126,7 +127,7 @@ void ThreeWireDevice::set_threshold(int threshold) {
 }
 
 float ThreeWireDevice::angle(int units) {
-    const float degrees = static_cast<float>(potentiometer_->get_angle()) / 10.0f;
+    const float degrees = static_cast<float>(vsafe::num(potentiometer_->get_angle())) / 10.0f;
     if (units == 23) {
         return degrees * 100.0f / (option_ ? 330.0f : 250.0f);
     }
@@ -134,21 +135,21 @@ float ThreeWireDevice::angle(int units) {
 }
 
 float ThreeWireDevice::heading(int units) {
-    const float degrees = static_cast<float>(gyro_->get_value()) / 10.0f + gyro_heading_offset_;
+    const float degrees = static_cast<float>(vsafe::num(gyro_->get_value())) / 10.0f + gyro_heading_offset_;
     return degrees_from_units(degrees, units);
 }
 
 float ThreeWireDevice::rotation(int units) {
-    const float degrees = static_cast<float>(gyro_->get_value()) / 10.0f + gyro_rotation_offset_;
+    const float degrees = static_cast<float>(vsafe::num(gyro_->get_value())) / 10.0f + gyro_rotation_offset_;
     return degrees_from_units(degrees, units);
 }
 
 void ThreeWireDevice::set_heading(float value, int units) {
-    gyro_heading_offset_ = (units == 30 ? value * 360.0f : value) - static_cast<float>(gyro_->get_value()) / 10.0f;
+    gyro_heading_offset_ = (units == 30 ? value * 360.0f : value) - static_cast<float>(vsafe::num(gyro_->get_value())) / 10.0f;
 }
 
 void ThreeWireDevice::set_rotation(float value, int units) {
-    gyro_rotation_offset_ = (units == 30 ? value * 360.0f : value) - static_cast<float>(gyro_->get_value()) / 10.0f;
+    gyro_rotation_offset_ = (units == 30 ? value * 360.0f : value) - static_cast<float>(vsafe::num(gyro_->get_value())) / 10.0f;
 }
 
 void ThreeWireDevice::calibrate() {
@@ -168,12 +169,12 @@ void ThreeWireDevice::reset_position() {
 }
 
 float ThreeWireDevice::position(int units) {
-    return degrees_from_units(static_cast<float>(encoder_->get_value()) + encoder_position_offset_, units);
+    return degrees_from_units(static_cast<float>(vsafe::num(encoder_->get_value())) + encoder_position_offset_, units);
 }
 
 float ThreeWireDevice::velocity(int units) {
     const auto now = pros::millis();
-    const auto current = encoder_->get_value();
+    const auto current = vsafe::num(encoder_->get_value());
     const auto elapsed = now - encoder_previous_time_;
     const float dps = elapsed == 0 ? 0.0f : (current - encoder_previous_) * 1000.0f / elapsed;
     encoder_previous_ = current;
@@ -182,11 +183,11 @@ float ThreeWireDevice::velocity(int units) {
 }
 
 bool ThreeWireDevice::found_object() {
-    return ultrasonic_->get_value() > 0;
+    return vsafe::num(ultrasonic_->get_value()) > 0;
 }
 
 float ThreeWireDevice::distance(int units) {
-    const float mm = static_cast<float>(ultrasonic_->get_value()) / 10.0f;
+    const float mm = static_cast<float>(vsafe::num(ultrasonic_->get_value())) / 10.0f;
     return inches_from_mm(mm, units);
 }
 
@@ -235,14 +236,14 @@ int ThreeWireDevice::watch_value(int event) {
         case 5:
         case 9:
         case 10:
-            return analog_->get_value();
+            return vsafe::num(analog_->get_value());
         case 1:
         case 2:
         case 3:
         case 4:
-            return digital_in_->get_value() != 0;
+            return vsafe::num(digital_in_->get_value()) != 0;
         case 6:
-            return potentiometer_->get_value();
+            return vsafe::num(potentiometer_->get_value());
         case 7:
         case 8:
             return is_object_detected();

@@ -18,10 +18,12 @@ def main():
             filename = os.path.basename(filepath)
             var_name = filename.replace(".", "_").replace("-", "_")
             
+            # No newline after R"PY_EOF( : line 1 of the string must be line 1 of
+            # the file, or every traceback line number is off by one.
             with open(filepath, "r", encoding="utf-8") as f:
                 code = f.read()
 
-            out.write(f'constexpr const char* {var_name} = R"PY_EOF(\n{code}\n)PY_EOF";\n\n')
+            out.write(f'constexpr const char* {var_name} = R"PY_EOF({code}\n)PY_EOF";\n\n')
             entries.append((filename, var_name))
 
         # Optional lookup table if your port needs to import other files by name

@@ -1,4 +1,5 @@
 #include "vex/Sensors/Optical.hpp"
+#include "vex/safe_value.hpp"
 
 Optical::Optical(Ports port){
     Sensor = new pros::Optical(static_cast<std::uint8_t>(port));
@@ -13,7 +14,7 @@ void Optical::set_light_power(int percent){
 }
 
 bool Optical::is_near_object(){
-    return Sensor->get_proximity() > 0;
+    return vsafe::num(Sensor->get_proximity()) > 0;
 }
 
 OpticalColor Optical::color(){
@@ -21,9 +22,9 @@ OpticalColor Optical::color(){
         return OpticalColor::BLACK;
     }
 
-    const float brightness_value = static_cast<float>(Sensor->get_brightness());
-    const float saturation = static_cast<float>(Sensor->get_saturation());
-    const float hue_value = static_cast<float>(Sensor->get_hue());
+    const float brightness_value = static_cast<float>(vsafe::num(Sensor->get_brightness()));
+    const float saturation = static_cast<float>(vsafe::num(Sensor->get_saturation()));
+    const float hue_value = static_cast<float>(vsafe::num(Sensor->get_hue()));
     if (brightness_value < 0.1f){
         return OpticalColor::BLACK;
     }
@@ -55,9 +56,10 @@ OpticalColor Optical::color(){
 }
 
 float Optical::brightness(){
-    return static_cast<float>(Sensor->get_brightness());
+    // PROS reports 0 to 1; VEX reports percent.
+    return static_cast<float>(vsafe::num(Sensor->get_brightness()) * 100.0);
 }
 
 float Optical::hue(){
-    return static_cast<float>(Sensor->get_hue());
+    return static_cast<float>(vsafe::num(Sensor->get_hue()));
 }
