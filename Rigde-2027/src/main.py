@@ -1492,12 +1492,12 @@ def liftTick_callback() -> None:
     """
 
     MT = MotorTicks()
-    liftGroup.set_velocity(100,PERCENT)
+    liftGroup.set_velocity(100, PERCENT)
     liftGroup.set_stopping(HOLD)
-    Claw.spin_to_position(-20,DEGREES)
+    Claw.spin_to_position(-20, DEGREES)
     while True:
         MT.lift_tick()
-        MT.intake_tick()
+        # MT.intake_tick()
         MT.liftTick()
         MT.grabberTick()
 
