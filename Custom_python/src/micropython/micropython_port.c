@@ -180,3 +180,52 @@ uint32_t pros_millis(void) {
     extern uint32_t millis(void);
     return millis();
 }
+
+// ---- Time HAL used by the time / select / asyncio modules ----
+#include "py/mpstate.h"
+#include "py/mpthread.h"
+#include "py/runtime.h"
+
+extern uint64_t micros(void);
+
+mp_uint_t mp_hal_ticks_us(void) {
+    return (mp_uint_t)micros();
+}
+
+mp_uint_t mp_hal_ticks_cpu(void) {
+    return (mp_uint_t)micros();
+}
+
+uint64_t mp_hal_time_ns(void) {
+    // No real-time clock: time.time() counts from program start, like VEXcode.
+    return micros() * 1000ULL;
+}
+
+void mp_hal_delay_us(mp_uint_t us) {
+    uint64_t end = micros() + us;
+    while (micros() < end) {
+    }
+}
+
+void mp_port_sleep_ms(mp_uint_t ms) {
+    extern void delay(const uint32_t milliseconds);
+    MP_THREAD_GIL_EXIT();
+    delay(ms);  // delay(0) just yields
+    MP_THREAD_GIL_ENTER();
+    mp_handle_pending(true);
+}
+
+void mp_port_sleep_us(mp_uint_t us) {
+    if (us >= 1000) {
+        mp_port_sleep_ms(us / 1000);
+        us %= 1000;
+    }
+    mp_hal_delay_us(us);
+}
+
+void mp_port_wfe(int timeout_ms) {
+    extern void delay(const uint32_t milliseconds);
+    MP_THREAD_GIL_EXIT();
+    delay(timeout_ms == 0 ? 0 : 1);
+    MP_THREAD_GIL_ENTER();
+}

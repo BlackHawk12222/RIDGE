@@ -92,6 +92,21 @@ typedef long mp_off_t;
     const char *readline_hist[8]; \
     mp_obj_t persistent_code_root_pointers;
 
+// ---- Modules VEXcode V5 Python has built in ----
+// time/utime, random/urandom, json/ujson, re/ure, binascii/ubinascii, select/uselect,
+// heapq/uheapq, hashlib/uhashlib (sha256),
+// asyncio/uasyncio (C core in extmod/, Python part frozen in frozen_content.c).
+// array, collections, io, struct, math, cmath, sys, gc, micropython come from py/.
+#define MICROPY_PY_TIME_INCLUDEFILE     "modtime_port.h"
+#define MICROPY_PY_TIME_TIME_TIME_NS    (1)
+#define MICROPY_MODULE_FROZEN_STR       (1)
+#define MICROPY_PY_HEAPQ                (1)
+#define MICROPY_PY_HASHLIB              (1)
+#define MICROPY_PY_HASHLIB_SHA256       (1)
+// Idle waits (select.poll, asyncio) give up the GIL and sleep 1 ms at a time.
+void mp_port_wfe(int timeout_ms);
+#define MICROPY_INTERNAL_WFE(TIMEOUT_MS) mp_port_wfe(TIMEOUT_MS)
+
 size_t mp_hal_stdout_tx_strn(const char *str, size_t len);
 
 #endif // INCLUDED_MPCONFIGPORT_H
