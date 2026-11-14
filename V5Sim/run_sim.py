@@ -57,6 +57,13 @@ def pack_config(robot, mips, bg_us, api_us, run_ms, sd, profile_us=0):
     for ev in robot.get("controller", []):
         idx = ev["input"].lower()
         ctrl.append((int(ev["t"]), 1 if ev.get("partner") else 0, CTRL_INDEX[idx], int(ev["value"])))
+    # Brain screen taps: {"t": ms, "x": px, "y": px, "ms": how long to hold (default 150)}
+    for ev in robot.get("touch", []):
+        t = int(ev["t"])
+        ctrl.append((t, 2, 1, int(ev["x"])))
+        ctrl.append((t, 2, 2, int(ev["y"])))
+        ctrl.append((t, 2, 0, 1))
+        ctrl.append((t + int(ev.get("ms", 150)), 2, 0, 0))
     ctrl.sort()
     blob += struct.pack("<I", len(ctrl))
     for t, c, i, v in ctrl[:256]:
@@ -70,7 +77,7 @@ def pack_config(robot, mips, bg_us, api_us, run_ms, sd, profile_us=0):
     return blob
 
 
-def build_firmware(script, src_dir):
+def build_firmware(script, src_dir, harness=False):
     """Copy Custom_python, swap in the script as py/main.py, and rebuild (main.cpp + link only)."""
     tmp = tempfile.mkdtemp(prefix="v5sim_build_")
     dst = os.path.join(tmp, "Custom_python")
@@ -78,7 +85,18 @@ def build_firmware(script, src_dir):
     for f in os.listdir(os.path.join(dst, "py")):
         if f.endswith(".py"):
             os.remove(os.path.join(dst, "py", f))
-    shutil.copy(script, os.path.join(dst, "py", "main.py"))
+    text = open(script).read()
+    if harness:
+        # put the timing harness right after the program's `from vex import *`
+        h = open(os.path.join(HERE, "tests", "harness.py")).read()
+        key = "from vex import *"
+        i = text.find(key)
+        if i < 0:
+            sys.exit("--harness needs a `from vex import *` line in the script")
+        j = text.find("\n", i) + 1
+        text = text[:j] + h + text[j:]
+    with open(os.path.join(dst, "py", "main.py"), "w") as f:
+        f.write(text)
     env = dict(os.environ)
     r = subprocess.run(["make", "-j4"], cwd=dst, env=env, capture_output=True, text=True)
     if r.returncode != 0:
@@ -181,6 +199,7 @@ def main():
     ap.add_argument("--bg-us", type=int, default=-1, help="cost of each VEXos background call in us (default 20)")
     ap.add_argument("--api-us", type=float, default=-1, help="cost of each device API call in us (default 0.5)")
     ap.add_argument("--sd", help="host folder used as the SD card (/usd)")
+    ap.add_argument("--harness", action="store_true", help="inject tests/harness.py to time every thread's loop (see tests/ridge_report.py)")
     ap.add_argument("--profile", action="store_true", help="sample the PC every ~97 us and print the hottest functions")
     ap.add_argument("--top", type=int, default=40, help="functions to show with --profile")
     ap.add_argument("--quiet", action="store_true")
@@ -194,7 +213,7 @@ def main():
     run_ms = a.ms or sim.get("run_ms", 20000)
 
     elf = build_emu()
-    bindir = a.bin or (build_firmware(a.script, a.src) if a.script else os.path.join(a.src, "bin"))
+    bindir = a.bin or (build_firmware(a.script, a.src, a.harness) if a.script else os.path.join(a.src, "bin"))
     cold, hot = os.path.join(bindir, "cold.package.bin"), os.path.join(bindir, "hot.package.bin")
     for f in (cold, hot):
         if not os.path.exists(f):

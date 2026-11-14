@@ -1,0 +1,76 @@
+{
+ "sim": {
+  "mips": 400,
+  "background_us": 20,
+  "api_call_us": 0.5,
+  "run_ms": 16000
+ },
+ "ports": {
+  "1": "rotation",
+  "2": "rotation",
+  "14": "rotation",
+  "4": "optical",
+  "6": "distance",
+  "7": "imu",
+  "5": {
+   "type": "motor",
+   "gear": "18"
+  },
+  "8": {
+   "type": "motor",
+   "gear": "18"
+  },
+  "10": {
+   "type": "motor",
+   "gear": "18"
+  },
+  "15": {
+   "type": "motor",
+   "gear": "6"
+  },
+  "16": {
+   "type": "motor",
+   "gear": "6"
+  },
+  "17": {
+   "type": "motor",
+   "gear": "6"
+  },
+  "18": {
+   "type": "motor",
+   "gear": "6"
+  },
+  "19": {
+   "type": "motor",
+   "gear": "6"
+  },
+  "20": {
+   "type": "motor",
+   "gear": "6"
+  }
+ },
+ "touch": [
+  {
+   "t": 4000,
+   "x": 150,
+   "y": 150
+  },
+  {
+   "t": 5000,
+   "x": 150,
+   "y": 150
+  },
+  {
+   "t": 6000,
+   "x": 150,
+   "y": 150
+  }
+ ],
+ "controller": [],
+ "competition": [
+  {
+   "t": 0,
+   "mode": "driver"
+  }
+ ]
+}

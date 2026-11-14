@@ -19,7 +19,7 @@
 #include <math.h>
 #include "jt_names.h"
 
-typedef uint8_t u8; typedef uint16_t u16; typedef uint32_t u32; typedef int32_t i32; typedef uint64_t u64;
+typedef uint8_t u8; typedef uint16_t u16; typedef uint32_t u32; typedef int16_t i16; typedef int32_t i32; typedef uint64_t u64;
 
 /* ---------------------------------------------------------------- hardware */
 #define REG(a) (*(volatile u32 *)(a))
@@ -352,8 +352,26 @@ static i32 vexControllerGet(u32 id, u32 index) {
     }
     return v;
 }
+/* Controller screen text: accepted and ignored (returns 1 = sent). */
+static u32 vexControllerTextSet(u32 id, u32 line, u32 col, const char *str) { (void)id; (void)line; (void)col; (void)str; api_cost(); return 1; }
 static u32 vexControllerConnectionStatusGet(u32 id) { return id == 0 ? 1 : 0; }
-static void vexTouchDataGet(void *st) { memset(st, 0, 12); }
+/* Brain screen touches come in as scripted events with ctrl id 2:
+ * index 0 = pressed (0/1), 1 = x, 2 = y. */
+struct touch_status { u8 event; u8 pad; i16 x, y; u16 pad2; i32 press_count, release_count; };
+static void vexTouchDataGet(void *st) {
+    struct touch_status *ts = (struct touch_status *)st;
+    memset(ts, 0, sizeof(*ts));
+    u32 t = now_ms(); i32 pressed = 0, x = 0, y = 0, presses = 0, releases = 0;
+    for (u32 i = 0; i < cfg->n_ctrl && i < 256; i++) {
+        const struct ctrl_ev *e = &cfg->ctrl[i];
+        if (e->t_ms > t || e->ctrl != 2) continue;
+        if (e->index == 0) { if (e->value && !pressed) presses++; if (!e->value && pressed) releases++; pressed = e->value; }
+        else if (e->index == 1) x = e->value;
+        else if (e->index == 2) y = e->value;
+    }
+    ts->event = pressed ? 1 : 0; ts->x = (i16)x; ts->y = (i16)y;
+    ts->press_count = presses; ts->release_count = releases;
+}
 
 /* ----------------------------------------------------------------- devices */
 enum { T_NONE = 0, T_MOTOR = 2, T_ROT = 4, T_IMU = 6, T_DIST = 7, T_ADI = 12, T_OPT = 16, T_GPS = 20 };
@@ -670,6 +688,7 @@ static void jt_fill(void) {
     SET(0x910, vexSystemBoot);
     SET(0x918, vexSystemFIQInterrupt);
     SET(0x964, vexTouchDataGet);
+    SET(0x1ac, vexControllerTextSet);
     SET(0x9d8, vexCompetitionStatus);
     SET(0xa00, vexBatteryVoltageGet);
     SET(0xa04, vexBatteryCurrentGet);
