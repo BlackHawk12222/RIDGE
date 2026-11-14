@@ -1617,6 +1617,8 @@ PROG = Thread( prog_setup )
 VS = Thread( vs_setup )
 
 comp = Competition(driver,auto)
+ACPv1.CLEARv2.CLAStart()
+
 
 if comp.is_driver_control():
     if brain.sdcard.is_inserted() and UseACP:
