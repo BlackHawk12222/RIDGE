@@ -10,16 +10,15 @@
 # Library imports
 from vex import *
 
-
 brain = Brain()
 
 if brain.sdcard.is_inserted() and brain.sdcard.exists("ACPv1"):
     import ACPv1
 
-# actions to do when the program starts
+# Actions to do when the program starts.
 brain.screen.clear_screen()
 
-# Robot configuration code
+# Robot configuration code.
 
 #controllers
 controller_1 = Controller(PRIMARY)
@@ -53,8 +52,7 @@ right_motor_b = Motor(Ports.PORT18, GearSetting.RATIO_6_1, False)#-EIGHTEEN
 left_motor_a = Motor(Ports.PORT19, GearSetting.RATIO_6_1, True)#---NINETEEN
 left_motor_b = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)#---TWENTY
 
-
-# creating motor grouping
+# Creating motor grouping.
 liftGroup = MotorGroup(liftOne,liftTwo)
 left_drive_smart = MotorGroup(left_motor_a, left_motor_b)
 right_drive_smart = MotorGroup(right_motor_a, right_motor_b)
@@ -64,14 +62,11 @@ drivetrain = DriveTrain(left_drive_smart, right_drive_smart, 219.44, 317.5, 254,
 Intake.set_velocity(100, PERCENT)
 Claw.set_stopping(HOLD)
 
-
-
-# wait for rotation sensor to fully initialize
+# Wait for rotation sensor to fully initialize.
 wait(30, MSEC)
 
-
-# Color to String Helper
-def convert_color_to_string(col):
+# Color to String Helper.
+def convert_color_to_string(col: Color) -> str:
     if col == Color.RED:
         return "red"
     if col == Color.GREEN:
@@ -99,79 +94,38 @@ wait(200, MSEC)
 # clear the console to make sure we don't have the REPL in the console
 print("\033[2J")
 
-
-
 # define variables used for controlling motors based on controller inputs
 drivetrain_l_needs_to_be_stopped_controller_1 = False
 drivetrain_r_needs_to_be_stopped_controller_1 = False
 
-# define a task that will handle monitoring inputs from controller_1
-# def rc_auto_loop_function_controller_1():
-#      global drivetrain_l_needs_to_be_stopped_controller_1, drivetrain_r_needs_to_be_stopped_controller_1, remote_control_code_enabled
-#      # process the controller input every 20 milliseconds
-#      # update the motors based on the input values
-#      while True:
-#          if remote_control_code_enabled:
-            
-#              # calculate the drivetrain motor velocities from the controller joystick axies
-#              # left = axis3 + axis1
-#              # right = axis3 - axis1
-#              drivetrain_left_side_speed = controller_1.axis3.position() + controller_1.axis1.position()
-#              drivetrain_right_side_speed = controller_1.axis3.position() - controller_1.axis1.position()
-            
-#              # check if the value is inside of the deadband range
-#              if drivetrain_left_side_speed < 5 and drivetrain_left_side_speed > -5:
-#                  # check if the left motor has already been stopped
-#                  if drivetrain_l_needs_to_be_stopped_controller_1:
-#                      # stop the left drive motor
-#                      left_drive_smart.stop()
-#                      # tell the code that the left motor has been stopped
-#                      drivetrain_l_needs_to_be_stopped_controller_1 = False
-#              else:
-#                  # reset the toggle so that the deadband code knows to stop the left motor next
-#                  # time the input is in the deadband range
-#                  drivetrain_l_needs_to_be_stopped_controller_1 = True
-#              # check if the value is inside of the deadband range
-#              if drivetrain_right_side_speed < 5 and drivetrain_right_side_speed > -5:
-#                  # check if the right motor has already been stopped
-#                  if drivetrain_r_needs_to_be_stopped_controller_1:
-#                     # stop the right drive motor
-#                      right_drive_smart.stop()
-#                      # tell the code that the right motor has been stopped
-#                      drivetrain_r_needs_to_be_stopped_controller_1 = False
-#              else:
-#                  # reset the toggle so that the deadband code knows to stop the right motor next
-#                  # time the input is in the deadband range
-#                  drivetrain_r_needs_to_be_stopped_controller_1 = True
-            
-#              # only tell the left drive motor to spin if the values are not in the deadband range
-#              if drivetrain_l_needs_to_be_stopped_controller_1:
-#                  left_drive_smart.set_velocity(drivetrain_left_side_speed, PERCENT)
-#                  left_drive_smart.spin(FORWARD)
-#              # only tell the right drive motor to spin if the values are not in the deadband range
-#              if drivetrain_r_needs_to_be_stopped_controller_1:
-#                  right_drive_smart.set_velocity(drivetrain_right_side_speed, PERCENT)
-#                  right_drive_smart.spin(FORWARD)
-#          # wait before repeating the process
-#          wait(20, MSEC)
-
-# define variable for remote controller enable/disable
-# remote_control_code_enabled = True
-
-#rc_auto_loop_thread_controller_1 = Thread(rc_auto_loop_function_controller_1)
-
 #endregion VEXcode Generated Robot Configuration
 
-screen_precision = 0
-console_precision = 0
-controller_1_precision = 0
-CC_display = Event()
-lift_run = Event()
-Obstacle_Points = ["0,600",0]
+screen_precision: int = 0
+"""Int build into VexCode Python for precision on brain.screen properties."""
 
-motors=[]
-motorNames=[]
-motorPorts=[]
+console_precision: int = 0
+"""Int build into VexCode Python for precision on print()."""
+
+controller_1_precision: int = 0
+"""Int build into VexCode Python for precision on controller_1.screen properties."""
+
+CC_display = Event()
+"""Event for the Controller response animation."""
+
+lift_run = Event()
+"""Event for the Robot Lift's and Claw's Ticks."""
+
+Obstacle_Points = ["0,600",0]
+"""Unknown."""
+
+motors: list[Motor]=[]
+"""List of detected Motor classes from MC.MotorConfig()."""
+
+motorNames: list[str]=[]
+"""List of detected Motor classes names as strings from MC.MotorConfig()."""
+
+motorPorts: list[int]=[]
+"""List of detected Motor classes ports as int from MC.MotorConfig()."""
 
 Dist = 0
 MyColor = 0
@@ -215,162 +169,342 @@ X_assist_Current = 0
 xScale = 0
 X_diff_scaled = 0
 LiftVelocity = 0
+
 setUp = False
+"""Bool to check if robot setup is done."""
+
 UseACP = False
+"""Bool to check if ACP should be used."""
+
 Loading = False
+"""Bool to check if Loading pin and cup into Claw."""
+
 liftUp = False
+"""Bool to check if Claw if in Up/Open position."""
+
 RunAuto = False
+"""Bool for runnig auto in driver control."""
 
-#BEGIN CODE HERE ###############################################################
+# BEGIN CODE HERE
 
-#MISC CODE(custom printing, velocity setting etc.)
 class robot():
-    def __init__(self):
-        self.liftRaised = False
-        pass
+    """MISC CODE(custom printing, velocity setting etc.)"""
 
-    def proportional(self,val,pwr=2):
+    def __init__(self: robot) -> None:
+        self.liftRaised = False
+        """Bool For check if Claw is out and Lift if up"""
+
+    def proportional(self: robot, val: float , pwr: int=2) -> float:
+        """
+        Returns ((val**pwr)/10**pwr) and returns same sign as val.
+        
+        ### Args:
+
+        val = float;
+        pwr = int : 2;
+        
+        ### Returns
+        float;
+        """
+
         if val < 0:
             return(-1*(val**pwr)/10**pwr)
+        
         else:
             return((val**pwr)/10**pwr)
     
-    def TankDrive(self,buffer=5):
-        #tank drive code for when ACP is not being used
+    def TankDrive(self: robot, buffer: int=5) -> None:
+        """
+        Tank drive code for when ACP is not being used.
+        
+        ### Args:
+        buffer = int : 5;
+
+        ### Returns
+        None;
+        """
+
         while True:
+
             if comp.is_driver_control() and not RunAuto:
+
                 if not self.liftRaised:
+
                     left_drive_smart.set_velocity(self.proportional(controller_1.axis3.position()), PERCENT)
                     right_drive_smart.set_velocity(self.proportional(controller_1.axis2.position()), PERCENT)
+
                 else:
+
                     left_drive_smart.set_velocity(controller_1.axis3.position()/2, PERCENT)
                     right_drive_smart.set_velocity(controller_1.axis2.position()/2, PERCENT)
+
                 if math.fabs(controller_1.axis3.position()) < buffer:
                     left_drive_smart.set_velocity(0,PERCENT)
+
                 if math.fabs(controller_1.axis2.position()) < buffer:
                     right_drive_smart.set_velocity(0,PERCENT)
 
                 left_drive_smart.spin(FORWARD)
                 right_drive_smart.spin(FORWARD)
-            wait(5, MSEC)
 
-    def autoload(self):
+            wait(10, MSEC)
+
+    def autoload(self: robot) -> None:
+        """
+        Loads and lifts a cup and pin stack in the intake.
+
+        ### Args:
+        None;
+
+        ### Returns
+        None;
+        """
+
         global Loading, liftUp
-        #loads and lifts a cup and pin stack in the intake
+
         while True:
             if controller_1.buttonA.pressing():
+
                 Loading = True
                 liftUp = True
-                liftGroup.set_velocity(100,PERCENT)
-                Claw.set_velocity(100,PERCENT)
+
+                liftGroup.set_velocity(100, PERCENT)
+                Claw.set_velocity(100, PERCENT)
+
                 if self.liftRaised:
+
                     self.liftRaised = False
+
                     grabber.set(False)
-                    liftGroup.spin_to_position(0,DEGREES,100,PERCENT,False)
-                    Claw.spin_to_position(-40, DEGREES)
-                    while not liftGroup.position()<10:
-                        wait(5,MSEC)
+                    liftGroup.spin_to_position(0, DEGREES, 100, PERCENT, False)
+                    Claw.spin_to_position(-40, DEGREES)  # Set to -40 to take out slack in Claw.
+
+                    while not liftGroup.position() < 10:
+                        wait(5, MSEC)
+
                 else:
                     self.liftRaised = True
                     liftUp = False
+
                     controller_1.screen.print("running")
+
                     grabber.set(False)
-                    liftGroup.spin_to_position(0,DEGREES)
-                    Claw.spin_to_position(-40, DEGREES)
-                    while math.fabs(liftGroup.position(DEGREES))>10 and math.fabs(Claw.position(DEGREES))>10:
-                        wait(5,MSEC)
+                    liftGroup.spin_to_position(0, DEGREES)
+                    Claw.spin_to_position(-40, DEGREES)  # Set to -40 to take out slack in Claw.
+
+                    while math.fabs(liftGroup.position(DEGREES)) > 10 and math.fabs(Claw.position(DEGREES)) > 10:
+                        wait(5, MSEC)
+
                     Intake.spin(FORWARD)
-                    wait(0.5,SECONDS)
+                    wait(0.5, SECONDS)
+
                     grabber.set(True)
-                    wait(100,MSEC)
-                    liftGroup.spin_to_position(700,DEGREES,100,PERCENT,False)
-                    Claw.spin_to_position(205,DEGREES)
-                    wait(500,MSEC)
+                    wait(100, MSEC)
+
+                    liftGroup.spin_to_position(700, DEGREES, 100, PERCENT, False)
+                    Claw.spin_to_position(205, DEGREES)
+                    wait(500, MSEC)
+
                     liftGroup.stop()
                     Intake.stop()
+
                 Loading = False
-            wait(50, MSEC)
 
-    def clawUp(self):
-        liftGroup.set_velocity(100,PERCENT)
-        Claw.set_velocity(100,PERCENT)
+            else:
+                wait(50, MSEC)
+
+    def clawUp(self: robot) -> None:
+        """
+        Brings Claw up to score.
+        
+        ### Args:
+        None;
+
+        ### Returns:
+        None;
+        """
+
+        liftGroup.set_velocity(100, PERCENT)
+        Claw.set_velocity(100, PERCENT)
         grabber.set(True)
-        wait(100,MSEC)
-        liftGroup.spin_to_position(700,DEGREES,100,PERCENT,False)
-        Claw.spin_to_position(190,DEGREES)
-        while not liftGroup.is_done():
-            wait(10,MSEC)
+        wait(100, MSEC)
 
-    def clawDown(self):
+        liftGroup.spin_to_position(700, DEGREES, 100, PERCENT, False)
+        Claw.spin_to_position(190, DEGREES)
+
+        while not liftGroup.is_done():
+            wait(10, MSEC)
+
+    def clawDown(self: robot) -> None:
+        """
+        Returns Claw to start to pickup pin and cup.
+        
+        ### Args:
+        None;
+
+        ### Returns:
+        None;
+        """
+
+        global liftUp
+
         self.liftRaised = True
         liftUp = False
+
         controller_1.screen.print("running")
         grabber.set(False)
-        liftGroup.spin_to_position(0,DEGREES)
-        Claw.spin_to_position(-40 ,DEGREES)
-        while math.fabs(liftGroup.position(DEGREES))>10 and math.fabs(Claw.position(DEGREES))>10:
-            wait(5,MSEC)
+        liftGroup.spin_to_position(0, DEGREES)
+        Claw.spin_to_position(-40, DEGREES)  # Set to -40 to take out slack in Claw.
 
-    def clawLoad(self):
+        while math.fabs(liftGroup.position(DEGREES)) > 10 and math.fabs(Claw.position(DEGREES)) > 10:
+            wait(10, MSEC)
+
+    def clawLoad(self: robot) -> None:
+        """
+        Brings pin and cup into the claw.
+        
+        ### Args:
+        None;
+
+        ### Returns:
+        None;
+        """
+
         Intake.spin(FORWARD)
-        wait(0.5,SECONDS)
+        wait(0.5, SECONDS)
+
         grabber.set(True)
-        wait(100,MSEC)
-        liftGroup.spin_to_position(700,DEGREES,100,PERCENT,False)
-        Claw.spin_to_position(205,DEGREES)
-        wait(500,MSEC)
+        wait(100, MSEC)
+
+        liftGroup.spin_to_position(700, DEGREES, 100, PERCENT, False)
+        Claw.spin_to_position(205, DEGREES)
+        wait(500, MSEC)
+
         liftGroup.stop()
         Intake.stop()
 
-    def clawScore(self):
-            Claw.set_velocity(100,PERCENT)
-            grabber.set(False)
-            wait(0.1,SECONDS)
-            Claw.spin_to_position(300,DEGREES)
+    def clawScore(self: robot) -> None:
+        """
+        Released Claw grabber and move Claw out of the way.
+
+        ### Args:
+        None;
+
+        ### Returns:
+        None;
+        """
+
+        Claw.set_velocity(100,PERCENT)
+        grabber.set(False)
+        wait(0.1,SECONDS)
+
+        Claw.spin_to_position(300,DEGREES)
 
 class display():
+    """Brain.screen Atrabutes and common code functions."""
 
-    def __init__(self, object: Brain):
-         self.brainObject: Brain = object
-         self.BO: Brain = self.brainObject
+    def __init__(self: display, object: Brain) -> None:
+        self.BO: Brain = object
+        """Brain Object to get Brain Properties"""
 
-    def drawImage(self,name,x,y):
+    def drawImage(self: display, name: str, x: int, y: int) -> None:
+        """
+        Same as brain.screen.draw_image_from_file().
+        
+        ### Args:
+        name = str;
+        x = int;
+        y = int;
+
+        ### Returns:
+        None;
+        """
+
         self.BO.screen.draw_image_from_file(name,x,y)
 
-    def reset(self,render=False):
+    def reset(self: display, render: bool=False) -> None:
+        """
+        Clears brain screen and resets the cursor.
+        
+        ### Args:
+        render = bool : False;
+
+        ### Returns:
+        None;
+        """
+        
         self.BO.screen.clear_screen()
         self.BO.screen.set_cursor(1,1)
         if render == True:
             self.BO.screen.render()
 
-    def printCS(self,text):
+    def printCS(self: display, text: str) -> None:
+        """
+        Takes full string and splits , into new lines.
+        
+        ### Args:
+        text = str;
+
+        ### Returns:
+        None
+        """
+
         split = text.split(",")
+
         for entry in split:
             self.BO.screen.print(entry)
             self.BO.screen.next_row()
 
-    def drawPB(self,x,y,width, height, percent, border,barColor,horizontalBar=False):
-        #draw progress bar
+    def drawPB(self: display, x: int, y: int, width: int, height: int, percent: int, border: int, barColor: Color, horizontalBar: bool=False) -> None:
+        """
+        Draws progress bar for brain screen.
+        
+        ### Args:
+        x = int;
+        y = int;
+        width = int;
+        hight = int;
+        percent = int;  # Amount of bar filled in %.
+        border = int;
+        barColor = Color;
+        horizontalBar = bool : False;
+
+        ### Returns:
+        None
+        """
+
         if horizontalBar:
             self.BO.screen.set_pen_width(0)
             self.BO.screen.set_fill_color(Color.WHITE)
-            self.BO.screen.draw_rectangle(x,y,width+border,height+border)
+            self.BO.screen.draw_rectangle(x, y, width + border, height + border)
             self.BO.screen.set_fill_color(barColor)
-            self.BO.screen.draw_rectangle(x+border/2,y+border/2, width*(percent/100),height)
+            self.BO.screen.draw_rectangle(x + border / 2, y + border / 2, width * (percent / 100), height)
         else:
             self.BO.screen.set_pen_width(0)
             self.BO.screen.set_fill_color(Color.WHITE)
-            self.BO.screen.draw_rectangle(x,y,width+border,height+border)
+            self.BO.screen.draw_rectangle(x, y, width + border, height + border)
             self.BO.screen.set_fill_color(barColor)
-            self.BO.screen.draw_rectangle(x+border/2,y+border/2+(height-height*(percent/100)), width,height*(percent/100))
+            self.BO.screen.draw_rectangle(x + border / 2, y + border / 2 + (height - height * (percent / 100)), width, height * (percent / 100))
         self.BO.screen.set_fill_color(Color.TRANSPARENT)
 
-    def printMotors(self):
+    def printMotors(self: display) -> None:
+        """
+        Prints all motors in motors list.
+
+        ### Args:
+        None;
+
+        ### Returns:
+        None;
+        """
+
         for i in range(len(motorNames)):
-            self.BO.screen.print(motorPorts[i]+motorNames[i]+motors[i].temperature(PERCENT))
+            self.BO.screen.print("%d %s %s %d" %(motorPorts[i], motorNames[i], motors[i].temperature(PERCENT)))
             self.BO.screen.next_row()
             
 class MotorTicks:
+    """Ticks for Misc. funtions with Motors in loops."""
+
     def __init__(self):
         self.intakeOn = False
         self.clawOpen = True
@@ -441,12 +575,14 @@ class MC:
                 motors.append(eval(item))
                 motorPorts.append(self.getMotorPort(eval(item)))
 
-    def getMotorPort(self,motor):
+    def getMotorPort(self: MC, motor: Motor) -> int:
         for port in range(Ports.PORT1, Ports.PORT20):
             m=Motor(port)
             if m.installed:
                 if m.power(PowerUnits.WATT) == motor.power(PowerUnits.WATT):
                     return(port)
+                
+        return -1
 
 def set_velocity(side, velocity):
 
