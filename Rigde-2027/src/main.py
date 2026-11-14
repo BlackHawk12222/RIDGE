@@ -49,7 +49,7 @@ liftOne = Motor(Ports.PORT15, GearSetting.RATIO_6_1, False)#-------FIFTEEN
 liftTwo = Motor(Ports.PORT16,GearSetting.RATIO_6_1,True)#---------SIXTEEN
 right_motor_a = Motor(Ports.PORT17, GearSetting.RATIO_6_1, False)#-SEVENTEEN
 right_motor_b = Motor(Ports.PORT18, GearSetting.RATIO_6_1, False)#-EIGHTEEN
-left_motor_a = Motor(Ports.PORT19, GearSetting.RATIO_6_1, True)#---NINETEEN
+left_motor_a = Motor(Ports.PORT13, GearSetting.RATIO_6_1, True)#---THIRTEEN
 left_motor_b = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)#---TWENTY
 
 # Creating motor grouping.
@@ -116,7 +116,7 @@ lift_run = Event()
 """Event for the Robot Lift's and Claw's Ticks."""
 
 Obstacle_Points = ["0,600",0]
-"""Unknown."""
+"""Enter points to be avoided in APF."""
 
 motors: list[Motor]=[]
 """List of detected Motor classes from MC.MotorConfig()."""
@@ -169,7 +169,7 @@ X_assist_Current = 0
 xScale = 0
 X_diff_scaled = 0
 LiftVelocity = 0
-
+Auto_Side = "right"
 setUp = False
 """Bool to check if robot setup is done."""
 
@@ -313,6 +313,8 @@ class robot():
             else:
                 wait(50, MSEC)
 
+            
+
     def clawUp(self) -> None:
         """
         Brings Claw up to score.
@@ -347,6 +349,9 @@ class robot():
         """
 
         global liftUp
+
+        self.liftRaised = True
+        liftUp = False
 
         controller_1.screen.print("running")
         grabber.set(False)
@@ -507,6 +512,7 @@ class MotorTicks:
         self.clawOpen = True
         self.Xrelease = True
         self.Uprelease = True
+        self.leftRelease = False
         pass
 
     def lift_tick(self) -> None:
@@ -592,6 +598,38 @@ class MotorTicks:
                 self.clawOpen = False
         else:
             self.Xrelease = True
+
+    def clawTick(self):
+        if not Loading:
+            if controller_1.buttonDown.pressing():
+                Claw.spin(FORWARD, 50, PERCENT)
+                wait(20, MSEC)
+            elif controller_1.buttonRight.pressing():
+                Claw.spin(REVERSE, 50, PERCENT)
+                wait(20, MSEC)
+            else:
+                Claw.stop()
+                wait(20, MSEC)
+
+    def resetTick(self):
+        global Loading
+        if not Loading:
+            if controller_1.buttonLeft.pressing():
+                Loading = True
+                if self.leftRelease:
+                    self.leftRelease = False
+                    Claw.set_velocity(70,PERCENT)
+                    Claw.spin(REVERSE)
+                    while Claw.torque(TorqueUnits.NM) < 0.5:
+                        wait(10,MSEC)
+
+                    Claw.stop()
+                    wait(0.2,SECONDS)
+                    Claw.set_position(0,DEGREES)
+                    
+                    Loading = False
+            else:
+                self.leftRelease = True
 
 class MC:
     """Motor config to find all motors and get there port numbers."""
@@ -708,14 +746,14 @@ class AIMDrive():
                 self.resetDrivetrain()
                 break
 
-    def AIM_turn(self, d: float, v: int = 100, p:int = 3) -> None:
+    def AIM_turn(self, d: float, v: int = 100, p: float = 0.7) -> None:
         """
         Accurate Inertial Movement main function to turn to a heading.
 
         ### Args:
         d = float;
         v = int : 100;
-        p = int : 3;
+        p = float : 0.7;
 
         ### Returns:
         None;
@@ -724,26 +762,40 @@ class AIMDrive():
         vel = v
         pro = p
         err = 0
+
+        temp = 0
+        
         Inertial_.set_rotation(0)
         rot = Inertial_.rotation()
         err = deg - rot
         while not math.fabs(err) < 5:
             rot = Inertial_.rotation()
+            controller_1.screen.clear_row(3)
+
+
+            if rot > temp:
+                temp = rot
+            controller_1.screen.print(rot,"  ",temp)
+            
+            
+            
             err = deg - rot
 
-            drivetrain.set_turn_velocity(err/pro)
+            drivetrain.set_turn_velocity(err*pro,PERCENT)
 
-            if err/pro < 5:
-                drivetrain.set_turn_velocity(5)
+            if math.fabs(err/pro) < 5:
+                drivetrain.set_turn_velocity(6)
 
             elif err/pro > vel:
                 drivetrain.set_turn_velocity(vel)
 
             
-            if deg < 0:
+            if err < 0:
                 drivetrain.turn(LEFT)
             else:
                 drivetrain.turn(RIGHT)
+            wait(10,MSEC)
+        drivetrain.stop()
 
 class BarColor():
     def Check_for_bar(self) -> None:
@@ -811,7 +863,7 @@ class BarColor():
 
         while Color_Flips == 1:
 
-            Bar_Switcher.spin_for(FORWARD, 100, DEGREES)
+            Bar_Switcher.spin_for(FORWARD, 130, DEGREES)
             wait(0.15, SECONDS)
 
             self.check_dist()
@@ -821,7 +873,6 @@ class BarColor():
 
         Bar_Switcher.stop()
 
-colorBar = BarColor()
 
 # APF SCRIPTS
 
@@ -1138,8 +1189,6 @@ def prog_setup() -> None:
     
     #start CC(controller connectivity) display
     CC_display.broadcast()
-    lift_run.broadcast()
-
     #initialize setup progression variable
     SETUP_progression = 1
 
@@ -1147,6 +1196,9 @@ def prog_setup() -> None:
     Inertial_.calibrate()
     while Inertial_.is_calibrating():
         sleep(50)
+
+    #AIM.AIM_turn(90,100)
+    #AIM.AIM_drive(200,50)
     #next step, shown by SETUP_progression
     SETUP_progression = SETUP_progression + 1
 
@@ -1296,7 +1348,7 @@ def bootAnim() -> None:
 
         #if the button is being pressed(in this case, the left side button), set Auto_Side to "l" and stop this loop, moving on to color selection
         if button_pressed == 1:
-            Auto_Side = "l"
+            Auto_Side = "left"
             break
         
         #draw the right side button; refer to left side button for how this works
@@ -1306,9 +1358,17 @@ def bootAnim() -> None:
         draw_button(210, 100, 100, 100)
         
         if button_pressed == 1:
-            Auto_Side = "r"
+            Auto_Side = "right"
             break
+
+        brain.screen.set_pen_color(Color.WHITE)
+        brain.screen.set_fill_color(Color.TRANSPARENT)
         
+        draw_button(320, 100, 100, 100)
+                
+        if button_pressed == 1:
+            Auto_Side = "skills"
+            break
         #separate from the button drawing, render the screen, showing everything that's been drawn
         brain.screen.render()
         wait(5, MSEC)
@@ -1489,19 +1549,21 @@ def liftTick_callback() -> None:
     """
 
     MT = MotorTicks()
-    liftGroup.set_velocity(100, PERCENT)
+    liftGroup.set_velocity(100,PERCENT)
     liftGroup.set_stopping(HOLD)
-    Claw.spin_to_position(-20, DEGREES)
+    Claw.spin_to_position(-20,DEGREES)
     while True:
         MT.lift_tick()
         MT.intake_tick()
         MT.liftTick()
         MT.grabberTick()
+        MT.clawTick()
+        MT.resetTick()
 
 # Event activation
 CC_display(CC_display_callback)
-
 lift_run(liftTick_callback)
+
 
 # add 15ms delay to make sure events are registered correctly.
 wait(15, MSEC)
@@ -1532,67 +1594,45 @@ def auto() -> None:
     None;
     """
 
-    color = Thread( color_switching )
-    AIM = AIMDrive()
+    #color = Thread( color_switching )
 
-    global MyColor
+    global MyColor, Auto_Side
 
     Inertial_.reset_heading()
-
+    Bar_Switcher.set_velocity(50,PERCENT)
     # Temperary Auto setup to make Aton
     MyColor = "red"
 
     # Inital Right turn for color bar.
-    right_drive_smart.spin(FORWARD, 10, PERCENT)
-    wait(0.5,SECONDS)
-    drivetrain.stop()
-    wait(1,SECONDS)
-
-    # Return to center before moving
-    CurrentHeading = Inertial_.heading()
-    if CurrentHeading > 180:  # make sure we dont turn more than 180.
-        drivetrain.turn_for(RIGHT, 360 - CurrentHeading, DEGREES, 100, PERCENT, True)
+    right_drive_smart.spin(FORWARD, 5, PERCENT)
+    Bar_Switcher.spin(FORWARD)
+    wait(0.83, SECONDS)
+    while Bar_Switcher.power(PowerUnits.WATT) > 5:
+        wait(10,MSEC)
+    Bar_Switcher.stop()
+    drivetrain.drive_for(REVERSE,20,MM,80)
+    drivetrain.drive_for(FORWARD,30,MM,100)
+    drivetrain.drive_for(REVERSE,360,MM,70)
+    if Auto_Side == "left":
+        drivetrain.turn_for(RIGHT,60,DEGREES,60)
+    elif Auto_Side == "right":
+        drivetrain.turn_for(LEFT,60,DEGREES,60)
     else:
-        drivetrain.turn_for(LEFT, CurrentHeading, DEGREES, 100, PERCENT, True)
-
-    # Drive Forward to setup for turn to right pin slot.
-    drivetrain.set_drive_velocity(80, PERCENT)
-    drivetrain.set_turn_velocity(80, PERCENT)
-    drivetrain.drive_for(REVERSE, 260, MM, 80, PERCENT)
-
-    wait(50, MSEC)  # Added wait to stableize robot before turn
-
-    # Turn to Right pin slot.
-    CurrentHeading = Inertial_.heading()
-    if CurrentHeading > 180:  # make sure we dont turn more than 180.
-        drivetrain.turn_for(RIGHT, 80 - (360 - CurrentHeading), DEGREES, 50, PERCENT, True)
-    else:
-        drivetrain.turn_for(RIGHT, 80 - CurrentHeading, DEGREES, 50, PERCENT, True)
-
-    # Bring Claw up to get ready to drop pre load pin
+        drivetrain.turn_for(RIGHT,60,DEGREES,60)
     K56721.clawUp()
-
-    # Waits for drive train to stop before drop.
-    while not drivetrain.is_done():
-        wait(5,MSEC)
-
-    # Drive forward to right pin slot.
-    drivetrain.drive_for(REVERSE, 300, MM)
-    wait(1,SECONDS)
-    drivetrain.drive_for(REVERSE, 100, MM, 20, PERCENT, False)
-    wait(0.4, SECONDS)
-    # Score preload pin
-    liftGroup.spin_to_position(-500, DEGREES, 100, PERCENT)
+    drivetrain.drive_for(REVERSE,700,MM,70,RPM,False)
+    wait(2,SECONDS)
+    drivetrain.stop()
+    liftGroup.spin_to_position(-600,DEGREES)
+    drivetrain.drive_for(FORWARD,10,MM,60,PERCENT)
     K56721.clawScore()
-
-    # return lift to up position
-    wait(100, MSEC)
-    drivetrain.drive_for(FORWARD, 200, MM)
-    liftGroup.spin_to_position(0, DEGREES, 100, PERCENT)
+    wait(0.1,SECONDS)
+    drivetrain.drive_for(FORWARD,300,MM,60,PERCENT)
     K56721.clawDown()
-
+    if Auto_Side == "skills":
+        drivetrain.turn_for(RIGHT,50,DEGREES,50,PERCENT)
+        drivetrain.drive_for(FORWARD,600,MM,50,PERCENT)
     # Stops Color turn Thread.
-    color.stop()
 
 def driver():
     """
@@ -1604,23 +1644,25 @@ def driver():
     ### Returns:
     None;
     """
-
+    lift_run.broadcast()
+    
     claw  = Thread(K56721.autoload)
     drive = Thread(lambda: K56721.TankDrive(2))
     color_switching()
-
+colorBar = BarColor()
 #PROGRAM RUN
-
+AIM = AIMDrive()
 K56721 = robot()
 grabber.set(True)
 PROG = Thread( prog_setup )
 VS = Thread( vs_setup )
 
 comp = Competition(driver,auto)
-
+#ACP=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
 if comp.is_driver_control():
     if brain.sdcard.is_inserted() and UseACP:
-        comp=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
+        pass
+        # comp=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
     else:
         wait(1, SECONDS)
         while not setUp:
@@ -1629,7 +1671,4 @@ if comp.is_driver_control():
         if RunAuto:
             controller_1.screen.print("auto")
             auto()
-            RunAut0 = False
-        #claw  = Thread(K56721.autoload)
-        drive = Thread(lambda: K56721.TankDrive(2))
-        color_switching()
+            RunAuto = False
