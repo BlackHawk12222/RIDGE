@@ -194,7 +194,7 @@ class robot():
         self.liftRaised = False
         """Bool For check if Claw is out and Lift if up"""
 
-    def proportional(self: robot, val: float , pwr: int=2) -> float:
+    def proportional(self: robot, val: float , pwr: int = 2) -> float:
         """
         Returns ((val**pwr)/10**pwr) and returns same sign as val.
         
@@ -213,7 +213,7 @@ class robot():
         else:
             return((val**pwr)/10**pwr)
     
-    def TankDrive(self: robot, buffer: int=5) -> None:
+    def TankDrive(self: robot, buffer: int = 5) -> None:
         """
         Tank drive code for when ACP is not being used.
         
@@ -422,7 +422,7 @@ class display():
 
         self.BO.screen.draw_image_from_file(name,x,y)
 
-    def reset(self: display, render: bool=False) -> None:
+    def reset(self: display, render: bool = False) -> None:
         """
         Clears brain screen and resets the cursor.
         
@@ -455,7 +455,7 @@ class display():
             self.BO.screen.print(entry)
             self.BO.screen.next_row()
 
-    def drawPB(self: display, x: int, y: int, width: int, height: int, percent: int, border: int, barColor: Color, horizontalBar: bool=False) -> None:
+    def drawPB(self: display, x: int, y: int, width: int, height: int, percent: int, border: int, barColor: Color, horizontalBar: bool = False) -> None:
         """
         Draws progress bar for brain screen.
         
@@ -512,7 +512,17 @@ class MotorTicks:
         self.Uprelease = True
         pass
 
-    def lift_tick(self):
+    def lift_tick(self: MotorTicks) -> None:
+        """
+        Tick in loop for Driver controler for lifting and droping the lift.
+
+        ### Args:
+        None;
+
+        ### Returns:
+        None;
+        """
+
         if comp.is_driver_control():
             if not Loading:
                 if controller_1.buttonL1.pressing():
@@ -522,7 +532,17 @@ class MotorTicks:
                 else:
                     liftGroup.stop()
 
-    def intake_tick(self):
+    def intake_tick(self: MotorTicks):
+        """
+        Tick in loop for Driver controler for spinning the intake motor.
+
+        ### Args:
+        None;
+
+        ### Returns:
+        None;
+        """
+        
         if not Loading:
             if controller_1.buttonR1.pressing():
                 Intake.spin(FORWARD)
@@ -531,7 +551,17 @@ class MotorTicks:
             else:
                 Intake.stop()
 
-    def liftTick(self):
+    def liftTick(self: MotorTicks):
+        """
+        Tick in loop for Driver controler for toggle for the intake hight.
+
+        ### Args:
+        None;
+
+        ### Returns:
+        None;
+        """
+        
         if controller_1.buttonUp.pressing():
             if self.Uprelease:
                 self.Uprelease = False
@@ -544,7 +574,17 @@ class MotorTicks:
         else:
             self.Uprelease = True
 
-    def grabberTick(self):
+    def grabberTick(self: MotorTicks):
+        """
+        Tick in loop for Driver controler for grabber toggle on the Claw.
+
+        ### Args:
+        None;
+
+        ### Returns:
+        None;
+        """
+
         if controller_1.buttonX.pressing():
             if self.Xrelease:
                 self.Xrelease = False
@@ -557,11 +597,19 @@ class MotorTicks:
             self.Xrelease = True
 
 class MC:
+    """Motor config to find all motors and get there port numbers."""
     
-    def __init__(self):
-        pass
-    
-    def MotorConfig(self):
+    def MotorConfig(self: MC) -> None:
+        """
+        Finds and stores all motors configured.
+        
+        ### Args:
+        None;
+
+        ### Returns:
+        None;
+        """
+
         global motors, motorNames
         data = dir()
 
@@ -576,6 +624,16 @@ class MC:
                 motorPorts.append(self.getMotorPort(eval(item)))
 
     def getMotorPort(self: MC, motor: Motor) -> int:
+        """
+        Finds and stores all motors configured.
+        
+        ### Args:
+        motor = Motor;
+
+        ### Returns:
+        int;
+        """
+        
         for port in range(Ports.PORT1, Ports.PORT20):
             m=Motor(port)
             if m.installed:
@@ -584,106 +642,210 @@ class MC:
                 
         return -1
 
-def set_velocity(side, velocity):
+class AIMDrive():
+    """Accurate Inertial Movement"""
+    def set_velocity(self: AIMDrive, side: str, velocity: float) -> None:
+        """
+        Set the drivetrain velocity for the individual sides of the drivetrain; useful for turning.
 
-    #set the drivetrain velocity for the individual sides of the drivetrain; useful for turning
-    if side.lower() == "left":
-        left_drive_smart.set_velocity(velocity, PERCENT)
-    elif side.lower() == "right":
-        right_drive_smart.set_velocity(velocity, PERCENT)
-    else:
-        left_drive_smart.set_velocity(velocity, PERCENT)
-        right_drive_smart.set_velocity(velocity, PERCENT)
+        ### Args:
+        side = str;
+        velocity = float;
 
-def resetDrivetrain():
-    right_drive_smart.set_velocity(100,PERCENT)
-    left_drive_smart.set_velocity(100,PERCENT)
-    left_drive_smart.stop()
-    right_drive_smart.stop()
+        ### Returns:
+        None;
+        """
 
-def AIM_drive(mm,driveVelocity,err=0):
-    mmToDeg = (mm/((69.85*3.14159)/360))/0.75
-    err = 0
-    #adding AIM (accurate inertial movement) code here
-    left_drive_smart.set_position(0, DEGREES)
-    right_drive_smart.set_position(0,DEGREES)
-    Inertial_.set_rotation(0,DEGREES)
-    left_drive_smart.spin_for(mmToDeg,DEGREES)
-    right_drive_smart.spin_for(mmToDeg,DEGREES)
-    while True:
-        err = Inertial_.rotation()*0.5
-        left_drive_smart.set_velocity(driveVelocity-err,PERCENT)
-        right_drive_smart.set_velocity(driveVelocity+err,PERCENT)
-        if math.fabs(mm-right_drive_smart.position(DEGREES))<5:
-            resetDrivetrain()
-            break
+        if side.lower() == "left":
+            left_drive_smart.set_velocity(velocity, PERCENT)
+        elif side.lower() == "right":
+            right_drive_smart.set_velocity(velocity, PERCENT)
+        else:
+            left_drive_smart.set_velocity(velocity, PERCENT)
+            right_drive_smart.set_velocity(velocity, PERCENT)
 
-#BAR SWITCHING LOGIC SCRIPTS VVVVVVVVVVVVVVVVVVV
+    def resetDrivetrain(self: AIMDrive):
+        """
+        Finds and stores all motors configured.
+        
+        ### Args:
+        None;
 
-def Check_for_bar():
-    #checks if an object (the control bar) is close enough. If it is, check to see if it's our own color, and activate the spin command
-    check_dist()
-    if Dist < 240:
-        check_color_redundancy()
-    spin_motor()
+        ### Returns:
+        None;
+        """
 
-def check_dist():
-    #used in Check_for_bar(): initializes Color_flips to 0(do not spin), then records the distance to the object.
-    global Dist, Color_Flips
-    Color_Flips = 0
-    Dist = DistanceSensor.object_distance(MM)
+        right_drive_smart.set_velocity(100, PERCENT)
+        left_drive_smart.set_velocity(100, PERCENT)
+        left_drive_smart.stop()
+        right_drive_smart.stop()
 
-def check_color_redundancy():
-    #used in Check_for_bar(): sets Color_flips to 1(spin motor), then checks to see if the detected object is our color. If it is, set Color_flips to 0(do not spin).
-    global Color_Flips
-    Color_Flips = 1
-    if ColorSensor.color() == Color.BLUE and MyColor == "blue" or ColorSensor.color() == Color.RED and MyColor == "red":
+    def AIM_drive(self: AIMDrive, mm: int, driveVelocity: int, err: float = 0.0) -> None:
+        """
+        Accurate Inertial Movement main function to drive a distance.
+
+        ### Args:
+        mm = int;
+        driveVelocity = int;
+        err = float : 0.0;
+
+        ### Returns:
+        None;
+        """
+
+        mmToDeg = (mm / ((69.85 * 3.14159) / 360)) / 0.75
+        err = 0
+
+        left_drive_smart.set_position(0, DEGREES)
+        right_drive_smart.set_position(0, DEGREES)
+        Inertial_.set_rotation(0, DEGREES)
+        left_drive_smart.spin_for(mmToDeg, DEGREES)
+        right_drive_smart.spin_for(mmToDeg, DEGREES)
+
+        while True:
+            err = Inertial_.rotation() * 0.5
+            left_drive_smart.set_velocity(driveVelocity - err, PERCENT)
+            right_drive_smart.set_velocity(driveVelocity + err, PERCENT)
+
+            if math.fabs(mm-right_drive_smart.position(DEGREES)) < 5:
+                self.resetDrivetrain()
+                break
+
+    def AIM_turn(self: AIMDrive, d: float, v: int = 100, p:int = 3) -> None:
+        """
+        Accurate Inertial Movement main function to turn to a heading.
+
+        ### Args:
+        d = float;
+        v = int : 100;
+        p = int : 3;
+
+        ### Returns:
+        None;
+        """
+        deg = d
+        vel = v
+        pro = p
+        err = 0
+        Inertial_.set_rotation(0)
+        rot = Inertial_.rotation()
+        err = deg - rot
+        while not math.fabs(err) < 5:
+            rot = Inertial_.rotation()
+            err = deg - rot
+
+            drivetrain.set_turn_velocity(err/pro)
+
+            if err/pro < 5:
+                drivetrain.set_turn_velocity(5)
+
+            elif err/pro > vel:
+                drivetrain.set_turn_velocity(vel)
+
+            
+            if deg < 0:
+                drivetrain.turn(LEFT)
+            else:
+                drivetrain.turn(RIGHT)
+
+class BarColor():
+    def Check_for_bar(self: BarColor) -> None:
+        """
+        Checks if an object (the control bar) is close enough. If it is, check to see if it's our own color, and activate the spin command.
+        
+        ### Args:
+        None;
+
+        ### Returns:
+        None;
+        """
+
+        self.check_dist()
+
+        if Dist < 240:
+            self.check_color_redundancy()
+        
+        self.spin_motor()
+
+    def check_dist(self: BarColor) -> None:
+        """
+        Used in Check_for_bar(): initializes Color_flips to 0(do not spin), then records the distance to the object.
+        
+        ### Args:
+        None;
+
+        ### Returns:
+        None;
+        """
+
+        global Dist, Color_Flips
+
         Color_Flips = 0
 
-def spin_motor():
-    #spins Bar_Switcher if Color_fips is 1(spin motor). Continues to do so until distance is too far away(robot has moved away) or color is correct.
-    while Color_Flips == 1:
-        Bar_Switcher.spin_for(FORWARD, 100, DEGREES)
-        wait(0.15, SECONDS)
-        check_dist()
-        if Dist < 240:
-            check_color_redundancy()
-    Bar_Switcher.stop()
+        Dist = DistanceSensor.object_distance(MM)
 
-# APF SCRIPTS VVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+    def check_color_redundancy(self: BarColor) -> None:
+        """
+        Used in Check_for_bar(): sets Color_flips to 1(spin motor), then checks to see if the detected object is our color. If it is, set Color_flips to 0(do not spin).
+        
+        ### Args:
+        None;
 
-def Do_APF():
-    # APF - Artificial Polarity Force. Runs all associated APF scripts . Begins by finding the closest obstacle point, noted in OBSTACLE_POINTS[]
-    Find_Closest_Point()
+        ### Returns:
+        None;
+        """
+        
+        global Color_Flips
+        Color_Flips = 1
 
-    #after finding the closest point, check to see if it's too close
-    if Closest_Distance < Avoidance_Distance:
+        if ColorSensor.color() == Color.BLUE and MyColor == "blue" or ColorSensor.color() == Color.RED and MyColor == "red":
+            Color_Flips = 0
 
-        #if it is, get the direction (relative to the robot) to the obstacle
-        directionTo_xy(Coords1, Coords2)
+    def spin_motor(self: BarColor) -> None:
+        """
+        Spins Bar_Switcher if Color_fips is 1(spin motor). Continues to do so until distance is too far away(robot has moved away) or color is correct.
+        
+        ### Args:
+        None;
 
-        if direction_to_turn == "right":
+        ### Returns:
+        None;
+        """
 
-            #turn right, scaled to object distance
-            drivetrain.set_turn_velocity((((Avoidance_Distance - Closest_Distance) / Avoidance_Distance) * 100), PERCENT)
-            drivetrain.turn(RIGHT)
-        elif direction_to_turn == "left":
+        while Color_Flips == 1:
 
-            #turn left, scaled to object distance
-            drivetrain.set_turn_velocity((((Avoidance_Distance - Closest_Distance) / Avoidance_Distance) * 100), PERCENT)
-            drivetrain.turn(LEFT)
-        else:
-            pass
+            Bar_Switcher.spin_for(FORWARD, 100, DEGREES)
+            wait(0.15, SECONDS)
 
-def Find_Closest_Point():
+            self.check_dist()
+
+            if Dist < 240:
+                self.check_color_redundancy()
+
+        Bar_Switcher.stop()
+
+colorBar = BarColor()
+
+# APF SCRIPTS
+
+def Find_Closest_Point() -> None:
+    """
+    Finds the closest point (obstacle) to the robot.
+
+    ### Args:
+    None;
+
+    ### Returns:
+    None;
+    """
+
     global Closest_ID, Closest_Distance, temp
-    # Finds the closest point (obstacle) to the robot
     
     temp = 1
     Closest_ID = 1
     Closest_Distance = 999999999999
     
-    for i in range(int(len(Obstacle_Points))):
+    for _ in range(int(len(Obstacle_Points))):
         
         if Obstacle_Points[temp - 1] == 0:
             #if the object is "0," consider it empty and break
@@ -705,9 +867,47 @@ def Find_Closest_Point():
         temp = Closest_ID
         Parse_all()
 
-def get_relative_heading(get_relative_heading_heading):
+def Do_APF() -> None:
+    """
+    APF - Artificial Polarity Force. Runs all associated APF scripts . Begins by finding the closest obstacle point, noted in OBSTACLE_POINTS[].
 
-    #corrects the input value to be relative to the robot's heading
+    ### Args:
+    None;
+
+    ### Returns:
+    None;
+    """
+
+    Find_Closest_Point()
+
+    #after finding the closest point, check to see if it's too close
+    if Closest_Distance < Avoidance_Distance:
+
+        #if it is, get the direction (relative to the robot) to the obstacle
+        directionTo_xy(Coords1, Coords2)
+
+        if direction_to_turn == "right":
+
+            #turn right, scaled to object distance
+            drivetrain.set_turn_velocity((((Avoidance_Distance - Closest_Distance) / Avoidance_Distance) * 100), PERCENT)
+            drivetrain.turn(RIGHT)
+        elif direction_to_turn == "left":
+
+            #turn left, scaled to object distance
+            drivetrain.set_turn_velocity((((Avoidance_Distance - Closest_Distance) / Avoidance_Distance) * 100), PERCENT)
+            drivetrain.turn(LEFT)
+
+def get_relative_heading(get_relative_heading_heading: float) -> None:
+    """
+    Corrects the input value to be relative to the robot's heading.
+
+    ### Args:
+    get_relative_heading_heading = float;
+
+    ### Returns:
+    None;
+    """
+
     global Relative_heading, corrected_heading, direction_to_turn
 
     #kind of cheezing the system here(not really, but that sounds funny. So.); I figured out that by subtracting the robot's heading from 360, then adding it to the target heading, you get the fixed heading, which is a lot easier than how I used to do it.
@@ -732,8 +932,18 @@ def get_relative_heading(get_relative_heading_heading):
     else:
         direction_to_turn = "right"
 
-def directionTo_xy(directionTo_xy__x, directionTo_xy__y):
-    #get the distance to the x and y coordinated based on the robot's
+def directionTo_xy(directionTo_xy__x: float, directionTo_xy__y: float) -> None:
+    """
+    Get the distance to the x and y coordinated based on the robot's.
+
+    ### Args:
+    directionTo_xy__x = float;
+    directionTo_xy__y = float;
+
+    ### Returns:
+    None;
+    """
+
     global dx, dy, Direction_To_Point
 
     #set dx and dy variables to use with aTan2()
@@ -741,15 +951,25 @@ def directionTo_xy(directionTo_xy__x, directionTo_xy__y):
     dy = directionTo_xy__y - PosY
 
     #use aTan2() to calculate the direction to the point
-    Direction_To_Point = math.atan2(dy,dx) / math.pi * 180
+    Direction_To_Point = math.atan2(dy, dx) / math.pi * 180
     #clamp to 360 degrees, just to be safe
     Direction_To_Point = (Direction_To_Point + 360) % 360
 
     #send it over to get the heading in relation to the robot
     get_relative_heading(Direction_To_Point)
 
-def distanceTo_xy(distanceTo_xy_x, distanceTo_xy_y):
-    #uses the Pythagorean theorem to get the distance to a point
+def distanceTo_xy(distanceTo_xy_x, distanceTo_xy_y) -> None:
+    """
+    Uses the Pythagorean theorem to get the distance to a point.
+
+    ### Args:
+    directionTo_xy__x = float;
+    directionTo_xy__y = float;
+
+    ### Returns:
+    None;
+    """
+
     global dx, dy, distance_to_point
 
     #calculate dx and dy, to be used in the equation
@@ -766,10 +986,21 @@ def Parse_all():
     Coords1 = int(Coords1)
     Coords2 = int(Coords2)
 
-#ODOMETRY SCRIPTS VVVVVVVVVVVVVVVVVVVVVVVVVVV
+#ODOMETRY SCRIPTS
 
-def ODOM_loop():
+def ODOM_loop() -> None:
+    """
+    Main loop For ODOM.
+
+    ### Args:
+    None;
+
+    ### Returns:
+    None;
+    """
+
     global Heading, Vertical_current, Horizontal_current, X_assist_Current, Delta_forward, Delta_sideways, Last_forward, Last_sideways, Forward_movement, Sideways_movement, Change_x, Change_y, PosX, PosY
+
     # Find Heading & set variable to it
     Heading = Inertial_.heading(DEGREES)
     
@@ -802,9 +1033,18 @@ def ODOM_loop():
     PosY = PosY + -1 *Change_y
     wait(5, MSEC)
 
-def offset_accommodation():
+def offset_accommodation() -> None:
+    """
+    Calculate the X_diff, which is subracted from the larger tracking wheel to find how much the robot has actually moved sideways; used to eliminate the X-change scripts picking up in-place rotation.
+
+    ### Args:
+    None;
+
+    ### Returns:
+    None;
+    """
+
     X_ACOM = 0
-    #calculate the X_diff, which is subracted from the larger tracking wheel to find how much the robot has actually moved sideways; used to eliminate the X-change scripts picking up in-place rotation
     
     global xScale, X_diff, X_diff_scaled, X_ACAOM,oldX_diff
     
@@ -821,10 +1061,19 @@ def offset_accommodation():
     X_ACAOM = X_diff_scaled
     oldX_diff += X_diff
 
-#RUNNING SCRIPTS VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+#RUNNING SCRIPTS
 
-def color_switching():
-    #initialize and run color sensing. Also set drive stopping and set Bar_switcher to 100% velocity
+def color_switching() -> None:
+    """
+    Initialize and run color sensing. Also set drive stopping and set Bar_switcher to 100% velocity.
+
+    ### Args:
+    None;
+
+    ### Returns:
+    None;
+    """
+
     global MyColor, drivetrain, Bar_Switcher, ColorSensor
 
     Bar_Switcher.set_velocity(100, PERCENT)
@@ -835,11 +1084,20 @@ def color_switching():
     ColorSensor.set_light_power(100, PERCENT)
 
     while True:
-        Check_for_bar()
+        colorBar.Check_for_bar()
         wait(5, MSEC)
 
-def vs_setup():
-    #show setup progression on the brain screen
+def vs_setup() -> None:
+    """
+    Show setup progression on the brain screen.
+
+    ### Args:
+    None;
+
+    ### Returns:
+    None;
+    """
+
     global SETUP_progression
 
     while not SETUP_progression > 0:
@@ -866,8 +1124,17 @@ def vs_setup():
         brain.screen.render()
         wait(5, MSEC)
 
-def prog_setup():
-    #calibration, scanning, and setup code to run when the program starts
+def prog_setup() -> None:
+    """
+    Calibration, scanning, and setup code to run when the program starts.
+
+    ### Args:
+    None;
+
+    ### Args:
+    None;
+    """
+
     global SETUP_progression, Avoidance_Distance, Obstacle_Points, PosX, PosY, Last_forward, Last_sideways, setUp
 
     setUp = True
@@ -942,9 +1209,17 @@ def prog_setup():
         brain.screen.render()
         wait(5, MSEC)
 
-def CC_display_callback():
+def CC_display_callback() -> None:
+    """
+    Connectivity code to show on controller throughout the program.
 
-    #connectivity code to show on controller throughout the program
+    ### Args:
+    None;
+
+    ### Returns:
+    None;
+    """
+
     while True:
         controller_1.screen.clear_row(3)
         controller_1.screen.set_cursor(controller_1.screen.row(), 1)
@@ -970,8 +1245,17 @@ def CC_display_callback():
         controller_1.screen.print("<")
         wait(0.5, SECONDS)
 
-def draw_button(draw_button_x, draw_button_y, draw_button_width, draw_button_height):
-    # Draws a button on the brain screen and checks if it is pressed
+def draw_button(draw_button_x: int, draw_button_y: int, draw_button_width: int, draw_button_height: int) -> None:
+    """
+    Draws a button on the brain screen and checks if it is pressed.
+
+    ### Args:
+    draw_button_x = int; draw_button_y = int; draw_button_width = int; draw_button_height = int;
+
+    ### Returns:
+    None;
+    """
+
     global button_pressed, Auto_Side, MyColor, v, sizeDrawRound, AnimProgress
 
     #draw the actual rectangle for the button
@@ -985,8 +1269,17 @@ def draw_button(draw_button_x, draw_button_y, draw_button_width, draw_button_hei
         if draw_button_x < brain.screen.x_position() < (draw_button_x + draw_button_width) and draw_button_y < brain.screen.y_position() < (draw_button_y + draw_button_height):
             button_pressed = 1
 
-def bootAnim():
-    #User interface and setup complete animation code
+def bootAnim() -> None:
+    """
+    User interface and setup complete animation code
+    
+    ### Args:
+    None;
+
+    ### Returns:
+    None;
+    """
+
     global button_pressed, Auto_Side, MyColor, v, sizeDrawRound, AnimProgress, screen_precision, console_precision, UseACP, RunAuto
     
     #print out side selection menu
@@ -1127,7 +1420,7 @@ def bootAnim():
     AnimProgress = 0
     v = 0
     
-    for i in range(45):
+    for _ in range(45):
 
         #clear the screen
         brain.screen.clear_screen()
@@ -1177,7 +1470,7 @@ def bootAnim():
         AnimProgress = AnimProgress + 1
 
         #lock the animation to 30 fps
-        wait(0.03, SECONDS)
+        wait(0.03333, SECONDS)
 
     #show the finished animation for a second
     wait(1, SECONDS)
@@ -1187,7 +1480,17 @@ def bootAnim():
     brain.screen.render()
 
 
-def liftTick_callback():
+def liftTick_callback() -> None:
+    """
+    Main loop for all ticks for Driver Control.
+
+    ### Args:
+    None;
+
+    ### Returns:
+    None;
+    """
+
     MT = MotorTicks()
     liftGroup.set_velocity(100,PERCENT)
     liftGroup.set_stopping(HOLD)
@@ -1220,36 +1523,23 @@ brain.screen.next_row()
 brain.screen.print("Debug for APF finished.")
 brain.screen.next_row()
 
-def AIM_turn(d,v=100,p=3):
-    deg = d
-    vel = v
-    pro = p
-    err = 0
-    Inertial_.set_rotation(0)
-    rot = Inertial_.rotation()
-    err = deg - rot
-    while not math.fabs(err) < 5:
-        rot = Inertial_.rotation()
-        err = deg - rot
-
-        drivetrain.set_turn_velocity(err/pro)
-
-        if err/pro < 5:
-            drivetrain.set_turn_velocity(5)
-
-        elif err/pro > vel:
-            drivetrain.set_turn_velocity(vel)
-
-        
-        if deg < 0:
-            drivetrain.turn(LEFT)
-        else:
-            drivetrain.turn(RIGHT)
-
 #Activate auto program; currently, this actually runs in ACPv1
-def auto():
+def auto() -> None:
+    """
+    Aton script used in the Auto period.
+    
+    ### Args:
+    None;
+
+    ### Returns:
+    None;
+    """
+
     color = Thread( color_switching )
+    AIM = AIMDrive()
+
     global MyColor
+
     Inertial_.reset_heading()
 
     # Temperary Auto setup to make Aton
@@ -1269,8 +1559,8 @@ def auto():
         drivetrain.turn_for(LEFT, CurrentHeading, DEGREES, 100, PERCENT, True)
 
     # Drive Forward to setup for turn to right pin slot.
-    drivetrain.set_drive_velocity(80,PERCENT)
-    drivetrain.set_turn_velocity(80,PERCENT)
+    drivetrain.set_drive_velocity(80, PERCENT)
+    drivetrain.set_turn_velocity(80, PERCENT)
     drivetrain.drive_for(REVERSE, 260, MM, 80, PERCENT)
 
     wait(50, MSEC)  # Added wait to stableize robot before turn
@@ -1301,18 +1591,28 @@ def auto():
     # return lift to up position
     wait(100, MSEC)
     drivetrain.drive_for(FORWARD, 200, MM)
-    liftGroup.spin_to_position(0,DEGREES,100,PERCENT)
+    liftGroup.spin_to_position(0, DEGREES, 100, PERCENT)
     K56721.clawDown()
 
     # Stops Color turn Thread.
     color.stop()
 
 def driver():
+    """
+    Driver Control init.
+
+    ### Args:
+    None;
+
+    ### Returns:
+    None;
+    """
+
     claw  = Thread(K56721.autoload)
     drive = Thread(lambda: K56721.TankDrive(2))
     color_switching()
 
-#PROGRAM RUN VVVVVVVVVVVVVVVVVVV
+#PROGRAM RUN
 
 K56721 = robot()
 grabber.set(True)
@@ -1323,11 +1623,11 @@ comp = Competition(driver,auto)
 
 if comp.is_driver_control():
     if brain.sdcard.is_inserted() and UseACP:
-        comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=auto)
+        comp=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
     else:
-        wait(1,SECONDS)
+        wait(1, SECONDS)
         while not setUp:
-            wait(5,MSEC)
+            wait(5, MSEC)
             controller_1.screen.print(".")
         if RunAuto:
             controller_1.screen.print("auto")
