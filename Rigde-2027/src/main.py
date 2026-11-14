@@ -274,7 +274,7 @@ class robot():
                 if self.liftRaised:
 
                     self.liftRaised = False
-
+                    
                     grabber.set(False)
                     liftGroup.spin_to_position(0, DEGREES, 100, PERCENT, False)
                     Claw.spin_to_position(-40, DEGREES)  # Set to -40 to take out slack in Claw.
@@ -600,7 +600,7 @@ class MotorTicks:
             self.Xrelease = True
 
     def clawTick(self):
-        if not Loading:
+        if not Loading and comp.is_driver_control():
             if controller_1.buttonDown.pressing():
                 Claw.spin(FORWARD, 50, PERCENT)
                 wait(20, MSEC)
@@ -612,11 +612,19 @@ class MotorTicks:
                 wait(20, MSEC)
 
     def resetTick(self):
+        controller_1.screen.print("RESET")
+        """resets the claw to zero facing down"""
+
         global Loading
+        
         if not Loading:
+       
             if controller_1.buttonLeft.pressing():
-                Loading = True
+                controller_1.screen.print("  <_  ")
+       
                 if self.leftRelease:
+                    controller_1.screen.print("(>)")
+                    Loading = True
                     self.leftRelease = False
                     Claw.set_velocity(70,PERCENT)
                     Claw.spin(REVERSE)
@@ -624,12 +632,27 @@ class MotorTicks:
                         wait(10,MSEC)
 
                     Claw.stop()
+                    Claw.set_stopping(COAST)
                     wait(0.2,SECONDS)
+                    Claw.set_stopping(HOLD)
                     Claw.set_position(0,DEGREES)
                     
                     Loading = False
             else:
                 self.leftRelease = True
+
+    def forceGrabberTick(self):
+        global Loading
+
+        if not Loading and comp.is_driver_control():
+            if controller_1.buttonB.pressing():
+                if self.clawOpen:
+                    self.clawOpen = False
+                    grabber.set(False)
+                else:
+                    self.clawOpen = True
+                    grabber.set(True)
+
 
 class MC:
     """Motor config to find all motors and get there port numbers."""
@@ -1559,6 +1582,7 @@ def liftTick_callback() -> None:
         MT.grabberTick()
         MT.clawTick()
         MT.resetTick()
+        MT.forceGrabberTick()
 
 # Event activation
 CC_display(CC_display_callback)
@@ -1601,7 +1625,6 @@ def auto() -> None:
     Inertial_.reset_heading()
     Bar_Switcher.set_velocity(50,PERCENT)
     # Temperary Auto setup to make Aton
-    MyColor = "red"
 
     # Inital Right turn for color bar.
     right_drive_smart.spin(FORWARD, 5, PERCENT)
