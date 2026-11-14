@@ -116,7 +116,7 @@ lift_run = Event()
 """Event for the Robot Lift's and Claw's Ticks."""
 
 Obstacle_Points = ["0,600",0]
-"""Unknown."""
+"""Enter points to be avoided in APF."""
 
 motors: list[Motor]=[]
 """List of detected Motor classes from MC.MotorConfig()."""
@@ -277,7 +277,7 @@ class robot():
 
                     grabber.set(False)
                     liftGroup.spin_to_position(0, DEGREES, 100, PERCENT, False)
-                    Claw.spin_to_position(-40, DEGREES)  # Set to -40 to take out slack in Claw.
+                    Claw.spin_to_position(0, DEGREES)  # Set to -40 to take out slack in Claw.
 
                     while not liftGroup.position() < 10:
                         wait(5, MSEC)
