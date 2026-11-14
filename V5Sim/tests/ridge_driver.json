@@ -1,0 +1,157 @@
+{
+ "sim": {
+  "mips": 400,
+  "background_us": 20,
+  "api_call_us": 0.5,
+  "run_ms": 25000
+ },
+ "ports": {
+  "1": "rotation",
+  "2": "rotation",
+  "14": "rotation",
+  "4": "optical",
+  "6": "distance",
+  "7": "imu",
+  "5": {
+   "type": "motor",
+   "gear": "18"
+  },
+  "8": {
+   "type": "motor",
+   "gear": "18"
+  },
+  "10": {
+   "type": "motor",
+   "gear": "18"
+  },
+  "15": {
+   "type": "motor",
+   "gear": "6"
+  },
+  "16": {
+   "type": "motor",
+   "gear": "6"
+  },
+  "17": {
+   "type": "motor",
+   "gear": "6"
+  },
+  "18": {
+   "type": "motor",
+   "gear": "6"
+  },
+  "19": {
+   "type": "motor",
+   "gear": "6"
+  },
+  "20": {
+   "type": "motor",
+   "gear": "6"
+  }
+ },
+ "touch": [
+  {
+   "t": 4000,
+   "x": 150,
+   "y": 150
+  },
+  {
+   "t": 5000,
+   "x": 150,
+   "y": 150
+  },
+  {
+   "t": 6000,
+   "x": 260,
+   "y": 150
+  }
+ ],
+ "controller": [
+  {
+   "t": 9000,
+   "input": "axis3",
+   "value": 100
+  },
+  {
+   "t": 9000,
+   "input": "axis2",
+   "value": 100
+  },
+  {
+   "t": 11000,
+   "input": "axis3",
+   "value": 60
+  },
+  {
+   "t": 11000,
+   "input": "axis2",
+   "value": -60
+  },
+  {
+   "t": 12000,
+   "input": "axis3",
+   "value": 0
+  },
+  {
+   "t": 12000,
+   "input": "axis2",
+   "value": 0
+  },
+  {
+   "t": 12500,
+   "input": "a",
+   "value": 1
+  },
+  {
+   "t": 12700,
+   "input": "a",
+   "value": 0
+  },
+  {
+   "t": 15000,
+   "input": "l1",
+   "value": 1
+  },
+  {
+   "t": 16000,
+   "input": "l1",
+   "value": 0
+  },
+  {
+   "t": 16000,
+   "input": "r1",
+   "value": 1
+  },
+  {
+   "t": 17000,
+   "input": "r1",
+   "value": 0
+  },
+  {
+   "t": 17500,
+   "input": "x",
+   "value": 1
+  },
+  {
+   "t": 17700,
+   "input": "x",
+   "value": 0
+  },
+  {
+   "t": 18500,
+   "input": "up",
+   "value": 1
+  },
+  {
+   "t": 18700,
+   "input": "up",
+   "value": 0
+  }
+ ],
+ "competition": [
+  {
+   "t": 0,
+   "mode": "driver"
+  }
+ ]
+}

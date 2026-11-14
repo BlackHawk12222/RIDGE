@@ -502,6 +502,7 @@ typedef struct _mp_gps_obj_t{
 typedef struct _mp_digital_out_obj_t{
     mp_obj_base_t base;
     void *cpp_handle;
+    bool state;  // last value written, returned by value()
 } mp_digital_out_obj_t;
 
 typedef struct _mp_three_wire_device_obj_t{
@@ -801,7 +802,10 @@ static mp_obj_t mp_motor_is_spinning(mp_obj_t self_ptr){
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_motor_is_spinning_obj, mp_motor_is_spinning);
 
-static mp_obj_t mp_motor_position(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 29).
+static mp_obj_t mp_motor_position(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(29);
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
@@ -809,9 +813,12 @@ static mp_obj_t mp_motor_position(mp_obj_t self_ptr, mp_obj_t units_t){
     output = motor_position(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_position_obj, mp_motor_position);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_position_obj, 1, 2, mp_motor_position);
 
-static mp_obj_t mp_motor_velocity(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 24).
+static mp_obj_t mp_motor_velocity(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(24);
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
@@ -819,9 +826,12 @@ static mp_obj_t mp_motor_velocity(mp_obj_t self_ptr, mp_obj_t units_t){
     output = motor_velocity(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_velocity_obj, mp_motor_velocity);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_velocity_obj, 1, 2, mp_motor_velocity);
 
-static mp_obj_t mp_motor_current(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 33).
+static mp_obj_t mp_motor_current(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(33);
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
@@ -829,9 +839,12 @@ static mp_obj_t mp_motor_current(mp_obj_t self_ptr, mp_obj_t units_t){
     output = motor_current(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_current_obj, mp_motor_current);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_current_obj, 1, 2, mp_motor_current);
 
-static mp_obj_t mp_motor_power(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 34).
+static mp_obj_t mp_motor_power(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(34);
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
@@ -839,9 +852,12 @@ static mp_obj_t mp_motor_power(mp_obj_t self_ptr, mp_obj_t units_t){
     output = motor_power(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_power_obj, mp_motor_power);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_power_obj, 1, 2, mp_motor_power);
 
-static mp_obj_t mp_motor_torque(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 31).
+static mp_obj_t mp_motor_torque(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(31);
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
@@ -849,9 +865,12 @@ static mp_obj_t mp_motor_torque(mp_obj_t self_ptr, mp_obj_t units_t){
     output = motor_torque(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_torque_obj, mp_motor_torque);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_torque_obj, 1, 2, mp_motor_torque);
 
-static mp_obj_t mp_motor_efficiency(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 23).
+static mp_obj_t mp_motor_efficiency(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(23);
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
@@ -859,7 +878,7 @@ static mp_obj_t mp_motor_efficiency(mp_obj_t self_ptr, mp_obj_t units_t){
     output = motor_efficiency(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_efficiency_obj, mp_motor_efficiency);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_efficiency_obj, 1, 2, mp_motor_efficiency);
 
 // units is optional and defaults to CELSIUS (35), like VEXcode.
 static mp_obj_t mp_motor_temperature(size_t n_args, const mp_obj_t *args){
@@ -1091,7 +1110,10 @@ static mp_obj_t mp_motor_group_is_spinning(mp_obj_t self_ptr){
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_motor_group_is_spinning_obj, mp_motor_group_is_spinning);
 
-static mp_obj_t mp_motor_group_position(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 29).
+static mp_obj_t mp_motor_group_position(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(29);
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
@@ -1099,9 +1121,12 @@ static mp_obj_t mp_motor_group_position(mp_obj_t self_ptr, mp_obj_t units_t){
     output = motor_group_position(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_position_obj, mp_motor_group_position);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_position_obj, 1, 2, mp_motor_group_position);
 
-static mp_obj_t mp_motor_group_velocity(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 24).
+static mp_obj_t mp_motor_group_velocity(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(24);
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
@@ -1109,9 +1134,12 @@ static mp_obj_t mp_motor_group_velocity(mp_obj_t self_ptr, mp_obj_t units_t){
     output = motor_group_velocity(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_velocity_obj, mp_motor_group_velocity);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_velocity_obj, 1, 2, mp_motor_group_velocity);
 
-static mp_obj_t mp_motor_group_current(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 33).
+static mp_obj_t mp_motor_group_current(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(33);
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
@@ -1119,9 +1147,12 @@ static mp_obj_t mp_motor_group_current(mp_obj_t self_ptr, mp_obj_t units_t){
     output = motor_group_current(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_current_obj, mp_motor_group_current);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_current_obj, 1, 2, mp_motor_group_current);
 
-static mp_obj_t mp_motor_group_power(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 34).
+static mp_obj_t mp_motor_group_power(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(34);
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
@@ -1129,9 +1160,12 @@ static mp_obj_t mp_motor_group_power(mp_obj_t self_ptr, mp_obj_t units_t){
     output = motor_group_power(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_power_obj, mp_motor_group_power);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_power_obj, 1, 2, mp_motor_group_power);
 
-static mp_obj_t mp_motor_group_torque(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 31).
+static mp_obj_t mp_motor_group_torque(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(31);
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
@@ -1139,9 +1173,12 @@ static mp_obj_t mp_motor_group_torque(mp_obj_t self_ptr, mp_obj_t units_t){
     output = motor_group_torque(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_torque_obj, mp_motor_group_torque);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_torque_obj, 1, 2, mp_motor_group_torque);
 
-static mp_obj_t mp_motor_group_efficiency(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 23).
+static mp_obj_t mp_motor_group_efficiency(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(23);
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_t);
 
@@ -1149,7 +1186,7 @@ static mp_obj_t mp_motor_group_efficiency(mp_obj_t self_ptr, mp_obj_t units_t){
     output = motor_group_efficiency(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_motor_group_efficiency_obj, mp_motor_group_efficiency);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_efficiency_obj, 1, 2, mp_motor_group_efficiency);
 
 // units is optional and defaults to CELSIUS (35), like VEXcode.
 static mp_obj_t mp_motor_group_temperature(size_t n_args, const mp_obj_t *args){
@@ -1418,11 +1455,14 @@ static mp_obj_t mp_drivetrain_rotation(size_t n_args, const mp_obj_t *args) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_rotation_obj, 1, 2, mp_drivetrain_rotation);
 
-static mp_obj_t mp_drivetrain_velocity(mp_obj_t self_ptr, mp_obj_t units_obj) {
+// units is optional, like VEXcode (default 24).
+static mp_obj_t mp_drivetrain_velocity(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_obj = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(24);
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     return mp_vex_new_float(drivetrain_velocity(self->cpp_handle, mp_obj_get_int(units_obj)));
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_drivetrain_velocity_obj, mp_drivetrain_velocity);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_velocity_obj, 1, 2, mp_drivetrain_velocity);
 
 static mp_obj_t mp_drivetrain_get_timeout(mp_obj_t self_ptr) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
@@ -1614,6 +1654,26 @@ static mp_obj_t mp_timer_time(size_t n_args, const mp_obj_t *args){
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_timer_time_obj, 1, 2, mp_timer_time);
 
+// VEXcode also has reset() (same as clear()), value() (seconds), system() (ms since the
+// program started) and system_high_res() (us since the program started).
+static mp_obj_t mp_timer_value(mp_obj_t self_ptr) {
+    mp_timer_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return mp_vex_new_float((mp_float_t)(vex_timer_time(self->cpp_handle, VEX_TIME_UNITS_MSEC) / 1000.0));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_timer_value_obj, mp_timer_value);
+
+static mp_obj_t mp_timer_system(mp_obj_t self_ptr) {
+    (void)self_ptr;
+    return mp_obj_new_int_from_uint(mp_hal_ticks_ms());
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_timer_system_obj, mp_timer_system);
+
+static mp_obj_t mp_timer_system_high_res(mp_obj_t self_ptr) {
+    (void)self_ptr;
+    return mp_obj_new_int_from_uint(mp_hal_ticks_us());
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_timer_system_high_res_obj, mp_timer_system_high_res);
+
 static mp_obj_t mp_timer_event(mp_obj_t self_ptr, mp_obj_t callback_func, mp_obj_t delay_t){
     mp_timer_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
@@ -1627,7 +1687,11 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mp_timer_event_obj, mp_timer_event);
 
 static const mp_rom_map_elem_t mp_timer_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&mp_timer_clear_obj) },
+    { MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&mp_timer_clear_obj) },
     { MP_ROM_QSTR(MP_QSTR_time), MP_ROM_PTR(&mp_timer_time_obj) },
+    { MP_ROM_QSTR(MP_QSTR_value), MP_ROM_PTR(&mp_timer_value_obj) },
+    { MP_ROM_QSTR(MP_QSTR_system), MP_ROM_PTR(&mp_timer_system_obj) },
+    { MP_ROM_QSTR(MP_QSTR_system_high_res), MP_ROM_PTR(&mp_timer_system_high_res_obj) },
     { MP_ROM_QSTR(MP_QSTR_event), MP_ROM_PTR(&mp_timer_event_obj) },
 };
 static MP_DEFINE_CONST_DICT(mp_timer_locals_dict, mp_timer_locals_dict_table);
@@ -1722,7 +1786,10 @@ static mp_obj_t mp_brain_battery_voltage(mp_obj_t self_ptr, mp_obj_t units_t){
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_battery_voltage_obj, mp_brain_battery_voltage);
 
-static mp_obj_t mp_brain_battery_current(mp_obj_t self_ptr, mp_obj_t units_t){
+// units is optional, like VEXcode (default 33).
+static mp_obj_t mp_brain_battery_current(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_t = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(33);
     mp_brain_battery_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
 
     int units = mp_obj_get_int(units_t);
@@ -1731,7 +1798,7 @@ static mp_obj_t mp_brain_battery_current(mp_obj_t self_ptr, mp_obj_t units_t){
     output = brain_battery_current(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_battery_current_obj, mp_brain_battery_current);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_battery_current_obj, 1, 2, mp_brain_battery_current);
 
 static mp_obj_t mp_brain_battery_capacity(mp_obj_t self_ptr){
     mp_brain_battery_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
@@ -2450,18 +2517,28 @@ static mp_obj_t mp_digital_out_make_new(const mp_obj_type_t *type, size_t n_args
     mp_three_wire_port_obj_t *port = MP_OBJ_TO_PTR(args[0]);
     mp_digital_out_obj_t *self = mp_obj_malloc(mp_digital_out_obj_t, type);
     self->cpp_handle = vex_digital_out_create(port->port);
+    self->state = false;
     return MP_OBJ_FROM_PTR(self);
 }
 
 static mp_obj_t mp_digital_out_set(mp_obj_t self_ptr, mp_obj_t value_obj){
     mp_digital_out_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    vex_digital_out_set(self->cpp_handle, mp_obj_is_true(value_obj));
+    self->state = mp_obj_is_true(value_obj);
+    vex_digital_out_set(self->cpp_handle, self->state);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(mp_digital_out_set_obj, mp_digital_out_set);
 
+// VEXcode: DigitalOut.value() returns the last value set (1 or 0).
+static mp_obj_t mp_digital_out_value(mp_obj_t self_ptr){
+    mp_digital_out_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+    return MP_OBJ_NEW_SMALL_INT(self->state ? 1 : 0);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_digital_out_value_obj, mp_digital_out_value);
+
 static const mp_rom_map_elem_t mp_digital_out_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_set), MP_ROM_PTR(&mp_digital_out_set_obj) },
+    { MP_ROM_QSTR(MP_QSTR_value), MP_ROM_PTR(&mp_digital_out_value_obj) },
 };
 static MP_DEFINE_CONST_DICT(mp_digital_out_locals_dict, mp_digital_out_locals_dict_table);
 
@@ -2916,13 +2993,16 @@ static mp_obj_t mp_rotation_position(size_t n_args, const mp_obj_t *args){
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_rotation_position_obj, 1, 2, mp_rotation_position);
 
-static mp_obj_t mp_rotation_velocity(mp_obj_t self_ptr, mp_obj_t units_obj){
+// units is optional, like VEXcode (default 24).
+static mp_obj_t mp_rotation_velocity(size_t n_args, const mp_obj_t *args) {
+    mp_obj_t self_ptr = args[0];
+    mp_obj_t units_obj = n_args > 1 ? args[1] : MP_OBJ_NEW_SMALL_INT(24);
     mp_rotation_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
     int units = mp_obj_get_int(units_obj);
     mp_vex_check_velocity_units(units, false);
     return mp_vex_new_float(vex_rotation_velocity(self->cpp_handle, units));
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_rotation_velocity_obj, mp_rotation_velocity);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_rotation_velocity_obj, 1, 2, mp_rotation_velocity);
 
 static mp_obj_t mp_rotation_reset_position(mp_obj_t self_ptr){
     mp_rotation_obj_t *self = MP_OBJ_TO_PTR(self_ptr);

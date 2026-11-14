@@ -71,6 +71,7 @@ EXTRA_CXXFLAGS += -I$(BINDIR)/micropython \
 ifeq ($(COMPILE_ALL),1)
 EXTRA_SRCDIRS += $(MPY_ROOT) \
                  $(MPY_ROOT)/py \
+                 $(MPY_ROOT)/extmod \
                  $(MPY_ROOT)/shared/runtime \
                  $(MPY_ROOT)/modules
 

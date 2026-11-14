@@ -1385,8 +1385,13 @@ pending_exception_check:
                     if (MP_STATE_VM(sched_state) == MP_SCHED_IDLE)
                     #endif
                     {
+                    #ifdef MP_THREAD_GIL_BOUNCE
+                    // Port hook: hand the GIL over only when another thread waits for it.
+                    MP_THREAD_GIL_BOUNCE();
+                    #else
                     MP_THREAD_GIL_EXIT();
                     MP_THREAD_GIL_ENTER();
+                    #endif
                     }
                 }
                 #endif

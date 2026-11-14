@@ -40,24 +40,36 @@ static mp_thread_record_t *find_thread_record(task_t task) {
     return NULL;
 }
 
-// ---- Fast thread-state lookup via FreeRTOS thread-local storage ----
-// FreeRTOS TLS (exported by libpros.a)
-extern void *pvTaskGetThreadLocalStoragePointer(task_t task, int32_t index);
-extern void vTaskSetThreadLocalStoragePointer(task_t task, int32_t index, void *value);
+// ---- Fast thread-state lookup ----
+// PROS builds FreeRTOS with only 2 thread-local-storage slots, and both are used by
+// task_notify_when_deleting. The old code used slot 4, which FreeRTOS silently
+// ignores, so every MP_STATE_THREAD access fell through to the mutex + list walk
+// (about 5 us per Python function call). Instead we keep the record pointer in the
+// task's "task number", a spare per-task word FreeRTOS reserves for trace tools
+// and PROS never touches (exported by libpros.a).
+extern uint32_t uxTaskGetTaskNumber(task_t task);
+extern void vTaskSetTaskNumber(task_t task, const uint32_t value);
 
-#ifndef MP_THREAD_TLS_INDEX
-#define MP_THREAD_TLS_INDEX (4)   // PROS uses the low slots
-#endif
+// FreeRTOS never initializes this word, so a task we didn't tag may hold garbage.
+// Only trust it if it points into the heap (where records are malloc'd) and the
+// record really belongs to this task; otherwise take the slow path.
+extern char _heap_start[], _heap_end[];
 
 static inline mp_thread_record_t *tls_get_record(void) {
-    return (mp_thread_record_t *)pvTaskGetThreadLocalStoragePointer(NULL, MP_THREAD_TLS_INDEX);
+    task_t task = task_get_current();
+    uintptr_t p = (uintptr_t)uxTaskGetTaskNumber(task);
+    if ((p & 3u) != 0 || p < (uintptr_t)_heap_start || p >= (uintptr_t)_heap_end - sizeof(mp_thread_record_t)) {
+        return NULL;
+    }
+    mp_thread_record_t *record = (mp_thread_record_t *)p;
+    return record->task == task ? record : NULL;
 }
 
 static inline void tls_set_record(mp_thread_record_t *record) {
-    vTaskSetThreadLocalStoragePointer(NULL, MP_THREAD_TLS_INDEX, record);
+    vTaskSetTaskNumber(task_get_current(), (uint32_t)(uintptr_t)record);
 }
 
-// Fallback: old locked lookup, then cache it in TLS
+// Fallback: locked lookup, then cache it in the task number
 static mp_thread_record_t *slow_find_current_record(void) {
     lock_thread_records();
     mp_thread_record_t *record = find_thread_record(task_get_current());
@@ -174,7 +186,7 @@ mp_uint_t mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size
     thread_records = record;
     unlock_thread_records();
 
-    task_t task = task_create(thread_task_entry, record, TASK_PRIORITY_DEFAULT,
+    task_t task = task_create(thread_task_entry, record, MP_PYTHON_TASK_PRIORITY,
         (uint16_t)stack_depth, "MicroPython Thread");
     if (task == NULL) {
         printf("[mp_thread] task_create failed (requested %u bytes, depth %u)\n",
@@ -225,14 +237,41 @@ void mp_thread_mutex_init(mp_thread_mutex_t *mutex) {
     }
 }
 
+// Number of tasks blocked waiting for the GIL. The VM only hands the GIL over
+// when this is non-zero, so a lone thread never pays for a mutex give/take.
+static volatile int gil_waiters;
+
 int mp_thread_mutex_lock(mp_thread_mutex_t *mutex, int wait) {
     if (mutex == &MP_STATE_VM(gil_mutex)) {
         mp_thread_record_t *record = current_record();
         if (record != NULL) {
             save_stack_pointer(record);
         }
+        if (mutex_take(*mutex, 0)) {
+            return 1;
+        }
+        if (!wait) {
+            return 0;
+        }
+        __atomic_add_fetch(&gil_waiters, 1, __ATOMIC_SEQ_CST);
+        bool taken = mutex_take(*mutex, TIMEOUT_MAX);
+        __atomic_sub_fetch(&gil_waiters, 1, __ATOMIC_SEQ_CST);
+        return taken ? 1 : 0;
     }
     return mutex_take(*mutex, wait ? TIMEOUT_MAX : 0) ? 1 : 0;
+}
+
+// FreeRTOS mutexes are not fair: giving the GIL to an equal-priority waiter
+// does not switch to it, so the holder took it straight back and the waiter
+// starved until a tick happened to land in the gap. Hand off explicitly:
+// release, yield (delay(0) == taskYIELD), then queue up behind the waiter.
+void mp_thread_gil_bounce(void) {
+    if (__atomic_load_n(&gil_waiters, __ATOMIC_RELAXED) == 0) {
+        return;
+    }
+    MP_THREAD_GIL_EXIT();
+    delay(0);
+    MP_THREAD_GIL_ENTER();
 }
 
 void mp_thread_mutex_unlock(mp_thread_mutex_t *mutex) {
