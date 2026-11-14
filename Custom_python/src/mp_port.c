@@ -335,3 +335,20 @@ mp_import_stat_t mp_import_stat(const char *path) {
     fclose(file);
     return MP_IMPORT_STAT_DIR;
 }
+
+// ---- Waking the idle MicroPython task (used by callbacks and competition events) ----
+#include "pros/rtos.h"
+
+static task_t mp_port_main_task = NULL;
+
+void mp_port_set_main_task(void *task) {
+    mp_port_main_task = (task_t)task;
+}
+
+// Wakes the idle MicroPython task right away so the slow GIL poll in main.cpp
+// doesn't delay scheduled callbacks. Safe to call from any task.
+void mp_port_wake_main(void) {
+    if (mp_port_main_task != NULL) {
+        task_notify(mp_port_main_task);
+    }
+}

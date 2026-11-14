@@ -8,6 +8,7 @@
 #include "vex/font_init.h"
 #include "vex/brain.hpp"
 #include "frozen_py.h"
+#include "mpthreadport.h"
 
 // MicroPython specific headers (must be inside extern "C")
 extern "C" {
@@ -27,21 +28,15 @@ extern "C" {
     // Keep ONLY this declaration line here. REMOVE the full function body definition.
     void mp_port_print_last_exception(void);
     void mp_port_wake_main(void);
+    void mp_port_set_main_task(void* task);
 }
 
 // How often the idle MicroPython task takes the GIL to run scheduled callbacks
 // when nothing wakes it sooner. It used to grab the GIL every 2 ms, which kept
 // pulling it away from running Python threads.
 static constexpr std::uint32_t GIL_POLL_MS = 15;
-static pros::task_t python_task = nullptr;
-
-// Wakes the idle MicroPython task right away (competition events, callbacks),
-// so the slow poll doesn't delay them. Safe to call from any task.
-extern "C" void mp_port_wake_main(void) {
-    if (python_task != nullptr) {
-        pros::c::task_notify(python_task);
-    }
-}
+// mp_port_wake_main() lives in mp_port.c: libmpy.a goes in the cold package,
+// and cold code can't call into main.cpp (hot package).
 
 enum {
     VEX_COMPETITION_DRIVER_CONTROL = 0,
@@ -170,10 +165,10 @@ void initialize() {
     
 
     pros::task_t task = pros::c::task_create(
-        run_python_script, NULL, 12, 0x4000,
+        run_python_script, NULL, MP_PYTHON_TASK_PRIORITY, 0x4000,
         "MicroPython Script"
     );
-    python_task = task;
+    mp_port_set_main_task(task);
     if (task == nullptr) {
         report_status("ERROR: cannot start MicroPython task");
         return;

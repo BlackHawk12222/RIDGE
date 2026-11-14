@@ -79,7 +79,8 @@ typedef long mp_off_t;
 
 #define MICROPY_NLR_SETJMP (0)
 #define MICROPY_PY_THREAD (1)
-#define MICROPY_PY_THREAD_GIL_VM_DIVISOR (8)
+// Checked every N branches; a hand-off only happens when another thread waits.
+#define MICROPY_PY_THREAD_GIL_VM_DIVISOR (32)
 
 #define MICROPY_HW_HAS_LCD (0)
 #define MICROPY_HW_ENABLE_LCD (0)

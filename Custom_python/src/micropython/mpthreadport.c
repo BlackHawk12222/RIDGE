@@ -174,7 +174,7 @@ mp_uint_t mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size
     thread_records = record;
     unlock_thread_records();
 
-    task_t task = task_create(thread_task_entry, record, TASK_PRIORITY_DEFAULT,
+    task_t task = task_create(thread_task_entry, record, MP_PYTHON_TASK_PRIORITY,
         (uint16_t)stack_depth, "MicroPython Thread");
     if (task == NULL) {
         printf("[mp_thread] task_create failed (requested %u bytes, depth %u)\n",
@@ -225,14 +225,41 @@ void mp_thread_mutex_init(mp_thread_mutex_t *mutex) {
     }
 }
 
+// Number of tasks blocked waiting for the GIL. The VM only hands the GIL over
+// when this is non-zero, so a lone thread never pays for a mutex give/take.
+static volatile int gil_waiters;
+
 int mp_thread_mutex_lock(mp_thread_mutex_t *mutex, int wait) {
     if (mutex == &MP_STATE_VM(gil_mutex)) {
         mp_thread_record_t *record = current_record();
         if (record != NULL) {
             save_stack_pointer(record);
         }
+        if (mutex_take(*mutex, 0)) {
+            return 1;
+        }
+        if (!wait) {
+            return 0;
+        }
+        __atomic_add_fetch(&gil_waiters, 1, __ATOMIC_SEQ_CST);
+        bool taken = mutex_take(*mutex, TIMEOUT_MAX);
+        __atomic_sub_fetch(&gil_waiters, 1, __ATOMIC_SEQ_CST);
+        return taken ? 1 : 0;
     }
     return mutex_take(*mutex, wait ? TIMEOUT_MAX : 0) ? 1 : 0;
+}
+
+// FreeRTOS mutexes are not fair: giving the GIL to an equal-priority waiter
+// does not switch to it, so the holder took it straight back and the waiter
+// starved until a tick happened to land in the gap. Hand off explicitly:
+// release, yield (delay(0) == taskYIELD), then queue up behind the waiter.
+void mp_thread_gil_bounce(void) {
+    if (__atomic_load_n(&gil_waiters, __ATOMIC_RELAXED) == 0) {
+        return;
+    }
+    MP_THREAD_GIL_EXIT();
+    delay(0);
+    MP_THREAD_GIL_ENTER();
 }
 
 void mp_thread_mutex_unlock(mp_thread_mutex_t *mutex) {
