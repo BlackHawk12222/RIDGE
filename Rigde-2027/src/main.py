@@ -190,11 +190,11 @@ RunAuto = False
 class robot():
     """MISC CODE(custom printing, velocity setting etc.)"""
 
-    def __init__(self: robot) -> None:
+    def __init__(self) -> None:
         self.liftRaised = False
         """Bool For check if Claw is out and Lift if up"""
 
-    def proportional(self: robot, val: float , pwr: int = 2) -> float:
+    def proportional(self, val: float , pwr: int = 2) -> float:
         """
         Returns ((val**pwr)/10**pwr) and returns same sign as val.
         
@@ -213,7 +213,7 @@ class robot():
         else:
             return((val**pwr)/10**pwr)
     
-    def TankDrive(self: robot, buffer: int = 5) -> None:
+    def TankDrive(self, buffer: int = 5) -> None:
         """
         Tank drive code for when ACP is not being used.
         
@@ -249,7 +249,7 @@ class robot():
 
             wait(10, MSEC)
 
-    def autoload(self: robot) -> None:
+    def autoload(self) -> None:
         """
         Loads and lifts a cup and pin stack in the intake.
 
@@ -313,7 +313,7 @@ class robot():
             else:
                 wait(50, MSEC)
 
-    def clawUp(self: robot) -> None:
+    def clawUp(self) -> None:
         """
         Brings Claw up to score.
         
@@ -335,7 +335,7 @@ class robot():
         while not liftGroup.is_done():
             wait(10, MSEC)
 
-    def clawDown(self: robot) -> None:
+    def clawDown(self) -> None:
         """
         Returns Claw to start to pickup pin and cup.
         
@@ -359,7 +359,7 @@ class robot():
         while math.fabs(liftGroup.position(DEGREES)) > 10 and math.fabs(Claw.position(DEGREES)) > 10:
             wait(10, MSEC)
 
-    def clawLoad(self: robot) -> None:
+    def clawLoad(self) -> None:
         """
         Brings pin and cup into the claw.
         
@@ -383,7 +383,7 @@ class robot():
         liftGroup.stop()
         Intake.stop()
 
-    def clawScore(self: robot) -> None:
+    def clawScore(self) -> None:
         """
         Released Claw grabber and move Claw out of the way.
 
@@ -403,11 +403,11 @@ class robot():
 class display():
     """Brain.screen Atrabutes and common code functions."""
 
-    def __init__(self: display, object: Brain) -> None:
+    def __init__(self, object: Brain) -> None:
         self.BO: Brain = object
         """Brain Object to get Brain Properties"""
 
-    def drawImage(self: display, name: str, x: int, y: int) -> None:
+    def drawImage(self, name: str, x: int, y: int) -> None:
         """
         Same as brain.screen.draw_image_from_file().
         
@@ -422,7 +422,7 @@ class display():
 
         self.BO.screen.draw_image_from_file(name,x,y)
 
-    def reset(self: display, render: bool = False) -> None:
+    def reset(self, render: bool = False) -> None:
         """
         Clears brain screen and resets the cursor.
         
@@ -438,7 +438,7 @@ class display():
         if render == True:
             self.BO.screen.render()
 
-    def printCS(self: display, text: str) -> None:
+    def printCS(self, text: str) -> None:
         """
         Takes full string and splits , into new lines.
         
@@ -455,7 +455,7 @@ class display():
             self.BO.screen.print(entry)
             self.BO.screen.next_row()
 
-    def drawPB(self: display, x: int, y: int, width: int, height: int, percent: int, border: int, barColor: Color, horizontalBar: bool = False) -> None:
+    def drawPB(self, x: int, y: int, width: int, height: int, percent: int, border: int, barColor: Color, horizontalBar: bool = False) -> None:
         """
         Draws progress bar for brain screen.
         
@@ -487,7 +487,7 @@ class display():
             self.BO.screen.draw_rectangle(x + border / 2, y + border / 2 + (height - height * (percent / 100)), width, height * (percent / 100))
         self.BO.screen.set_fill_color(Color.TRANSPARENT)
 
-    def printMotors(self: display) -> None:
+    def printMotors(self) -> None:
         """
         Prints all motors in motors list.
 
@@ -512,7 +512,7 @@ class MotorTicks:
         self.Uprelease = True
         pass
 
-    def lift_tick(self: MotorTicks) -> None:
+    def lift_tick(self) -> None:
         """
         Tick in loop for Driver controler for lifting and droping the lift.
 
@@ -532,7 +532,7 @@ class MotorTicks:
                 else:
                     liftGroup.stop()
 
-    def intake_tick(self: MotorTicks):
+    def intake_tick(self):
         """
         Tick in loop for Driver controler for spinning the intake motor.
 
@@ -551,7 +551,7 @@ class MotorTicks:
             else:
                 Intake.stop()
 
-    def liftTick(self: MotorTicks):
+    def liftTick(self):
         """
         Tick in loop for Driver controler for toggle for the intake hight.
 
@@ -574,7 +574,7 @@ class MotorTicks:
         else:
             self.Uprelease = True
 
-    def grabberTick(self: MotorTicks):
+    def grabberTick(self):
         """
         Tick in loop for Driver controler for grabber toggle on the Claw.
 
@@ -599,7 +599,7 @@ class MotorTicks:
 class MC:
     """Motor config to find all motors and get there port numbers."""
     
-    def MotorConfig(self: MC) -> None:
+    def MotorConfig(self) -> None:
         """
         Finds and stores all motors configured.
         
@@ -623,7 +623,7 @@ class MC:
                 motors.append(eval(item))
                 motorPorts.append(self.getMotorPort(eval(item)))
 
-    def getMotorPort(self: MC, motor: Motor) -> int:
+    def getMotorPort(self, motor: Motor) -> int:
         """
         Finds and stores all motors configured.
         
@@ -644,7 +644,7 @@ class MC:
 
 class AIMDrive():
     """Accurate Inertial Movement"""
-    def set_velocity(self: AIMDrive, side: str, velocity: float) -> None:
+    def set_velocity(self, side: str, velocity: float) -> None:
         """
         Set the drivetrain velocity for the individual sides of the drivetrain; useful for turning.
 
@@ -664,7 +664,7 @@ class AIMDrive():
             left_drive_smart.set_velocity(velocity, PERCENT)
             right_drive_smart.set_velocity(velocity, PERCENT)
 
-    def resetDrivetrain(self: AIMDrive):
+    def resetDrivetrain(self):
         """
         Finds and stores all motors configured.
         
@@ -680,7 +680,7 @@ class AIMDrive():
         left_drive_smart.stop()
         right_drive_smart.stop()
 
-    def AIM_drive(self: AIMDrive, mm: int, driveVelocity: int, err: float = 0.0) -> None:
+    def AIM_drive(self, mm: int, driveVelocity: int, err: float = 0.0) -> None:
         """
         Accurate Inertial Movement main function to drive a distance.
 
@@ -711,7 +711,7 @@ class AIMDrive():
                 self.resetDrivetrain()
                 break
 
-    def AIM_turn(self: AIMDrive, d: float, v: int = 100, p:int = 3) -> None:
+    def AIM_turn(self, d: float, v: int = 100, p:int = 3) -> None:
         """
         Accurate Inertial Movement main function to turn to a heading.
 
@@ -749,7 +749,7 @@ class AIMDrive():
                 drivetrain.turn(RIGHT)
 
 class BarColor():
-    def Check_for_bar(self: BarColor) -> None:
+    def Check_for_bar(self) -> None:
         """
         Checks if an object (the control bar) is close enough. If it is, check to see if it's our own color, and activate the spin command.
         
@@ -767,7 +767,7 @@ class BarColor():
         
         self.spin_motor()
 
-    def check_dist(self: BarColor) -> None:
+    def check_dist(self) -> None:
         """
         Used in Check_for_bar(): initializes Color_flips to 0(do not spin), then records the distance to the object.
         
@@ -784,7 +784,7 @@ class BarColor():
 
         Dist = DistanceSensor.object_distance(MM)
 
-    def check_color_redundancy(self: BarColor) -> None:
+    def check_color_redundancy(self) -> None:
         """
         Used in Check_for_bar(): sets Color_flips to 1(spin motor), then checks to see if the detected object is our color. If it is, set Color_flips to 0(do not spin).
         
@@ -801,7 +801,7 @@ class BarColor():
         if ColorSensor.color() == Color.BLUE and MyColor == "blue" or ColorSensor.color() == Color.RED and MyColor == "red":
             Color_Flips = 0
 
-    def spin_motor(self: BarColor) -> None:
+    def spin_motor(self) -> None:
         """
         Spins Bar_Switcher if Color_fips is 1(spin motor). Continues to do so until distance is too far away(robot has moved away) or color is correct.
         
