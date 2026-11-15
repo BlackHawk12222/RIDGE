@@ -875,6 +875,7 @@ try:
             
             # Setting up Log Files if they dont exist and setting index.
             log_number=0
+            self._log_lines=1  # Lines in Log.csv including header; used by Archive.log().
             if not brain.sdcard.exists("Log.csv"):
                 brain.sdcard.savefile("Log.csv", bytearray("log Start: \n", self.format))
             else:
@@ -888,6 +889,7 @@ try:
                         log_number+=chunk.count(b'\n')
 
                 self._index= log_number - 1
+                self._log_lines=log_number
 
         def append_log(self) -> None:
             """
@@ -1342,119 +1344,80 @@ try:
             
             def log(self) -> None:
                 """
-                Archives the Log.csv file.
-                
+                Archives the oldest lines of Log.csv into loghistory.txt, keeping the newest 2000.
+
                 Args:
                 None
                 """
 
                 speed=log_time.time()
-                loop=True
-                number_of_lines=0
-                buffer=bytearray(100000)
-                fileoffset=0
-                loglines=[]
+                KEEP=2000
+                HIST="ACPv1/Data/loghistory.txt"
 
-                reversecodes=log.reversecodes
+                total=log._log_lines - 1  # Data lines in Log.csv (minus the "Log Start:" header). Counted in Log.__init__.
+                to_archive=total - KEEP
+                if to_archive <= 0:
+                    return
 
-                while loop:
-                    with open("Log.csv", 'rb') as infile:
-                        infile.seek(fileoffset)
-                        chunk=infile.readinto(buffer)
-                        if not chunk:
+                # b"<Cont DATA: Button Changed>" -> b"DC0", built once.
+                rc={text: code.encode() for text, code in log.reversecodes.items()}
+                rc_get=rc.get
+
+                out=[]
+                append=out.append
+                archived=0
+                with open("Log.csv", "rb") as f, open(HIST, "ab") as h:
+                    header=f.readline()
+                    readline=f.readline
+                    for _ in range(to_archive):
+                        line=readline()
+                        if not line:
                             break
-                        number_of_lines+=bytes(buffer[0:chunk]).count(b'\n')
-                        fileoffset+=chunk
 
-                    if number_of_lines > 2000:
-                        with open("Log.csv", 'r+') as infile:
-                            bytecount=0
-                            LinesRead=0
-                            TotalBytes=0
-                            while True:
-                                infile.seek(bytecount)
-                                loglines=infile.read(500).split("\n")
-                                LinesRead+=len(loglines)
-                                if LinesRead >= number_of_lines - 2000 or not loglines:
-                                    break
+                        # b"2317 [123533 ms], <Cont DATA: Button Changed>, controller(30), L1, Released\n"
+                        parts=line.rstrip(b"\r\n").split(b", ")
+                        p0=parts[0]
+                        ts=int(p0[p0.find(b"[") + 1 : p0.rfind(b" ms")])
+                        code=parts[1].strip() if len(parts) > 1 else b""
 
-                                TotalBytes=sum(len(s.encode('utf-8')) for s in loglines)
-                                bytecount+=TotalBytes
+                        # b"1E28D,DC0,controller(30) L1 Released\n"
+                        append(b"%x,%s,%s\n" % (ts, rc_get(code, code), b" ".join(parts[2:])))
+                        archived+=1
 
-                            infile.seek(0)
-                            lines_to_archive=number_of_lines - 2000
-                            linecount=-1
-                            while True:
+                        if len(out) >= 200:  # Batch SD writes and cap RAM.
+                            h.write(b"".join(out))
+                            out=[]
+                            append=out.append
 
-                                if linecount >= lines_to_archive:
-                                    break
+                    if out:
+                        h.write(b"".join(out))
+                    tail=f.read()  # The lines being kept.
 
-                                line=infile.readline()
+                # Rewrite Log.csv once: header + kept lines.
+                with open("Log.csv", "wb") as f:
+                    f.write(header)
+                    f.write(tail)
+                tail=None
 
-                                if linecount == -1:
-                                    linecount+=1
-                                    continue
+                # Update the fixed-width (20 char) count at the top of loghistory.txt in place.
+                with open(HIST, "r+b") as h:
+                    first=h.readline()
+                    new_header=b"%-20d\n" % (int(first) + archived)
+                    in_place=len(first) == len(new_header)
+                    if in_place:
+                        h.seek(0)
+                        h.write(new_header)
 
-                                linecount+=1
+                if not in_place:  # One-time repair of an unpadded header.
+                    with open(HIST, "rb") as h:
+                        h.readline()
+                        rest=h.read()
+                    with open(HIST, "wb") as h:
+                        h.write(new_header)
+                        h.write(rest)
+                    rest=None
 
-                                # [2317 [123533 ms], <Cont DATA: Button Changed>, controller(30), L1, Released]
-                                prelist=line.split(',')
-
-                                # ["2317", "123533"]
-                                numbers=prelist[0].replace("[", "").replace(" ms]", "").split(' ')
-
-                                details=""
-
-                                # "controller(30) L1 Released"
-                                if len(prelist) > 3:
-                                    detailslist=[item + " " for item in prelist[2 : len(prelist)-1]]
-                                    details="".join(detailslist)
-
-                                print(numbers)
-
-                                # [1E28D, DC0, controller(30) L1 Released]
-                                entry="{:x}, {}, {}\n".format(int(numbers[1].strip()), reversecodes.get(bytes(prelist[1].strip(), 'utf-8'), prelist[1].strip()), details)
-
-                                brain.sdcard.appendfile("ACPv1/Data/loghistory.txt", bytearray(entry, log.format))
-                        
-                        with open("ACPv1/Data/loghistory.txt", "r") as infile:
-                            with open("ACPv1/Data/temp.tmp", "w") as outfile:
-
-                                infile.seek(0)
-                                OldNumberStr=infile.readline()
-                                OldNumber=int(OldNumberStr)
-
-                                # Flag to ensure we only replace the very first line
-                                is_first_line = True
-                                
-                                for line in infile:
-                                    if is_first_line:
-                                        line = line.replace(line, str(OldNumber + number_of_lines - 2000) + "\n") 
-                                        is_first_line = False # Turn off flag so the rest of the file is untouched
-                                    
-                                    outfile.write(line)
-
-                        with open("ACPv1/Data/temp.tmp", "r") as infile:
-                            with open("ACPv1/Data/loghistory.txt", "w") as outfile:
-                                for line in infile:
-                                    outfile.write(line)
-
-                        with open("Log.csv", 'r') as infile:
-                            with open("ACPv1/Data/temp.tmp", "w") as outfile:
-                                infile.seek(bytecount)
-                                while True:
-                                    chunk=infile.read(500)
-                                    if not chunk:
-                                        break
-                                    outfile.write(chunk)
-
-                        with open("ACPv1/Data/temp.tmp", "r") as infile:
-                            with open("Log.csv", "w") as outfile:
-                                for line in infile:
-                                    outfile.write(line)
-
-                        loop=False
-
+                log._log_lines=1 + total - archived
                 collect()
                 log.add("DS1", str(log_time.time() - speed) + " MSEC")
 
@@ -1478,21 +1441,31 @@ try:
 
             def recall_log(self) -> None:
                 """
-                Unarchives The log.
+                Unarchives The log into logrecalled.csv. Reads both old ", " and new "," entries.
 
                 Args:
                 None
                 """
 
-                filename="logrecalled.csv"
                 print("recalling...")
-                with open("ACPv1/Data/loghistory.txt", 'r') as file:
-                    for line in file:
-                        prelist=line.split(' ')
-                        if len(prelist) > 3:
-                            detailslist=[item + " " for item in prelist[2 : len(prelist)-1]]
-                        details="".join(detailslist)
-                        brain.sdcard.appendfile(filename, bytearray("%d [%s ms], %s, %s\n"%(int(prelist[0], 16),int(prelist[1], 16) , log.codes.get(prelist[2], prelist[2]), details), log.format))
+                codes=log.codes
+                out=[]
+                index=0
+                with open("ACPv1/Data/loghistory.txt", "rb") as f, open("logrecalled.csv", "ab") as o:
+                    f.readline()  # Skip the count header.
+                    for line in f:
+                        parts=line.rstrip(b"\r\n").split(b",", 2)
+                        if len(parts) < 2:
+                            continue
+                        code=parts[1].strip().decode()
+                        details=parts[2].strip() if len(parts) > 2 else b""
+                        out.append(b"%d [%d ms], %s, %s\n" % (index, int(parts[0].strip(), 16), codes.get(code, code.encode()), details))
+                        index+=1
+                        if len(out) >= 200:
+                            o.write(b"".join(out))
+                            out=[]
+                    if out:
+                        o.write(b"".join(out))
                 print("Recall done.")
 
     class Settings:
