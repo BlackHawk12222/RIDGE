@@ -751,6 +751,9 @@ try:
                     log.add(log.variable, "%s, Val %s"%(name, value))
                     self.variables[self.valueid] = value
 
+            def const_variable(self, name: str, value: Any) -> None:
+                log.add(log.variable, "%s, Val %s"%(name, value))
+
     class Log:
         """Main object for the CLEAR import. \n To start logging use the "logstart()" function in this object to do the main logging if you need help with its inputs use help() over the "logstart()" function."""
                     
@@ -1129,61 +1132,98 @@ try:
             if brain.sdcard.filesize("Log.csv") > 100000:
                 self.archive.log()
 
-            controllers: List[Controller]=[]
+            self.controllers: List[Controller]=[]
 
             scope=dir()
 
-            #print(globallogging)
+            log_add_logstart = self.add_logstart
+
+            def Void(name, obj):
+                pass
+
+            def set_var(name: str, obj):
+                if name.isupper() or (name.endswith("__") and name.startswith("__")):  # Check if variable is all caps and is a dunder variable eg. "TOTAL" or "__path__" repectively.
+                    log.capture.const_variable(name, obj)
+                    return
+                
+                log_add_logstart("log.capture.variable('%s', %s)"%(name, name.replace("'", "")))
+                self.VariablesAdded.append(name)
+
+            def set_motor(name, obj):
+                if "Left" in name or "left" in name:
+                    self.LeftMotors+=[obj]
+                elif "Right" in name or "right" in name:
+                    self.RightMotors+=[obj]
+                else:
+                    self.MiscMotors+=[obj]
+                    self.MiscMotorsName+=[name]
+
+            def set_controller(name, obj):
+                self.controllers+=[obj]
+
+                if "Interface" in name or "interface" in name:
+                    Thread(lambda: CInterface.start(obj))
+
+            def set_inertial(name, obj):
+                log_add_logstart("log.capture.smartport.inertial(%s)"%(name.replace("'", "")))
+
+            def set_optical(name, obj):
+                log_add_logstart("log.capture.smartport.optical(%s)"%(name.replace("'", "")))
+
+            def set_rotation(name, obj):
+                log_add_logstart("log.capture.smartport.rotation(%s, '%s')"%(name.replace("'", ""), name))
+
+            def set_distance(name, obj):
+                log_add_logstart("log.capture.smartport.distance(%s)"%(name.replace("'", "")))
+
+            def set_bumper(name, obj):
+                log_add_logstart("log.capture.threewire.bumper(%s)"%(name.replace("'", "")))
+
+            def set_limit(name, obj):
+                log_add_logstart("log.capture.threewire.limit(%s)"%(name.replace("'", "")))
+
+            def set_digital_in(name, obj):
+                log_add_logstart("log.capture.threewire.digitalinput(%s)"%(name.replace("'", "")))
+
+            def set_potv2(name, obj):
+                log_add_logstart("log.capture.threewire.potentiometer(%s)"%(name.replace("'", "")))
+
+            def set_analog(name, obj):
+                log_add_logstart("log.capture.threewire.analog(%s)"%(name.replace("'", "")))
+
+            def set_comp(name, obj):
+                log_add_logstart("log.capture.system.control(%s)"%(name.replace("'", "")))
+
+            ConfigDict = {
+                "<class 'int'>" : set_var if auto_do_variables else Void,
+                "<class 'bool'>" : set_var if auto_do_variables else Void,
+                "<class 'float'>" : set_var if auto_do_variables else Void,
+                "<class 'str'>" : set_var if auto_do_variables else Void,
+                "<class 'list'>" : set_var if auto_do_variables else Void,
+                "<class 'dict'>" : set_var if auto_do_variables else Void,
+                "<class 'tuple'>" : set_var if auto_do_variables else Void,
+                "<class 'motor'>" : set_motor if auto_do_motors else Void,
+                "<class 'controller'>" : set_controller if auto_do_controller else Void,
+                "<class 'inertial'>" : set_inertial if auto_do_smart_port else Void,
+                "<class 'optical'>" : set_optical if auto_do_smart_port else Void,
+                "<class 'rotation'>" : set_rotation if auto_do_smart_port else Void,
+                "<class 'distance'>" : set_distance if auto_do_smart_port else Void,
+                "<class 'triport_bumper'>" : set_bumper if auto_do_three_wire else Void,
+                "<class 'triport_limit'>" : set_limit if auto_do_three_wire else Void,
+                "<class 'triport_digitalin'>" : set_digital_in if auto_do_three_wire else Void,
+                "<class 'triport_potv2'>" : set_potv2 if auto_do_three_wire else Void,
+                "<class 'triport_analog'>" : set_analog if auto_do_three_wire else Void,
+                "<class 'comp'>" : set_comp if auto_do_control else Void  
+            }
 
             for item in scope:
                 
                 try:
-                    item_type=str(type(eval(item)))
-                    # print(item, item_type)
+                    eval_item = eval(item)
                 except NameError:
                     continue
 
-                if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>") and auto_do_variables:
-                    log.add_logstart("log.capture.variable('%s', %s)"%(item, item.replace("'", "")))
-                    self.VariablesAdded.append(item)
-                elif item_type == "<class 'motor'>" and auto_do_motors:
-
-                    if "Left" in item or "left" in item:
-                        self.LeftMotors+=[eval(item)]
-                    elif "Right" in item or "right" in item:
-                        self.RightMotors+=[eval(item)]
-                    else:
-                        self.MiscMotors+=[eval(item)]
-                        self.MiscMotorsName+=[item]
-                elif item_type == "<class 'controller'>" and auto_do_controller:
-                    controller_temp=eval(item)
-                    controllers+=[controller_temp]
-
-                    if "Interface" in item or "interface" in item:
-                        Thread(CInterface.start, [controller_temp])  # type: ignore
-
-                elif item_type == "<class 'inertial'>" and auto_do_smart_port:
-                    log.add_logstart("log.capture.smartport.inertial(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'optical'>" and auto_do_smart_port:
-                    log.add_logstart("log.capture.smartport.optical(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'rotation'>" and auto_do_smart_port:
-                    log.add_logstart("log.capture.smartport.rotation(%s, '%s')"%(item.replace("'", ""), item))
-                elif item_type == "<class 'distance'>" and auto_do_smart_port:
-                    log.add_logstart("log.capture.smartport.distance(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'triport_bumper'>" and auto_do_three_wire:
-                    log.add_logstart("log.capture.threewire.bumper(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'triport_limit'>" and auto_do_three_wire:
-                    log.add_logstart("log.capture.threewire.limit(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'triport_digitalin'>" and auto_do_three_wire:
-                    log.add_logstart("log.capture.threewire.digitalinput(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'triport_potv2'>" and auto_do_three_wire:
-                    log.add_logstart("log.capture.threewire.potentiometer(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'triport_analog'>" and auto_do_three_wire:
-                    log.add_logstart("log.capture.threewire.analog(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'comp'>" and auto_do_control:
-                    log.add_logstart("log.capture.system.control(%s)"%(item.replace("'", "")))
-
-            #print(sys.modules)
+                ConfigDict.get(str(type(eval_item)), Void) (item, eval_item)
 
             ModulesChecked=[]
 
@@ -1199,12 +1239,8 @@ try:
                 ModulesChecked.append(Module)
                 try:
                     ModuleLogging=dir(ModuleType)
-                    #print(Module)
                 except NameError:
-                    #print(Module)
                     continue
-
-                # print(ModuleLogging)
 
                 for item in ModuleLogging:
                     
@@ -1221,10 +1257,7 @@ try:
                         self.VariablesAdded.append(item)
 
                     
-            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port
-
-            # print("Logstart: ")
-            # print(brain.sdcard.loadfile("ACPv1/Config/Logstart.txt").decode(self.format))
+            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port, ConfigDict, set_var, set_motor, set_controller, set_analog, set_bumper
 
             _exec=exec
             lwait=wait
@@ -1238,6 +1271,7 @@ try:
             controllercapture=log.capture.controller
             log_check=log.append_log
             drivetrainuse= True if self.LeftMotors and self.RightMotors else False
+            controllers = self.controllers
 
             # Loads extra funtions from file.
             try:
@@ -1256,8 +1290,10 @@ try:
             
             gc_collect()
 
+
+
             while True:
-                for _ in range(200):
+                for _ in range(2000):
                     start:int=timer()
 
                     if not self.robot_active:
@@ -1293,8 +1329,6 @@ try:
                     
                     if log_battery:
                         capture_battery()
-                    
-                    #print(timer()-start)
 
                     lwait(wait_time_logging - (timer() - start))
 
@@ -1319,7 +1353,6 @@ try:
                 number_of_lines=0
                 buffer=bytearray(100000)
                 fileoffset=0
-                archived=False
                 loglines=[]
 
                 reversecodes=log.reversecodes
@@ -1334,7 +1367,6 @@ try:
                         fileoffset+=chunk
 
                     if number_of_lines > 2000:
-                        archived=True
                         with open("Log.csv", 'r+') as infile:
                             bytecount=0
                             LinesRead=0
@@ -1473,8 +1505,8 @@ try:
                 "brain_read": False,
                 "print_read": True,
                 "sdcard_read": True,
-                "controller_interface": False,
-                "gc_use": True,
+                "controller_interface": True,
+                "gc_use": False,
                 "archive_log": True,
                 "archive_recordings": True,
                 "log_memory": False,
