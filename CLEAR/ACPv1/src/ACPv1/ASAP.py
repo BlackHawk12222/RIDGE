@@ -23,12 +23,12 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
     for motor in RightMotorList:
         motor.set_stopping(COAST)
 
-    KP = 1    # Modest tracking aggressiveness to start
+    KP = 15    # Controller bandwidth (rad/s): ~67 ms response, 3x open-loop speed, under sensor-delay limit
     KPScale = 0.0     # Turn off error-scaling initially to establish a baseline
-    B0 = 8.33    # Neutral input-to-output gain scaling
-    Omega_o = 3.5    # Safe observer bandwidth for a 100Hz (dt=0.01) loop
+    B0 = 239    # Plant gain (RPM/s per volt) for ~6.8 kg robot, 2x 600rpm motors/side, G=0.75, 69.85mm wheels. ~1624/mass_kg
+    Omega_o = 45    # Observer bandwidth = 3x KP; Omega_o*dt = 0.45 (stable for Euler at 100Hz)
     Alpha = 1.0       # IMPORTANT: Sets _fal() to linear mode for safe initial tuning
-    MaxAccel = 5.0    # Gentler target ramping to protect your hardware initially
+    MaxAccel = 28    # RPM per 10ms tick: traction limit (mu 0.8 -> 2861 RPM/s), 0->600 in ~0.21 s
     Delta = 5.0
     Dt = 0.01
 
