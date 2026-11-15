@@ -1345,61 +1345,77 @@ try:
             def log(self) -> None:
                 """
                 Archives the oldest lines of Log.csv into loghistory.txt, keeping the newest 2000.
+                Streams through one fixed 32 KB buffer so RAM use does not grow with file size.
 
                 Args:
                 None
                 """
 
                 speed=log_time.time()
-                KEEP=2000
+                KEEP=2000  # Lines kept in Log.csv.
                 HIST="ACPv1/Data/loghistory.txt"
+                TMP="ACPv1/Data/temp.tmp"
+                CHUNK=32768
 
-                total=log._log_lines - 1  # Data lines in Log.csv (minus the "Log Start:" header). Counted in Log.__init__.
+                total=log._log_lines - 1  # Data lines (minus header). Counted in Log.__init__.
                 to_archive=total - KEEP
                 if to_archive <= 0:
                     return
 
-                # b"<Cont DATA: Button Changed>" -> b"DC0", built once.
+                collect()
+                buf=bytearray(CHUNK)
+                mv=memoryview(buf)
+
                 rc={text: code.encode() for text, code in log.reversecodes.items()}
                 rc_get=rc.get
 
-                out=[]
-                append=out.append
                 archived=0
-                with open("Log.csv", "rb") as f, open(HIST, "ab") as h:
-                    header=f.readline()
-                    readline=f.readline
-                    for _ in range(to_archive):
-                        line=readline()
-                        if not line:
-                            break
+                off=0
+                with open("Log.csv", "rb") as f:
+                    with open(HIST, "ab") as h:
+                        header=f.readline()
+                        readline=f.readline
+                        write=h.write
+                        for _ in range(to_archive):
+                            line=readline()
+                            if not line:
+                                break
+                            parts=line.rstrip(b"\r\n").split(b", ")
+                            p0=parts[0]
+                            ts=int(p0[p0.find(b"[") + 1 : p0.rfind(b" ms")])
+                            code=parts[1].strip() if len(parts) > 1 else b""
+                            entry=b"%x,%s,%s\n" % (ts, rc_get(code, code), b" ".join(parts[2:]))
+                            n=len(entry)
+                            if off + n > CHUNK:
+                                write(mv[:off])
+                                off=0
+                            if n > CHUNK:
+                                write(entry)
+                            else:
+                                mv[off:off + n]=entry
+                                off+=n
+                            archived+=1
+                        if off:
+                            write(mv[:off])
 
-                        # b"2317 [123533 ms], <Cont DATA: Button Changed>, controller(30), L1, Released\n"
-                        parts=line.rstrip(b"\r\n").split(b", ")
-                        p0=parts[0]
-                        ts=int(p0[p0.find(b"[") + 1 : p0.rfind(b" ms")])
-                        code=parts[1].strip() if len(parts) > 1 else b""
+                    with open(TMP, "wb") as t:
+                        t.write(header)
+                        readinto=f.readinto
+                        while True:
+                            n=readinto(buf)
+                            if not n:
+                                break
+                            t.write(mv[:n])
 
-                        # b"1E28D,DC0,controller(30) L1 Released\n"
-                        append(b"%x,%s,%s\n" % (ts, rc_get(code, code), b" ".join(parts[2:])))
-                        archived+=1
+                with open(TMP, "rb") as t:
+                    with open("Log.csv", "wb") as f:
+                        readinto=t.readinto
+                        while True:
+                            n=readinto(buf)
+                            if not n:
+                                break
+                            f.write(mv[:n])
 
-                        if len(out) >= 200:  # Batch SD writes and cap RAM.
-                            h.write(b"".join(out))
-                            out=[]
-                            append=out.append
-
-                    if out:
-                        h.write(b"".join(out))
-                    tail=f.read()  # The lines being kept.
-
-                # Rewrite Log.csv once: header + kept lines.
-                with open("Log.csv", "wb") as f:
-                    f.write(header)
-                    f.write(tail)
-                tail=None
-
-                # Update the fixed-width (20 char) count at the top of loghistory.txt in place.
                 with open(HIST, "r+b") as h:
                     first=h.readline()
                     new_header=b"%-20d\n" % (int(first) + archived)
@@ -1408,15 +1424,27 @@ try:
                         h.seek(0)
                         h.write(new_header)
 
-                if not in_place:  # One-time repair of an unpadded header.
+                if not in_place:
                     with open(HIST, "rb") as h:
                         h.readline()
-                        rest=h.read()
-                    with open(HIST, "wb") as h:
-                        h.write(new_header)
-                        h.write(rest)
-                    rest=None
+                        with open(TMP, "wb") as t:
+                            t.write(new_header)
+                            while True:
+                                n=h.readinto(buf)
+                                if not n:
+                                    break
+                                t.write(mv[:n])
+                    with open(TMP, "rb") as t:
+                        with open(HIST, "wb") as h:
+                            while True:
+                                n=t.readinto(buf)
+                                if not n:
+                                    break
+                                h.write(mv[:n])
 
+                brain.sdcard.savefile(TMP)  # Empty temp.tmp so it does not hold SD space.
+                mv=None
+                buf=None
                 log._log_lines=1 + total - archived
                 collect()
                 log.add("DS1", str(log_time.time() - speed) + " MSEC")
