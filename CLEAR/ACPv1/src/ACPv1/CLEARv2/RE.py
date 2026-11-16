@@ -197,3 +197,25 @@ class Recording():
 
     def stop(self):
         self.Run = False  # loop finishes its frame, flushes, and exits
+
+class Encode():
+    def __init__(self) -> None:
+        pass
+
+    def _loop(self, name: str) -> None:
+        FULLFILEPATH = "ACPv1/Data/%s"%(name)
+        FILEHEADER = b"""
+        # This is a file generated using CLEAR.
+        # Aton name: %s size: %03.2f.
+
+        """
+
+        brain.sdcard.savefile(FULLFILEPATH, bytearray(FILEHEADER))
+
+        
+
+    def run(self, name: str) -> None:
+        Thread(lambda: self._loop(name))
+
+recording = Recording()
+encode = Encode()
