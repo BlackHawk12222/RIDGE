@@ -414,7 +414,7 @@ class Encode:
     # ===========================================================================
     class _Recording:
         def __init__(self):
-            self.times = array("l")    # ms since record start, one per frame
+            self.times = array("l", [])    # ms since record start, one per frame
             self.kinds = {}            # name -> "motor" / "inertial" / "rotation" / "piston" / "var"
             self.installed = {}        # name -> True/False from the header
             self.channels = {}         # name -> array of positions/rotations, one per frame
@@ -523,7 +523,7 @@ class Encode:
                         rec.kinds[name] = kind
                         rec.installed[name] = parts[4] == "1" if len(parts) > 4 else True
                         if kind in ("motor", "inertial", "rotation"):
-                            rec.channels[name] = array("f")
+                            rec.channels[name] = array("f", [])
 
                 elif line[0] == "T":                       # new frame
                     try:
@@ -1217,10 +1217,9 @@ class Encode:
 
         # 1. temp file, in chunks, with progress
         brain.sdcard.savefile(self.tmp_path, bytearray(0))
-        view = memoryview(data)
         written = 0
         while written < total:
-            chunk = view[written:written + self.WRITE_CHUNK]
+            chunk = data[written:written + self.WRITE_CHUNK]
             brain.sdcard.appendfile(self.tmp_path, bytearray(chunk))
             written += len(chunk)
             p(90 + 7 * written // total, "writing temp file (%d/%d bytes)" % (written, total))
@@ -1229,34 +1228,15 @@ class Encode:
             p(97, "temp file size wrong, not replacing script")
             return False
 
-        # 2. move into place: rename if the brain supports it, else one write
+        # 2. write the real script in one go. V5 Python has no os module
+        # (no rename, no delete), so the checked .tmp stays as the backup
+        # copy run_script() falls back to.
         p(98, "saving %s" % self.script_path)
-        if not self._rename(self.tmp_path, self.script_path):
-            brain.sdcard.savefile(self.script_path, bytearray(data))
+        brain.sdcard.savefile(self.script_path, bytearray(data))
 
         ok = brain.sdcard.filesize(self.script_path) == total
         p(99, "checked %s (%d bytes)" % (self.script_path, total) if ok else "final size wrong")
         return ok
-
-    @staticmethod
-    def _rename(src, dst):
-        try:
-            import os
-        except ImportError:
-            try:
-                import uos as os
-            except ImportError:
-                return False
-        try:
-            try:
-                os.remove(dst)
-            except OSError:
-                pass
-            os.rename(src, dst)
-            return True
-        except Exception:
-            return False
-
 
 # ###########################################################################
 # AUTON: runs the scripts Encode writes
@@ -1556,7 +1536,8 @@ class Auton:
 
     @staticmethod
     def _complete(data):
-        return data is not None and data.rstrip().endswith(Auton.END_MARK)
+        # bytes(): MicroPython's bytearray has no rstrip()/endswith()
+        return data is not None and bytes(data).rstrip().endswith(Auton.END_MARK)
 
 
     @staticmethod
@@ -1592,8 +1573,10 @@ class Auton:
             MainDict[n] = value
         env["set_global"] = set_global
 
+        if data is None:
+            return False
         try:
-            exec(data.decode("utf-8"), env)
+            exec(bytes(data).decode("utf-8"), env)
             env["main_script"]()
             return True
         except Exception as e:
