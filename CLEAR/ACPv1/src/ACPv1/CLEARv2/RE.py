@@ -3,7 +3,7 @@ from vex import *
 brain = Brain()
 
 from .CLA import log as cla
-import ustruct
+
 
 class DigitalOutWrap():
     def __init__(self, DigitalOutObj: DigitalOut) -> None:
@@ -15,159 +15,185 @@ class DigitalOutWrap():
         self.obj.set(state)
         self.state = state
 
+
 class Recording():
     def __init__(self):
-        self.StateHistory = {}
-        self.FILEPATH = "/ACPv1/Data"
+        self.StateHistory = {}          # name -> last value written (change-only events)
+        self.FILEPATH = "/ACPv1/Data"   # folder must already exist on the SD card
         self.MainDict = {}
         self.VariablesAdded = []
-        self.ConstVars = []
-        self.Motors = []
+        self.Motors = []                # list of (b"<name> ", MotorObj), resolved once
         self.Inertials = []
         self.Opticals = []
-        self.Controllers: List[str]=[]
+        self.Controllers = []
         self.Rotations = []
         self.Distances = []
         self.Bumpers = []
         self.Limits = []
-        self.DigitalOuts: list[str] = []
+        self.DigitalOuts = []           # names; values are DigitalOutWrap after config
         self.Potsv2s = []
         self.Analogs = []
         self.Timer = Timer()
+        self.Run = False
+        self.Headroom = 500
 
     def _auto_config(self, MainDict: dict):
-        
-        
-        scope=MainDict.values()
+        self.MainDict = MainDict
 
-        def Void(obj):
+        def Void(name, obj):
             pass
 
-        def set_var(name: str):
-            if name.isupper() or (name.endswith("__") and name.startswith("__")):  # Check if variable is all caps and is a dunder variable eg. "TOTAL" or "__path__" repectively.
-                self.ConstVars.append(name)
-                return
+        def set_var(name, obj):
             self.VariablesAdded.append(name)
 
-        def set_motor(name: str):
-            self.Motors+=[name]
+        def set_motor(name, obj):
+            self.Motors.append((b"<" + name.encode() + b"> ", obj))
 
-        def set_controller(name: str):
-            self.Controllers+=[name]
+        def set_controller(name, obj):
+            self.Controllers.append(name)
 
-        def set_inertial(name: str):
+        def set_inertial(name, obj):
             self.Inertials.append(name)
 
-        def set_optical(name: str):
+        def set_optical(name, obj):
             self.Opticals.append(name)
 
-        def set_rotation(name: str):
+        def set_rotation(name, obj):
             self.Rotations.append(name)
 
-        def set_distance(name: str):
+        def set_distance(name, obj):
             self.Distances.append(name)
-            
 
-        def set_bumper(name: str):
+        def set_bumper(name, obj):
             self.Bumpers.append(name)
 
-        def set_limit(name: str):
+        def set_limit(name, obj):
             self.Limits.append(name)
 
-        def set_digital_out(name: str):
+        def set_digital_out(name, obj):
             self.DigitalOuts.append(name)
 
-        def set_potv2(name: str):
+        def set_potv2(name, obj):
             self.Potsv2s.append(name)
 
-        def set_analog(name: str):
+        def set_analog(name, obj):
             self.Analogs.append(name)
 
         ConfigDict = {
-            "<class 'int'>" : set_var,
-            "<class 'bool'>" : set_var,
-            "<class 'float'>" : set_var,
-            
+            "<class 'int'>": set_var,
+            "<class 'bool'>": set_var,
+            "<class 'float'>": set_var,
+
             # Disabled for speed.
             # "<class 'str'>" : set_var,
             # "<class 'list'>" : set_var,
             # "<class 'dict'>" : set_var,
             # "<class 'tuple'>" : set_var,
 
-            "<class 'motor'>" : set_motor,
-            "<class 'controller'>" : set_controller,
-            "<class 'inertial'>" : set_inertial,
-            "<class 'optical'>" : set_optical,
-            "<class 'rotation'>" : set_rotation,
-            "<class 'distance'>" : set_distance,
-            "<class 'triport_bumper'>" : set_bumper,
-            "<class 'triport_limit'>" : set_limit,
-            "<class 'triport_digitalout'>" : set_digital_out,
-            "<class 'triport_potv2'>" : set_potv2,
-            "<class 'triport_analog'>" : set_analog,
+            "<class 'motor'>": set_motor,
+            "<class 'controller'>": set_controller,
+            "<class 'inertial'>": set_inertial,
+            "<class 'optical'>": set_optical,
+            "<class 'rotation'>": set_rotation,
+            "<class 'distance'>": set_distance,
+            "<class 'triport_bumper'>": set_bumper,
+            "<class 'triport_limit'>": set_limit,
+            "<class 'triport_digitalout'>": set_digital_out,
+            "<class 'DigitalOutWrap'>": set_digital_out,   # already wrapped (config run twice)
+            "<class 'triport_potv2'>": set_potv2,
+            "<class 'triport_analog'>": set_analog,
         }
 
-        for item in scope:
-            ConfigDict.get(str(type(item)), Void) (item)
+        # list() so we can replace entries in MainDict while looping
+        for name, obj in list(MainDict.items()):
+            # Skip constants ("TOTAL") and dunders ("__name__")
+            if name.isupper() or (name.startswith("__") and name.endswith("__")):
+                continue
+            ConfigDict.get(str(type(obj)), Void)(name, obj)
 
-        for digital in self.DigitalOuts:
-            MainDict[digital] = DigitalOutWrap(eval(digital, MainDict))
+        for name in self.DigitalOuts:
+            obj = MainDict[name]
+            if not isinstance(obj, DigitalOutWrap):
+                MainDict[name] = DigitalOutWrap(obj)
+            else:
+                obj.set(False)  # known state at record start
 
-    def _loop(self, MainDict: dict, name:str):
-        Run = True
+        # Worst-case bytes one frame can add, so the buffer never overflows
+        self.Headroom = 32 + 64 * len(self.Motors) + 64 * (len(self.VariablesAdded) + len(self.DigitalOuts))
 
-        FULLFILEPATH = "%s/%s.clear.record"%(self.FILEPATH, name)
+    # Line formats:
+    #   "T <ms>;"                                      frame start
+    #   "<Right1> 332.7000, 217.0 / Pos [DEGREES], Vel [RPM];"   every frame
+    #   "<speed> 12 / Val[int];"                       only when it changes
+    #   "<grabber> 1 / Val[piston];"                   only when it changes
+    def _loop(self, name: str):
+        MainDict = self.MainDict
+        FULLFILEPATH = "%s/%s.clear.record" % (self.FILEPATH, name)
 
-        brain.sdcard.savefile(FULLFILEPATH)
+        brain.sdcard.savefile(FULLFILEPATH, bytearray(0))  # create/empty the file
 
-        self.BufferLen = 34000
-        self.Buffer = bytearray(self.BufferLen)  # 34 KB buffer
-        self.BufferOffset = 0
+        BufferLen = 34000
+        Buffer = bytearray(BufferLen)  # 34 KB buffer
+        Offset = 0
+        Headroom = self.Headroom
+        History = self.StateHistory
+        History.clear()
 
-        # Intended format for the file per line is "<name> data( seperated by ',' ) / formatstr;" eg. "<Right> 332.7, 217 / Pos [DEGREES], Vel [RPM]"
+        # Pre-encode names once so the loop never formats a str into bytes
+        Vars = [(n, b"<" + n.encode() + b"> ") for n in self.VariablesAdded]
+        Pistons = [(n, b"<" + n.encode() + b"> ", MainDict[n]) for n in self.DigitalOuts]
+        Motors = self.Motors
 
-        def Void(name, item):
-            pass
+        def write(entry, Offset):
+            n = len(entry)
+            Buffer[Offset:Offset + n] = entry
+            return Offset + n
 
-        def motor_handle(name: str, item: Motor) -> None:
-            entry = b"<%s> %.4f, %.1f / Pos [DEGREES], Vel [RPM]; \n"%(name, item.position(DEGREES), item.velocity(RPM))
-            ustruct.pack_into("=%ds"%(len(entry)), self.Buffer, self.BufferOffset, entry)
-            self.BufferOffset+=len(entry)
+        NextTime = self.Timer.time()
+        while self.Run:
+            Offset = write(b"T %d;\n" % self.Timer.time(), Offset)
 
-        def int_handle(name: str, item) -> None:
-            entry = b"<%s> %d / Val[int]; \n"%(name, item)
-            ustruct.pack_into("=%ds"%(len(entry)), self.Buffer, self.BufferOffset, entry)
-            self.BufferOffset+=len(entry)
+            for prefix, motor in Motors:
+                Offset = write(prefix + b"%.4f, %.1f / Pos [DEGREES], Vel [RPM];\n"
+                               % (motor.position(DEGREES), motor.velocity(RPM)), Offset)
 
-        def float_handle(name: str, item) -> None:
-            entry = b"<%s> %.5f / Val[float]; \n"%(name, item)
-            ustruct.pack_into("=%ds"%(len(entry)), self.Buffer, self.BufferOffset, entry)
-            self.BufferOffset+=len(entry)
+            for n, prefix in Vars:
+                val = MainDict[n]
+                if History.get(n) != val:
+                    History[n] = val
+                    if type(val) is float:
+                        Offset = write(prefix + b"%.5f / Val[float];\n" % val, Offset)
+                    elif type(val) is bool:
+                        Offset = write(prefix + b"%d / Val[bool];\n" % val, Offset)
+                    else:
+                        Offset = write(prefix + b"%d / Val[int];\n" % val, Offset)
 
-        def bool_handle(name: str, item) -> None:
-            entry = b"<%s> %s / Val[bool]; \n"%(name, item)
-            ustruct.pack_into("=%ds"%(len(entry)), self.Buffer, self.BufferOffset, entry)
-            self.BufferOffset+=len(entry)
+            for n, prefix, wrap in Pistons:
+                val = wrap.state
+                if History.get(n) != val:
+                    History[n] = val
+                    Offset = write(prefix + b"%d / Val[piston];\n" % val, Offset)
 
-        TypeDict = {
-            Motor : motor_handle,
-            int : int_handle,
-            float : float_handle,
-            bool : bool_handle
-        }
-        
-        while Run:
-            StartTime = self.Timer.time()
+            if Offset >= BufferLen - Headroom:
+                brain.sdcard.appendfile(FULLFILEPATH, Buffer[:Offset])
+                Offset = 0
 
-            for key, item in MainDict.items():
-                TypeDict.get(type(item), Void) (key, item)
+            NextTime += 10
+            delay = NextTime - self.Timer.time()
+            if delay > 0:
+                wait(delay, MSEC)
+            else:
+                NextTime = self.Timer.time()  # overran: resync instead of bursting
 
-            if self.BufferOffset >= self.BufferLen - 500:
-                brain.sdcard.appendfile(FULLFILEPATH, bytearray(self.Buffer[: self.BufferOffset]))
-                self.BufferOffset = 0
-
-            TimePast = self.Timer.time() - StartTime
-            wait(10 - TimePast, MSEC)
+        if Offset:
+            brain.sdcard.appendfile(FULLFILEPATH, Buffer[:Offset])  # final flush
 
     def start(self, MainDict, name):
-        Thread(lambda: self._loop(MainDict, name))
+        if self.Run:
+            return
+        self._auto_config(MainDict)
+        self.Run = True
+        Thread(lambda: self._loop(name))
+
+    def stop(self):
+        self.Run = False  # loop finishes its frame, flushes, and exits
