@@ -1140,9 +1140,6 @@ try:
 
             log_add_logstart = self.add_logstart
 
-            def Void(name, obj):
-                pass
-
             def set_var(name: str, obj):
                 if name.isupper() or (name.endswith("__") and name.startswith("__")):  # Check if variable is all caps and is a dunder variable eg. "TOTAL" or "__path__" repectively.
                     log.capture.const_variable(name, obj)
@@ -1197,25 +1194,25 @@ try:
                 log_add_logstart("log.capture.system.control(%s)"%(name.replace("'", "")))
 
             ConfigDict = {
-                "<class 'int'>" : set_var if auto_do_variables else Void,
-                "<class 'bool'>" : set_var if auto_do_variables else Void,
-                "<class 'float'>" : set_var if auto_do_variables else Void,
-                "<class 'str'>" : set_var if auto_do_variables else Void,
-                "<class 'list'>" : set_var if auto_do_variables else Void,
-                "<class 'dict'>" : set_var if auto_do_variables else Void,
-                "<class 'tuple'>" : set_var if auto_do_variables else Void,
-                "<class 'motor'>" : set_motor if auto_do_motors else Void,
-                "<class 'controller'>" : set_controller if auto_do_controller else Void,
-                "<class 'inertial'>" : set_inertial if auto_do_smart_port else Void,
-                "<class 'optical'>" : set_optical if auto_do_smart_port else Void,
-                "<class 'rotation'>" : set_rotation if auto_do_smart_port else Void,
-                "<class 'distance'>" : set_distance if auto_do_smart_port else Void,
-                "<class 'triport_bumper'>" : set_bumper if auto_do_three_wire else Void,
-                "<class 'triport_limit'>" : set_limit if auto_do_three_wire else Void,
-                "<class 'triport_digitalin'>" : set_digital_in if auto_do_three_wire else Void,
-                "<class 'triport_potv2'>" : set_potv2 if auto_do_three_wire else Void,
-                "<class 'triport_analog'>" : set_analog if auto_do_three_wire else Void,
-                "<class 'comp'>" : set_comp if auto_do_control else Void  
+                "<class 'int'>" : set_var if auto_do_variables else None,
+                "<class 'bool'>" : set_var if auto_do_variables else None,
+                "<class 'float'>" : set_var if auto_do_variables else None,
+                "<class 'str'>" : set_var if auto_do_variables else None,
+                "<class 'list'>" : set_var if auto_do_variables else None,
+                "<class 'dict'>" : set_var if auto_do_variables else None,
+                "<class 'tuple'>" : set_var if auto_do_variables else None,
+                "<class 'motor'>" : set_motor if auto_do_motors else None,
+                "<class 'controller'>" : set_controller if auto_do_controller else None,
+                "<class 'inertial'>" : set_inertial if auto_do_smart_port else None,
+                "<class 'optical'>" : set_optical if auto_do_smart_port else None,
+                "<class 'rotation'>" : set_rotation if auto_do_smart_port else None,
+                "<class 'distance'>" : set_distance if auto_do_smart_port else None,
+                "<class 'triport_bumper'>" : set_bumper if auto_do_three_wire else None,
+                "<class 'triport_limit'>" : set_limit if auto_do_three_wire else None,
+                "<class 'triport_digitalin'>" : set_digital_in if auto_do_three_wire else None,
+                "<class 'triport_potv2'>" : set_potv2 if auto_do_three_wire else None,
+                "<class 'triport_analog'>" : set_analog if auto_do_three_wire else None,
+                "<class 'comp'>" : set_comp if auto_do_control else None  
             }
 
             for item in scope:
@@ -1225,7 +1222,10 @@ try:
                 except NameError:
                     continue
 
-                ConfigDict.get(str(type(eval_item)), Void) (item, eval_item)
+                
+                func = ConfigDict.get(str(type(eval_item)))
+                if func != None:
+                    func(item, eval_item)
 
             ModulesChecked=[]
 

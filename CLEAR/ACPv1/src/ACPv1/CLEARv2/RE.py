@@ -1,214 +1,159 @@
 from vex import *
 
-from ustruct import pack_into
-
 brain = Brain()
-timer=Timer()
 
-class Encode:
+from .CLA import log as cla
+import ustruct
+
+class DigitalOutWrap():
+    def __init__(self, DigitalOutObj: DigitalOut) -> None:
+        self.state: bool = False
+        self.obj: DigitalOut = DigitalOutObj
+        DigitalOutObj.set(False)
+
+    def set(self, state: bool) -> None:
+        self.obj.set(state)
+        self.state = state
+
+class Recording():
     def __init__(self):
-        self.axis2History=0
-        self.axis3History=0
-        self.degreesoffsetright=0
-        self.degreesoffsetleft=0
-        self.codeobjectoffset=0
+        self.StateHistory = {}
+        self.FILEPATH = "/ACPv1/Data"
+        self.MainDict = {}
+        self.VariablesAdded = []
+        self.ConstVars = []
+        self.Motors = []
+        self.Inertials = []
+        self.Opticals = []
+        self.Controllers: List[str]=[]
+        self.Rotations = []
+        self.Distances = []
+        self.Bumpers = []
+        self.Limits = []
+        self.DigitalOuts: list[str] = []
+        self.Potsv2s = []
+        self.Analogs = []
+        self.Timer = Timer()
 
-    def rightmoveCLEAR(self, Motors: List[Motor], Velocity: int):
-        for motor in Motors:
-            motor.set_velocity(Velocity, PERCENT)
+    def _auto_config(self, MainDict: dict):
         
-    def leftmoveCLEAR(self, Motors: List[Motor], Velocity: int):
-        for motor in Motors:
-            motor.set_velocity(Velocity, PERCENT)
-    
-    def rightDegreesCLEAR(self, Motors: List[Motor], degrees):
-        for motor in Motors:
-            motor.spin_for(FORWARD, degrees, DEGREES)
-
-    def leftDegreesCELAR(self, Motors: List[Motor], degrees):
-        for motor in Motors:
-            motor.spin_for(FORWARD, degrees, DEGREES)
-
-    def run(self, Name: str):
-        exec(brain.sdcard.loadfile(Name + ".txt").decode("utf-8"))
-
-    def encode(self, Name: str, RightMotorsName: List[str], LeftMotorsName: List[str], dotank=True):
-
-        prelist:List[List[str]]=[]
-        file=brain.sdcard.loadfile("RecordingData.csv").decode("utf-8").split("\n")
-        for line in file:
-            if line:
-                prelist.append(line.split(','))
-
-        codeobject=bytearray(50000)
         
-        for i in range(len(prelist)):
-            axis1=int(prelist[i][0].replace("A1", ""))
-            axis2=int(prelist[i][1].replace("A2", ""))
-            axis3=int(prelist[i][2].replace("A3", ""))
-            axis4=int(prelist[i][3].replace("A4", ""))
-            timestamp=int(prelist[i][4].replace("T", ""))
-            rightposition=int(prelist[i][6].replace("RP", ""))
-            leftposition=int(prelist[i][7].replace("LP", ""))
-            pressedbuttons: List[str] = prelist[i][5].replace("BP", "").split(":")
-            print(axis1, axis2, axis3, axis4, timestamp, pressedbuttons, rightposition, leftposition)
+        scope=MainDict.values()
 
-            if dotank:
-                codestring=b", encode.rightmoveCLEAR(%s, %s), encode.leftmoveCLEAR(%s, %s)"%(RightMotorsName, axis2, LeftMotorsName, axis3)
-            else:
-                pass
+        def Void(obj):
+            pass
 
-            if axis2 > 0:
-                axis2sign=True
-            else:
-                axis2sign=False
+        def set_var(name: str):
+            if name.isupper() or (name.endswith("__") and name.startswith("__")):  # Check if variable is all caps and is a dunder variable eg. "TOTAL" or "__path__" repectively.
+                self.ConstVars.append(name)
+                return
+            self.VariablesAdded.append(name)
+
+        def set_motor(name: str):
+            self.Motors+=[name]
+
+        def set_controller(name: str):
+            self.Controllers+=[name]
+
+        def set_inertial(name: str):
+            self.Inertials.append(name)
+
+        def set_optical(name: str):
+            self.Opticals.append(name)
+
+        def set_rotation(name: str):
+            self.Rotations.append(name)
+
+        def set_distance(name: str):
+            self.Distances.append(name)
             
-            if axis3 > 0:
-                axis3sign=True
-            else:
-                axis3sign=False
 
-            codestringdegreeright=b""
-            codestringdegreeleft=b""
+        def set_bumper(name: str):
+            self.Bumpers.append(name)
+
+        def set_limit(name: str):
+            self.Limits.append(name)
+
+        def set_digital_out(name: str):
+            self.DigitalOuts.append(name)
+
+        def set_potv2(name: str):
+            self.Potsv2s.append(name)
+
+        def set_analog(name: str):
+            self.Analogs.append(name)
+
+        ConfigDict = {
+            "<class 'int'>" : set_var,
+            "<class 'bool'>" : set_var,
+            "<class 'float'>" : set_var,
             
-            if axis2sign != self.axis2History:
-                self.axis2History=axis2sign
-                degrees=rightposition-self.degreesoffsetright
-                codestringdegreeright=b", rightDegreesCLEAR(%s, %s)"%(RightMotorsName, degrees)
-                self.degreesoffsetright=rightposition
+            # Disabled for speed.
+            # "<class 'str'>" : set_var,
+            # "<class 'list'>" : set_var,
+            # "<class 'dict'>" : set_var,
+            # "<class 'tuple'>" : set_var,
 
-            if axis3sign != self.axis3History:
-                self.axis3History=axis3sign
-                degrees=leftposition-self.degreesoffsetleft
-                codestringdegreeleft=b", leftDegreesCLEAR(%s, %s)"%(LeftMotorsName, degrees)
-                self.degreesoffsetright=rightposition
-            
-            fullstring="%s%s%s"%(codestring.decode("utf-8"), codestringdegreeright.decode("utf-8"), codestringdegreeleft.decode("utf-8"))
-            
-            stringsize=len(fullstring)
-            pack_into("=%ds"%(stringsize), codeobject, self.codeobjectoffset, fullstring)
+            "<class 'motor'>" : set_motor,
+            "<class 'controller'>" : set_controller,
+            "<class 'inertial'>" : set_inertial,
+            "<class 'optical'>" : set_optical,
+            "<class 'rotation'>" : set_rotation,
+            "<class 'distance'>" : set_distance,
+            "<class 'triport_bumper'>" : set_bumper,
+            "<class 'triport_limit'>" : set_limit,
+            "<class 'triport_digitalout'>" : set_digital_out,
+            "<class 'triport_potv2'>" : set_potv2,
+            "<class 'triport_analog'>" : set_analog,
+        }
 
-            self.codeobjectoffset+=stringsize 
+        for item in scope:
+            ConfigDict.get(str(type(item)), Void) (item)
 
-        brain.sdcard.savefile(Name + ".txt", codeobject[0:self.codeobjectoffset])
+        for digital in self.DigitalOuts:
+            MainDict[digital] = DigitalOutWrap(eval(digital, MainDict))
 
+    def _loop(self, MainDict: dict, name:str):
+        Run = True
 
-class Recording:
-    """
-    Main class for recording.
-    """
+        brain.sdcard.savefile("%s/%s.clear.record"%(self.FILEPATH, name))
 
-    def __init__(self):
-        self.record=False
+        Buffer = bytearray(34000)  # 34 KB buffer
+        BufferOffset = 0
 
-    def start(self, controller:Controller, Right: Motor, Left: Motor):
-        brain.sdcard.savefile("RecordingData.csv")
-        self.record=True
-        self._record_loop(controller, Right, Left)
+        # Intended format for the file per line is "<name> data( seperated by ',' ) / formatstr;" eg. "<Right> 332.7, 217 / 'Pos [DEGREES], Vel [RPM]'"
 
-    def stop(self, NameOfFile: str, RightMotorsName: List[str], LeftMotorsName: List[str]):
-        self.record=False
-        encode.encode(NameOfFile, RightMotorsName, LeftMotorsName)
+        def Void(name):
+            pass
 
-    def _record_loop(self, controller: Controller, Right: Motor, Left: Motor):
-        while True:
-            
-            if not self.record:
-                break
-            
-            self.axis1=controller.axis1.position()
-            self.axis2=controller.axis2.position()
-            self.axis3=controller.axis3.position()
-            self.axis4=controller.axis4.position()
-            self.time_stamp=timer.time()
-            self.buttonspressed=bytearray()
+        def motor_handle(name: str) -> None:
+            pass
 
-            if controller.buttonA.pressing():
-                self.buttonspressed.extend(b"A: ")
+        def int_handle(name: str) -> None:
+            pass
 
-            if controller.buttonB.pressing():
-                self.buttonspressed.extend(b"B: ")
+        def float_handle(name: str) -> None:
+            pass
 
-            if controller.buttonX.pressing():
-                self.buttonspressed.extend(b"X: ")
+        def bool_handle(name: str) -> None:
+            pass
 
-            if controller.buttonY.pressing():
-                self.buttonspressed.extend(b"Y: ")
+        TypeDict = {
+            Motor : motor_handle,
+            int : int_handle,
+            float : float_handle,
+            bool : bool_handle
+        }
+        
+        while Run:
+            StartTime = self.Timer.time()
 
-            if controller.buttonUp.pressing():
-                self.buttonspressed.extend(b"Up: ")
+            for key, item in MainDict.items():
+                TypeDict.get(type(item), Void) (key)
 
-            if controller.buttonDown.pressing():
-                self.buttonspressed.extend(b"Down: ")
+            TimePast = self.Timer.time() - StartTime
+            wait(10 - TimePast, MSEC)
+            pass
 
-            if controller.buttonLeft.pressing():
-                self.buttonspressed.extend(b"Left: ")
-
-            if controller.buttonRight.pressing():
-                self.buttonspressed.extend(b"Right: ")
-
-            if controller.buttonR1.pressing():
-                self.buttonspressed.extend(b"R1: ")
-
-            if controller.buttonR2.pressing():
-                self.buttonspressed.extend(b"R2: ")
-
-            if controller.buttonL1.pressing():
-                self.buttonspressed.extend(b"L1: ")
-
-            if controller.buttonL2.pressing():
-                self.buttonspressed.extend(b"L2: ")
-
-            brain.sdcard.appendfile("RecordingData.csv", bytearray(b"%d A1, %d A2, %d A3, %d A4, %d T, %s BP, %d RP, %d LP \n"%(self.axis1, self.axis2 , self.axis3, self.axis4, self.time_stamp , self.buttonspressed.decode("utf-8"), Right.position(DEGREES), Left.position(DEGREES))))
-
-            wait(20, MSEC)
-
-recording=Recording()
-encode=Encode()
-
-def archive_recording(self, recordingname: str) -> None:
-    """
-    Archives recording file. 
-    Enter full name of file.
-
-    Args:
-    recordingname= String
-    """
-
-    print("Archiving...")
-    filename=str(recordingname).replace(".txt", "_archived.txt")
-    brain.sdcard.savefile(filename)
-    with open(recordingname, 'rb') as recording:
-        chunk_buffer=bytearray(10240)
-        buffer=bytearray()
-        while True:
-            chunk=recording.readinto(chunk_buffer)
-            if not chunk:
-                break
-            
-            list=chunk_buffer.split(b"\n")
-            for line in list:
-                prelist=line.split(b' ')
-                buffer.extend(b"%b %b %b %b \n" %(prelist[2], prelist[9], prelist[10], prelist[11]))
-            brain.sdcard.appendfile(filename, buffer)
-
-    brain.sdcard.savefile(recordingname)
-
-def recall_recording(self, name: str) -> None:
-    """
-    Restores recording file to an uncompressed state. 
-    Enter full name of the archived file.
-
-    Args:
-    name=String, full name of file
-    """
-
-    recording=brain.sdcard.loadfile(name).decode("utf-8").split('\n')
-    filename=name.replace("_archived.txt", ".txt")
-    brain.sdcard.savefile(filename)
-    for item in recording:
-        prelist=item.split(' ')
-        if "Moved" in item:
-            brain.sdcard.appendfile(filename, bytearray("[',', '0', %s ':Controller', 'DATA:', 'Axis', 'Changed.', 'Axis:', '', %s %s 'Moved', '0', 'Degrees', ''] \n"%(prelist[0], prelist[1], prelist[2]), "utf-8"))
-        elif "Pressed" in item or "Released" in item:
-            brain.sdcard.appendfile(filename, bytearray("[',', '0', %s ':Controller', 'DATA:', 'Button', 'Changed.', 'Button:', '', %s %s %s ''] \n"%(prelist[0], prelist[1], prelist[2], prelist[3]), "utf-8"))
+    def start(self, MainDict, name):
+        Thread(lambda: self._loop(MainDict, name))
