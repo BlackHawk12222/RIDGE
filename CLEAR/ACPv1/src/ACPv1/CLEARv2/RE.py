@@ -116,27 +116,38 @@ class Recording():
     def _loop(self, MainDict: dict, name:str):
         Run = True
 
-        brain.sdcard.savefile("%s/%s.clear.record"%(self.FILEPATH, name))
+        FULLFILEPATH = "%s/%s.clear.record"%(self.FILEPATH, name)
 
-        Buffer = bytearray(34000)  # 34 KB buffer
-        BufferOffset = 0
+        brain.sdcard.savefile(FULLFILEPATH)
 
-        # Intended format for the file per line is "<name> data( seperated by ',' ) / formatstr;" eg. "<Right> 332.7, 217 / 'Pos [DEGREES], Vel [RPM]'"
+        self.BufferLen = 34000
+        self.Buffer = bytearray(self.BufferLen)  # 34 KB buffer
+        self.BufferOffset = 0
 
-        def Void(name):
+        # Intended format for the file per line is "<name> data( seperated by ',' ) / formatstr;" eg. "<Right> 332.7, 217 / Pos [DEGREES], Vel [RPM]"
+
+        def Void(name, item):
             pass
 
-        def motor_handle(name: str) -> None:
-            pass
+        def motor_handle(name: str, item: Motor) -> None:
+            entry = b"<%s> %.4f, %.1f / Pos [DEGREES], Vel [RPM]; \n"%(name, item.position(DEGREES), item.velocity(RPM))
+            ustruct.pack_into("=%ds"%(len(entry)), self.Buffer, self.BufferOffset, entry)
+            self.BufferOffset+=len(entry)
 
-        def int_handle(name: str) -> None:
-            pass
+        def int_handle(name: str, item) -> None:
+            entry = b"<%s> %d / Val[int]; \n"%(name, item)
+            ustruct.pack_into("=%ds"%(len(entry)), self.Buffer, self.BufferOffset, entry)
+            self.BufferOffset+=len(entry)
 
-        def float_handle(name: str) -> None:
-            pass
+        def float_handle(name: str, item) -> None:
+            entry = b"<%s> %.5f / Val[float]; \n"%(name, item)
+            ustruct.pack_into("=%ds"%(len(entry)), self.Buffer, self.BufferOffset, entry)
+            self.BufferOffset+=len(entry)
 
-        def bool_handle(name: str) -> None:
-            pass
+        def bool_handle(name: str, item) -> None:
+            entry = b"<%s> %s / Val[bool]; \n"%(name, item)
+            ustruct.pack_into("=%ds"%(len(entry)), self.Buffer, self.BufferOffset, entry)
+            self.BufferOffset+=len(entry)
 
         TypeDict = {
             Motor : motor_handle,
@@ -149,11 +160,14 @@ class Recording():
             StartTime = self.Timer.time()
 
             for key, item in MainDict.items():
-                TypeDict.get(type(item), Void) (key)
+                TypeDict.get(type(item), Void) (key, item)
+
+            if self.BufferOffset >= self.BufferLen - 500:
+                brain.sdcard.appendfile(FULLFILEPATH, bytearray(self.Buffer[: self.BufferOffset]))
+                self.BufferOffset = 0
 
             TimePast = self.Timer.time() - StartTime
             wait(10 - TimePast, MSEC)
-            pass
 
     def start(self, MainDict, name):
         Thread(lambda: self._loop(MainDict, name))
