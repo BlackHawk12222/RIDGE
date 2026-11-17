@@ -33,6 +33,7 @@ brain.screen.clear_screen()
 controller_1 = Controller(PRIMARY)
 Interface =  Controller(PARTNER)
 
+ACPv1.CLEARv2.CInterface.start(Interface)
 
 sudoIntakeLift = DigitalOut(brain.three_wire_port.a)
 sudoGrabber = DigitalOut(brain.three_wire_port.b)
@@ -668,6 +669,13 @@ class MotorTicks:
                 else:
                     self.clawOpen = True
                     grabber.set(True)
+
+    def recordTick(self):
+        if Interface.buttonY.pressing():
+            if not ACPv1.record:
+                ACPv1.start_recording("Test", globals())
+            else:
+                ACPv1.stop_recording()
 
 
 class MC:
@@ -1699,8 +1707,8 @@ PROG = Thread( prog_setup )
 VS = Thread( vs_setup )
 claw  = Thread( K56721.autoload )
 
-comp=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
-
+if brain.sdcard.is_inserted():
+    comp=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
 
 # if comp.is_driver_control():
 #     if brain.sdcard.is_inserted() and UseACP:

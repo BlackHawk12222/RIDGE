@@ -110,3 +110,23 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
     cla=CLEARv2.CLA.CLAStart()
 
     return comp
+
+record = False
+
+def _thread_handle_re(name, MainDict):
+    CLEARv2.RE.recording.start(MainDict, name)
+
+def start_recording(name, MainDict):
+    global record
+    record = True
+    Thread(lambda: _thread_handle_re(name, MainDict))
+    while record:
+        wait(100, MSEC)
+
+    CLEARv2.RE.recording.stop()
+    CLEARv2.RE.Encode.execute(name)
+
+def stop_recording():
+    global record
+    record = False
+
