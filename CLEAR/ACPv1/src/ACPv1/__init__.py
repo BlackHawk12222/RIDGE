@@ -59,7 +59,7 @@ def ACP_driver():
 
     print("Variable selection suscessful, starting ASAP with vars %s, %s, %s, %s, %s, %s, %s, %s, %s, %s"%(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial))
 
-    # Start(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial)
+    Start(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial)
 
 # Primary start method for the ACPv1 package. Call this in main.py to start the package.
 def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Tank", AtonFunc=_none) -> Competition:
