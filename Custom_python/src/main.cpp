@@ -120,50 +120,6 @@ void initialize() {
     status_screen_line = 1;
     report_status("MP: initializing");
 
-    // report_status("initalize: opening /usd/main.py");
-    // FILE* py_file = fopen("/usd/main.py", "r");
-
-    // if (py_file == NULL) {
-    //     py_file = fopen("/usd/main.mpy", "r");
-    //     if (py_file == NULL) {
-    //         report_status("ERROR: /usd/main.py not found");
-    //         return;
-    //     }
-    // }
-
-    // if (fseek(py_file, 0, SEEK_END) != 0) {
-    //     fclose(py_file);
-    //     report_status("ERROR: cannot seek /usd/main.py");
-    //     return;
-    // }
-
-    // long file_size = ftell(py_file);
-    // if (file_size < 0 || fseek(py_file, 0, SEEK_SET) != 0) {
-    //     fclose(py_file);
-    //     report_status("ERROR: cannot size /usd/main.py");
-    //     return;
-    // }
-
-    // char* python_buffer = (char*)malloc((size_t)file_size + 1);
-    // if (python_buffer == NULL) {
-    //     fclose(py_file);
-    //     report_status("ERROR: not enough memory for script");
-    //     return;
-    // }
-
-    // size_t bytes_read = fread(python_buffer, 1, (size_t)file_size, py_file);
-    // int read_error = ferror(py_file);
-    // fclose(py_file);
-
-    // if (read_error || bytes_read != (size_t)file_size) {
-    //     free(python_buffer);
-    //     report_status("ERROR: failed reading /usd/main.py");
-    //     return;
-    // }
-    // python_buffer[bytes_read] = '\0';
-
-    
-
     pros::task_t task = pros::c::task_create(
         run_python_script, NULL, MP_PYTHON_TASK_PRIORITY, 0x4000,
         "MicroPython Script"

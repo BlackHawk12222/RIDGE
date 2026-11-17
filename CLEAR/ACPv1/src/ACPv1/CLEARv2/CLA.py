@@ -875,6 +875,7 @@ try:
             
             # Setting up Log Files if they dont exist and setting index.
             log_number=0
+            self._log_lines=1  # Lines in Log.csv including header; used by Archive.log().
             if not brain.sdcard.exists("Log.csv"):
                 brain.sdcard.savefile("Log.csv", bytearray("log Start: \n", self.format))
             else:
@@ -888,6 +889,7 @@ try:
                         log_number+=chunk.count(b'\n')
 
                 self._index= log_number - 1
+                self._log_lines=log_number
 
         def append_log(self) -> None:
             """
@@ -1138,9 +1140,6 @@ try:
 
             log_add_logstart = self.add_logstart
 
-            def Void(name, obj):
-                pass
-
             def set_var(name: str, obj):
                 if name.isupper() or (name.endswith("__") and name.startswith("__")):  # Check if variable is all caps and is a dunder variable eg. "TOTAL" or "__path__" repectively.
                     log.capture.const_variable(name, obj)
@@ -1195,25 +1194,25 @@ try:
                 log_add_logstart("log.capture.system.control(%s)"%(name.replace("'", "")))
 
             ConfigDict = {
-                "<class 'int'>" : set_var if auto_do_variables else Void,
-                "<class 'bool'>" : set_var if auto_do_variables else Void,
-                "<class 'float'>" : set_var if auto_do_variables else Void,
-                "<class 'str'>" : set_var if auto_do_variables else Void,
-                "<class 'list'>" : set_var if auto_do_variables else Void,
-                "<class 'dict'>" : set_var if auto_do_variables else Void,
-                "<class 'tuple'>" : set_var if auto_do_variables else Void,
-                "<class 'motor'>" : set_motor if auto_do_motors else Void,
-                "<class 'controller'>" : set_controller if auto_do_controller else Void,
-                "<class 'inertial'>" : set_inertial if auto_do_smart_port else Void,
-                "<class 'optical'>" : set_optical if auto_do_smart_port else Void,
-                "<class 'rotation'>" : set_rotation if auto_do_smart_port else Void,
-                "<class 'distance'>" : set_distance if auto_do_smart_port else Void,
-                "<class 'triport_bumper'>" : set_bumper if auto_do_three_wire else Void,
-                "<class 'triport_limit'>" : set_limit if auto_do_three_wire else Void,
-                "<class 'triport_digitalin'>" : set_digital_in if auto_do_three_wire else Void,
-                "<class 'triport_potv2'>" : set_potv2 if auto_do_three_wire else Void,
-                "<class 'triport_analog'>" : set_analog if auto_do_three_wire else Void,
-                "<class 'comp'>" : set_comp if auto_do_control else Void  
+                "<class 'int'>" : set_var if auto_do_variables else None,
+                "<class 'bool'>" : set_var if auto_do_variables else None,
+                "<class 'float'>" : set_var if auto_do_variables else None,
+                "<class 'str'>" : set_var if auto_do_variables else None,
+                "<class 'list'>" : set_var if auto_do_variables else None,
+                "<class 'dict'>" : set_var if auto_do_variables else None,
+                "<class 'tuple'>" : set_var if auto_do_variables else None,
+                "<class 'motor'>" : set_motor if auto_do_motors else None,
+                "<class 'controller'>" : set_controller if auto_do_controller else None,
+                "<class 'inertial'>" : set_inertial if auto_do_smart_port else None,
+                "<class 'optical'>" : set_optical if auto_do_smart_port else None,
+                "<class 'rotation'>" : set_rotation if auto_do_smart_port else None,
+                "<class 'distance'>" : set_distance if auto_do_smart_port else None,
+                "<class 'triport_bumper'>" : set_bumper if auto_do_three_wire else None,
+                "<class 'triport_limit'>" : set_limit if auto_do_three_wire else None,
+                "<class 'triport_digitalin'>" : set_digital_in if auto_do_three_wire else None,
+                "<class 'triport_potv2'>" : set_potv2 if auto_do_three_wire else None,
+                "<class 'triport_analog'>" : set_analog if auto_do_three_wire else None,
+                "<class 'comp'>" : set_comp if auto_do_control else None  
             }
 
             for item in scope:
@@ -1223,7 +1222,10 @@ try:
                 except NameError:
                     continue
 
-                ConfigDict.get(str(type(eval_item)), Void) (item, eval_item)
+                
+                func = ConfigDict.get(str(type(eval_item)))
+                if func != None:
+                    func(item, eval_item)
 
             ModulesChecked=[]
 
@@ -1342,119 +1344,108 @@ try:
             
             def log(self) -> None:
                 """
-                Archives the Log.csv file.
-                
+                Archives the oldest lines of Log.csv into loghistory.txt, keeping the newest 2000.
+                Streams through one fixed 32 KB buffer so RAM use does not grow with file size.
+
                 Args:
                 None
                 """
 
                 speed=log_time.time()
-                loop=True
-                number_of_lines=0
-                buffer=bytearray(100000)
-                fileoffset=0
-                loglines=[]
+                KEEP=2000  # Lines kept in Log.csv.
+                HIST="ACPv1/Data/loghistory.txt"
+                TMP="ACPv1/Data/temp.tmp"
+                CHUNK=32768
 
-                reversecodes=log.reversecodes
+                total=log._log_lines - 1  # Data lines (minus header). Counted in Log.__init__.
+                to_archive=total - KEEP
+                if to_archive <= 0:
+                    return
 
-                while loop:
-                    with open("Log.csv", 'rb') as infile:
-                        infile.seek(fileoffset)
-                        chunk=infile.readinto(buffer)
-                        if not chunk:
-                            break
-                        number_of_lines+=bytes(buffer[0:chunk]).count(b'\n')
-                        fileoffset+=chunk
+                collect()
+                buf=bytearray(CHUNK)
+                mv=memoryview(buf)
 
-                    if number_of_lines > 2000:
-                        with open("Log.csv", 'r+') as infile:
-                            bytecount=0
-                            LinesRead=0
-                            TotalBytes=0
+                rc={text: code.encode() for text, code in log.reversecodes.items()}
+                rc_get=rc.get
+
+                archived=0
+                off=0
+                with open("Log.csv", "rb") as f:
+                    with open(HIST, "ab") as h:
+                        header=f.readline()
+                        readline=f.readline
+                        write=h.write
+                        for _ in range(to_archive):
+                            line=readline()
+                            if not line:
+                                break
+                            parts=line.rstrip(b"\r\n").split(b", ")
+                            p0=parts[0]
+                            ts=int(p0[p0.find(b"[") + 1 : p0.rfind(b" ms")])
+                            code=parts[1].strip() if len(parts) > 1 else b""
+                            entry=b"%x,%s,%s\n" % (ts, rc_get(code, code), b" ".join(parts[2:]))
+                            n=len(entry)
+                            if off + n > CHUNK:
+                                write(mv[:off])
+                                off=0
+                            if n > CHUNK:
+                                write(entry)
+                            else:
+                                mv[off:off + n]=entry
+                                off+=n
+                            archived+=1
+                        if off:
+                            write(mv[:off])
+
+                    with open(TMP, "wb") as t:
+                        t.write(header)
+                        readinto=f.readinto
+                        while True:
+                            n=readinto(buf)
+                            if not n:
+                                break
+                            t.write(mv[:n])
+
+                with open(TMP, "rb") as t:
+                    with open("Log.csv", "wb") as f:
+                        readinto=t.readinto
+                        while True:
+                            n=readinto(buf)
+                            if not n:
+                                break
+                            f.write(mv[:n])
+
+                with open(HIST, "r+b") as h:
+                    first=h.readline()
+                    new_header=b"%-20d\n" % (int(first) + archived)
+                    in_place=len(first) == len(new_header)
+                    if in_place:
+                        h.seek(0)
+                        h.write(new_header)
+
+                if not in_place:
+                    with open(HIST, "rb") as h:
+                        h.readline()
+                        with open(TMP, "wb") as t:
+                            t.write(new_header)
                             while True:
-                                infile.seek(bytecount)
-                                loglines=infile.read(500).split("\n")
-                                LinesRead+=len(loglines)
-                                if LinesRead >= number_of_lines - 2000 or not loglines:
+                                n=h.readinto(buf)
+                                if not n:
                                     break
-
-                                TotalBytes=sum(len(s.encode('utf-8')) for s in loglines)
-                                bytecount+=TotalBytes
-
-                            infile.seek(0)
-                            lines_to_archive=number_of_lines - 2000
-                            linecount=-1
+                                t.write(mv[:n])
+                    with open(TMP, "rb") as t:
+                        with open(HIST, "wb") as h:
                             while True:
-
-                                if linecount >= lines_to_archive:
+                                n=t.readinto(buf)
+                                if not n:
                                     break
+                                h.write(mv[:n])
 
-                                line=infile.readline()
-
-                                if linecount == -1:
-                                    linecount+=1
-                                    continue
-
-                                linecount+=1
-
-                                # [2317 [123533 ms], <Cont DATA: Button Changed>, controller(30), L1, Released]
-                                prelist=line.split(',')
-
-                                # ["2317", "123533"]
-                                numbers=prelist[0].replace("[", "").replace(" ms]", "").split(' ')
-
-                                details=""
-
-                                # "controller(30) L1 Released"
-                                if len(prelist) > 3:
-                                    detailslist=[item + " " for item in prelist[2 : len(prelist)-1]]
-                                    details="".join(detailslist)
-
-                                print(numbers)
-
-                                # [1E28D, DC0, controller(30) L1 Released]
-                                entry="{:x}, {}, {}\n".format(int(numbers[1].strip()), reversecodes.get(bytes(prelist[1].strip(), 'utf-8'), prelist[1].strip()), details)
-
-                                brain.sdcard.appendfile("ACPv1/Data/loghistory.txt", bytearray(entry, log.format))
-                        
-                        with open("ACPv1/Data/loghistory.txt", "r") as infile:
-                            with open("ACPv1/Data/temp.tmp", "w") as outfile:
-
-                                infile.seek(0)
-                                OldNumberStr=infile.readline()
-                                OldNumber=int(OldNumberStr)
-
-                                # Flag to ensure we only replace the very first line
-                                is_first_line = True
-                                
-                                for line in infile:
-                                    if is_first_line:
-                                        line = line.replace(line, str(OldNumber + number_of_lines - 2000) + "\n") 
-                                        is_first_line = False # Turn off flag so the rest of the file is untouched
-                                    
-                                    outfile.write(line)
-
-                        with open("ACPv1/Data/temp.tmp", "r") as infile:
-                            with open("ACPv1/Data/loghistory.txt", "w") as outfile:
-                                for line in infile:
-                                    outfile.write(line)
-
-                        with open("Log.csv", 'r') as infile:
-                            with open("ACPv1/Data/temp.tmp", "w") as outfile:
-                                infile.seek(bytecount)
-                                while True:
-                                    chunk=infile.read(500)
-                                    if not chunk:
-                                        break
-                                    outfile.write(chunk)
-
-                        with open("ACPv1/Data/temp.tmp", "r") as infile:
-                            with open("Log.csv", "w") as outfile:
-                                for line in infile:
-                                    outfile.write(line)
-
-                        loop=False
-
+                brain.sdcard.savefile(TMP)  # Empty temp.tmp so it does not hold SD space.
+                mv=None
+                buf=None
+                log._log_lines=1 + total - archived
                 collect()
                 log.add("DS1", str(log_time.time() - speed) + " MSEC")
 
@@ -1478,21 +1469,31 @@ try:
 
             def recall_log(self) -> None:
                 """
-                Unarchives The log.
+                Unarchives The log into logrecalled.csv. Reads both old ", " and new "," entries.
 
                 Args:
                 None
                 """
 
-                filename="logrecalled.csv"
                 print("recalling...")
-                with open("ACPv1/Data/loghistory.txt", 'r') as file:
-                    for line in file:
-                        prelist=line.split(' ')
-                        if len(prelist) > 3:
-                            detailslist=[item + " " for item in prelist[2 : len(prelist)-1]]
-                        details="".join(detailslist)
-                        brain.sdcard.appendfile(filename, bytearray("%d [%s ms], %s, %s\n"%(int(prelist[0], 16),int(prelist[1], 16) , log.codes.get(prelist[2], prelist[2]), details), log.format))
+                codes=log.codes
+                out=[]
+                index=0
+                with open("ACPv1/Data/loghistory.txt", "rb") as f, open("logrecalled.csv", "ab") as o:
+                    f.readline()  # Skip the count header.
+                    for line in f:
+                        parts=line.rstrip(b"\r\n").split(b",", 2)
+                        if len(parts) < 2:
+                            continue
+                        code=parts[1].strip().decode()
+                        details=parts[2].strip() if len(parts) > 2 else b""
+                        out.append(b"%d [%d ms], %s, %s\n" % (index, int(parts[0].strip(), 16), codes.get(code, code.encode()), details))
+                        index+=1
+                        if len(out) >= 200:
+                            o.write(b"".join(out))
+                            out=[]
+                    if out:
+                        o.write(b"".join(out))
                 print("Recall done.")
 
     class Settings:
