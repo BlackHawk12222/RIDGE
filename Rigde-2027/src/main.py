@@ -1641,16 +1641,16 @@ def auto() -> None:
     global MyColor, Auto_Side
 
     Inertial_.reset_heading()
-    Bar_Switcher.set_velocity(50,PERCENT)
+    # Bar_Switcher.set_velocity(50,PERCENT)
     # Temperary Auto setup to make Aton
 
     # Inital Right turn for color bar.
     right_drive_smart.spin(FORWARD, 5, PERCENT)
-    Bar_Switcher.spin(FORWARD)
-    wait(0.83, SECONDS)
-    while Bar_Switcher.power(PowerUnits.WATT) > 5:
-        wait(10,MSEC)
-    Bar_Switcher.stop()
+    # Bar_Switcher.spin(FORWARD)
+    # wait(0.83, SECONDS)
+    # while Bar_Switcher.power(PowerUnits.WATT) > 5:
+    #     wait(10,MSEC)
+    # Bar_Switcher.stop()
     drivetrain.drive_for(REVERSE,20,MM,80)
     drivetrain.drive_for(FORWARD,30,MM,100)
     drivetrain.drive_for(REVERSE,360,MM,70)
@@ -1676,20 +1676,20 @@ def auto() -> None:
     # Stops Color turn Thread.
     # color.stop()
 
-def driver():
-    """
-    Driver Control init.
+# def driver():
+#     """
+#     Driver Control init.
 
-    ### Args:
-    None;
+#     ### Args:
+#     None;
 
-    ### Returns:
-    None;
-    """
+#     ### Returns:
+#     None;
+#     """
 
     
-    K56721.TankDrive(2)
-    # color_switching()
+#     K56721.TankDrive(2)
+#     # color_switching()
 
 #PROGRAM RUN
 AIM = AIMDrive()
