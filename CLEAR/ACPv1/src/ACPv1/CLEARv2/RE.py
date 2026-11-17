@@ -332,7 +332,7 @@ class Encode:
         8. Attach pistons, variables and mechanism moves to the drive moves by
            position, so they fire at the same spot on the field
         9. Measure how far the script's path is from the recording (tolerance)
-       10. Write the script safely: ACPv1/TMP/<name>.CLEAR.tmp first, then
+       10. Write the script safely: ACPv1/TMP/<name>.clear.tmp first, then
            ACPv1/Data/<name>.py
     """
 
@@ -439,7 +439,7 @@ class Encode:
         self.name = name
         self.record_path = "%s/%s.clear.record" % (self.DATA_DIR, name)
         self.script_path = "%s/%s.py" % (self.DATA_DIR, name)
-        self.tmp_path = "%s/%s.CLEAR.tmp" % (self.TMP_DIR, name)
+        self.tmp_path = "%s/%s.clear.tmp" % (self.TMP_DIR, name)
         self.notes = []            # warnings written into the script header
 
     # =======================================================================
@@ -1148,7 +1148,8 @@ class Encode:
             add("    # " + "-" * 70)
             add("    # MOVES")
             add("    # " + "-" * 70)
-            for num, m in enumerate(moves, 1):
+            for num in range(len(moves), 1):
+                m = moves[num]
                 F, H = drive["F"], drive["H"]
                 add("    # Move %d of %d  (t = %s s)" % (num, len(moves), self._fmt((T[m.i] - T[0]) / 1000.0, 2)))
                 if m.kind == "straight":
@@ -1209,7 +1210,7 @@ class Encode:
     # 10b. Save safely
     # =======================================================================
     def _atomic_write(self, data, p):
-        """Write to ACPv1/TMP/<name>.CLEAR.tmp, check it, then put it in
+        """Write to ACPv1/TMP/<name>.clear.tmp, check it, then put it in
         ACPv1/Data/<name>.py. The script ends with "# CLEAR-END", and
         run_script() falls back to the .tmp copy if the .py is cut short,
         so stopping the program at any point never leaves a broken script."""
@@ -1555,10 +1556,10 @@ class Auton:
         """Load ACPv1/Data/<name>.py and run its main_script().
 
         If the file is missing its end marker (power cut mid-write), the finished
-        copy in ACPv1/TMP/<name>.CLEAR.tmp is used instead."""
+        copy in ACPv1/TMP/<name>.clear.tmp is used instead."""
         data = Auton._load("%s/%s.py" % (Auton.DATA_DIR, name))
         if not Auton._complete(data):
-            data = Auton._load("%s/%s.CLEAR.tmp" % (Auton.TMP_DIR, name))
+            data = Auton._load("%s/%s.clear.tmp" % (Auton.TMP_DIR, name))
             if not Auton._complete(data):
                 print("CLEAR: script %s missing or incomplete" % name)
                 return False
