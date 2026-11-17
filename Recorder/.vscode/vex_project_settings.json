@@ -1,0 +1,18 @@
+{
+	"extension": {
+		"version": "0.8.2026020401",
+		"json": 2
+	},
+	"project": {
+		"name": "Recorder",
+		"description": "Record an auton by driving, encode it, play it back (CLEARv2 RE)",
+		"creationDate": "11/17/2026, 4:55:00 PM",
+		"platform": "V5",
+		"language": "python",
+		"slot": 5,
+		"sdkVersion": "V5_1_0_1_25",
+		"python": {
+			"main": "src/main.py"
+		}
+	}
+}
