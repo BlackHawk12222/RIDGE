@@ -751,6 +751,9 @@ try:
                     log.add(log.variable, "%s, Val %s"%(name, value))
                     self.variables[self.valueid] = value
 
+            def const_variable(self, name: str, value: Any) -> None:
+                log.add(log.variable, "%s, Val %s"%(name, value))
+
     class Log:
         """Main object for the CLEAR import. \n To start logging use the "logstart()" function in this object to do the main logging if you need help with its inputs use help() over the "logstart()" function."""
                     
@@ -872,6 +875,7 @@ try:
             
             # Setting up Log Files if they dont exist and setting index.
             log_number=0
+            self._log_lines=1  # Lines in Log.csv including header; used by Archive.log().
             if not brain.sdcard.exists("Log.csv"):
                 brain.sdcard.savefile("Log.csv", bytearray("log Start: \n", self.format))
             else:
@@ -885,6 +889,7 @@ try:
                         log_number+=chunk.count(b'\n')
 
                 self._index= log_number - 1
+                self._log_lines=log_number
 
         def append_log(self) -> None:
             """
@@ -1129,61 +1134,98 @@ try:
             if brain.sdcard.filesize("Log.csv") > 100000:
                 self.archive.log()
 
-            controllers: List[Controller]=[]
+            self.controllers: List[Controller]=[]
 
             scope=dir()
 
-            #print(globallogging)
+            log_add_logstart = self.add_logstart
+
+            def set_var(name: str, obj):
+                if name.isupper() or (name.endswith("__") and name.startswith("__")):  # Check if variable is all caps and is a dunder variable eg. "TOTAL" or "__path__" repectively.
+                    log.capture.const_variable(name, obj)
+                    return
+                
+                log_add_logstart("log.capture.variable('%s', %s)"%(name, name.replace("'", "")))
+                self.VariablesAdded.append(name)
+
+            def set_motor(name, obj):
+                if "Left" in name or "left" in name:
+                    self.LeftMotors+=[obj]
+                elif "Right" in name or "right" in name:
+                    self.RightMotors+=[obj]
+                else:
+                    self.MiscMotors+=[obj]
+                    self.MiscMotorsName+=[name]
+
+            def set_controller(name, obj):
+                self.controllers+=[obj]
+
+                if "Interface" in name or "interface" in name:
+                    Thread(lambda: CInterface.start(obj))
+
+            def set_inertial(name, obj):
+                log_add_logstart("log.capture.smartport.inertial(%s)"%(name.replace("'", "")))
+
+            def set_optical(name, obj):
+                log_add_logstart("log.capture.smartport.optical(%s)"%(name.replace("'", "")))
+
+            def set_rotation(name, obj):
+                log_add_logstart("log.capture.smartport.rotation(%s, '%s')"%(name.replace("'", ""), name))
+
+            def set_distance(name, obj):
+                log_add_logstart("log.capture.smartport.distance(%s)"%(name.replace("'", "")))
+
+            def set_bumper(name, obj):
+                log_add_logstart("log.capture.threewire.bumper(%s)"%(name.replace("'", "")))
+
+            def set_limit(name, obj):
+                log_add_logstart("log.capture.threewire.limit(%s)"%(name.replace("'", "")))
+
+            def set_digital_in(name, obj):
+                log_add_logstart("log.capture.threewire.digitalinput(%s)"%(name.replace("'", "")))
+
+            def set_potv2(name, obj):
+                log_add_logstart("log.capture.threewire.potentiometer(%s)"%(name.replace("'", "")))
+
+            def set_analog(name, obj):
+                log_add_logstart("log.capture.threewire.analog(%s)"%(name.replace("'", "")))
+
+            def set_comp(name, obj):
+                log_add_logstart("log.capture.system.control(%s)"%(name.replace("'", "")))
+
+            ConfigDict = {
+                "<class 'int'>" : set_var if auto_do_variables else None,
+                "<class 'bool'>" : set_var if auto_do_variables else None,
+                "<class 'float'>" : set_var if auto_do_variables else None,
+                "<class 'str'>" : set_var if auto_do_variables else None,
+                "<class 'list'>" : set_var if auto_do_variables else None,
+                "<class 'dict'>" : set_var if auto_do_variables else None,
+                "<class 'tuple'>" : set_var if auto_do_variables else None,
+                "<class 'motor'>" : set_motor if auto_do_motors else None,
+                "<class 'controller'>" : set_controller if auto_do_controller else None,
+                "<class 'inertial'>" : set_inertial if auto_do_smart_port else None,
+                "<class 'optical'>" : set_optical if auto_do_smart_port else None,
+                "<class 'rotation'>" : set_rotation if auto_do_smart_port else None,
+                "<class 'distance'>" : set_distance if auto_do_smart_port else None,
+                "<class 'triport_bumper'>" : set_bumper if auto_do_three_wire else None,
+                "<class 'triport_limit'>" : set_limit if auto_do_three_wire else None,
+                "<class 'triport_digitalin'>" : set_digital_in if auto_do_three_wire else None,
+                "<class 'triport_potv2'>" : set_potv2 if auto_do_three_wire else None,
+                "<class 'triport_analog'>" : set_analog if auto_do_three_wire else None,
+                "<class 'comp'>" : set_comp if auto_do_control else None  
+            }
 
             for item in scope:
                 
                 try:
-                    item_type=str(type(eval(item)))
-                    # print(item, item_type)
+                    eval_item = eval(item)
                 except NameError:
                     continue
 
-                if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>") and auto_do_variables:
-                    log.add_logstart("log.capture.variable('%s', %s)"%(item, item.replace("'", "")))
-                    self.VariablesAdded.append(item)
-                elif item_type == "<class 'motor'>" and auto_do_motors:
-
-                    if "Left" in item or "left" in item:
-                        self.LeftMotors+=[eval(item)]
-                    elif "Right" in item or "right" in item:
-                        self.RightMotors+=[eval(item)]
-                    else:
-                        self.MiscMotors+=[eval(item)]
-                        self.MiscMotorsName+=[item]
-                elif item_type == "<class 'controller'>" and auto_do_controller:
-                    controller_temp=eval(item)
-                    controllers+=[controller_temp]
-
-                    if "Interface" in item or "interface" in item:
-                        Thread(CInterface.start, [controller_temp])  # type: ignore
-
-                elif item_type == "<class 'inertial'>" and auto_do_smart_port:
-                    log.add_logstart("log.capture.smartport.inertial(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'optical'>" and auto_do_smart_port:
-                    log.add_logstart("log.capture.smartport.optical(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'rotation'>" and auto_do_smart_port:
-                    log.add_logstart("log.capture.smartport.rotation(%s, '%s')"%(item.replace("'", ""), item))
-                elif item_type == "<class 'distance'>" and auto_do_smart_port:
-                    log.add_logstart("log.capture.smartport.distance(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'triport_bumper'>" and auto_do_three_wire:
-                    log.add_logstart("log.capture.threewire.bumper(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'triport_limit'>" and auto_do_three_wire:
-                    log.add_logstart("log.capture.threewire.limit(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'triport_digitalin'>" and auto_do_three_wire:
-                    log.add_logstart("log.capture.threewire.digitalinput(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'triport_potv2'>" and auto_do_three_wire:
-                    log.add_logstart("log.capture.threewire.potentiometer(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'triport_analog'>" and auto_do_three_wire:
-                    log.add_logstart("log.capture.threewire.analog(%s)"%(item.replace("'", "")))
-                elif item_type == "<class 'comp'>" and auto_do_control:
-                    log.add_logstart("log.capture.system.control(%s)"%(item.replace("'", "")))
-
-            #print(sys.modules)
+                
+                func = ConfigDict.get(str(type(eval_item)))
+                if func != None:
+                    func(item, eval_item)
 
             ModulesChecked=[]
 
@@ -1199,12 +1241,8 @@ try:
                 ModulesChecked.append(Module)
                 try:
                     ModuleLogging=dir(ModuleType)
-                    #print(Module)
                 except NameError:
-                    #print(Module)
                     continue
-
-                # print(ModuleLogging)
 
                 for item in ModuleLogging:
                     
@@ -1221,10 +1259,7 @@ try:
                         self.VariablesAdded.append(item)
 
                     
-            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port
-
-            # print("Logstart: ")
-            # print(brain.sdcard.loadfile("ACPv1/Config/Logstart.txt").decode(self.format))
+            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port, ConfigDict, set_var, set_motor, set_controller, set_analog, set_bumper
 
             _exec=exec
             lwait=wait
@@ -1238,6 +1273,7 @@ try:
             controllercapture=log.capture.controller
             log_check=log.append_log
             drivetrainuse= True if self.LeftMotors and self.RightMotors else False
+            controllers = self.controllers
 
             # Loads extra funtions from file.
             try:
@@ -1256,8 +1292,10 @@ try:
             
             gc_collect()
 
+
+
             while True:
-                for _ in range(200):
+                for _ in range(2000):
                     start:int=timer()
 
                     if not self.robot_active:
@@ -1293,8 +1331,6 @@ try:
                     
                     if log_battery:
                         capture_battery()
-                    
-                    #print(timer()-start)
 
                     lwait(wait_time_logging - (timer() - start))
 
@@ -1308,121 +1344,108 @@ try:
             
             def log(self) -> None:
                 """
-                Archives the Log.csv file.
-                
+                Archives the oldest lines of Log.csv into loghistory.txt, keeping the newest 2000.
+                Streams through one fixed 32 KB buffer so RAM use does not grow with file size.
+
                 Args:
                 None
                 """
 
                 speed=log_time.time()
-                loop=True
-                number_of_lines=0
-                buffer=bytearray(100000)
-                fileoffset=0
-                archived=False
-                loglines=[]
+                KEEP=2000  # Lines kept in Log.csv.
+                HIST="ACPv1/Data/loghistory.txt"
+                TMP="ACPv1/Data/temp.tmp"
+                CHUNK=32768
 
-                reversecodes=log.reversecodes
+                total=log._log_lines - 1  # Data lines (minus header). Counted in Log.__init__.
+                to_archive=total - KEEP
+                if to_archive <= 0:
+                    return
 
-                while loop:
-                    with open("Log.csv", 'rb') as infile:
-                        infile.seek(fileoffset)
-                        chunk=infile.readinto(buffer)
-                        if not chunk:
-                            break
-                        number_of_lines+=bytes(buffer[0:chunk]).count(b'\n')
-                        fileoffset+=chunk
+                collect()
+                buf=bytearray(CHUNK)
+                mv=memoryview(buf)
 
-                    if number_of_lines > 2000:
-                        archived=True
-                        with open("Log.csv", 'r+') as infile:
-                            bytecount=0
-                            LinesRead=0
-                            TotalBytes=0
+                rc={text: code.encode() for text, code in log.reversecodes.items()}
+                rc_get=rc.get
+
+                archived=0
+                off=0
+                with open("Log.csv", "rb") as f:
+                    with open(HIST, "ab") as h:
+                        header=f.readline()
+                        readline=f.readline
+                        write=h.write
+                        for _ in range(to_archive):
+                            line=readline()
+                            if not line:
+                                break
+                            parts=line.rstrip(b"\r\n").split(b", ")
+                            p0=parts[0]
+                            ts=int(p0[p0.find(b"[") + 1 : p0.rfind(b" ms")])
+                            code=parts[1].strip() if len(parts) > 1 else b""
+                            entry=b"%x,%s,%s\n" % (ts, rc_get(code, code), b" ".join(parts[2:]))
+                            n=len(entry)
+                            if off + n > CHUNK:
+                                write(mv[:off])
+                                off=0
+                            if n > CHUNK:
+                                write(entry)
+                            else:
+                                mv[off:off + n]=entry
+                                off+=n
+                            archived+=1
+                        if off:
+                            write(mv[:off])
+
+                    with open(TMP, "wb") as t:
+                        t.write(header)
+                        readinto=f.readinto
+                        while True:
+                            n=readinto(buf)
+                            if not n:
+                                break
+                            t.write(mv[:n])
+
+                with open(TMP, "rb") as t:
+                    with open("Log.csv", "wb") as f:
+                        readinto=t.readinto
+                        while True:
+                            n=readinto(buf)
+                            if not n:
+                                break
+                            f.write(mv[:n])
+
+                with open(HIST, "r+b") as h:
+                    first=h.readline()
+                    new_header=b"%-20d\n" % (int(first) + archived)
+                    in_place=len(first) == len(new_header)
+                    if in_place:
+                        h.seek(0)
+                        h.write(new_header)
+
+                if not in_place:
+                    with open(HIST, "rb") as h:
+                        h.readline()
+                        with open(TMP, "wb") as t:
+                            t.write(new_header)
                             while True:
-                                infile.seek(bytecount)
-                                loglines=infile.read(500).split("\n")
-                                LinesRead+=len(loglines)
-                                if LinesRead >= number_of_lines - 2000 or not loglines:
+                                n=h.readinto(buf)
+                                if not n:
                                     break
-
-                                TotalBytes=sum(len(s.encode('utf-8')) for s in loglines)
-                                bytecount+=TotalBytes
-
-                            infile.seek(0)
-                            lines_to_archive=number_of_lines - 2000
-                            linecount=-1
+                                t.write(mv[:n])
+                    with open(TMP, "rb") as t:
+                        with open(HIST, "wb") as h:
                             while True:
-
-                                if linecount >= lines_to_archive:
+                                n=t.readinto(buf)
+                                if not n:
                                     break
+                                h.write(mv[:n])
 
-                                line=infile.readline()
-
-                                if linecount == -1:
-                                    linecount+=1
-                                    continue
-
-                                linecount+=1
-
-                                # [2317 [123533 ms], <Cont DATA: Button Changed>, controller(30), L1, Released]
-                                prelist=line.split(',')
-
-                                # ["2317", "123533"]
-                                numbers=prelist[0].replace("[", "").replace(" ms]", "").split(' ')
-
-                                details=""
-
-                                # "controller(30) L1 Released"
-                                if len(prelist) > 3:
-                                    detailslist=[item + " " for item in prelist[2 : len(prelist)-1]]
-                                    details="".join(detailslist)
-
-                                print(numbers)
-
-                                # [1E28D, DC0, controller(30) L1 Released]
-                                entry="{:x}, {}, {}\n".format(int(numbers[1].strip()), reversecodes.get(bytes(prelist[1].strip(), 'utf-8'), prelist[1].strip()), details)
-
-                                brain.sdcard.appendfile("ACPv1/Data/loghistory.txt", bytearray(entry, log.format))
-                        
-                        with open("ACPv1/Data/loghistory.txt", "r") as infile:
-                            with open("ACPv1/Data/temp.tmp", "w") as outfile:
-
-                                infile.seek(0)
-                                OldNumberStr=infile.readline()
-                                OldNumber=int(OldNumberStr)
-
-                                # Flag to ensure we only replace the very first line
-                                is_first_line = True
-                                
-                                for line in infile:
-                                    if is_first_line:
-                                        line = line.replace(line, str(OldNumber + number_of_lines - 2000) + "\n") 
-                                        is_first_line = False # Turn off flag so the rest of the file is untouched
-                                    
-                                    outfile.write(line)
-
-                        with open("ACPv1/Data/temp.tmp", "r") as infile:
-                            with open("ACPv1/Data/loghistory.txt", "w") as outfile:
-                                for line in infile:
-                                    outfile.write(line)
-
-                        with open("Log.csv", 'r') as infile:
-                            with open("ACPv1/Data/temp.tmp", "w") as outfile:
-                                infile.seek(bytecount)
-                                while True:
-                                    chunk=infile.read(500)
-                                    if not chunk:
-                                        break
-                                    outfile.write(chunk)
-
-                        with open("ACPv1/Data/temp.tmp", "r") as infile:
-                            with open("Log.csv", "w") as outfile:
-                                for line in infile:
-                                    outfile.write(line)
-
-                        loop=False
-
+                brain.sdcard.savefile(TMP)  # Empty temp.tmp so it does not hold SD space.
+                mv=None
+                buf=None
+                log._log_lines=1 + total - archived
                 collect()
                 log.add("DS1", str(log_time.time() - speed) + " MSEC")
 
@@ -1446,21 +1469,31 @@ try:
 
             def recall_log(self) -> None:
                 """
-                Unarchives The log.
+                Unarchives The log into logrecalled.csv. Reads both old ", " and new "," entries.
 
                 Args:
                 None
                 """
 
-                filename="logrecalled.csv"
                 print("recalling...")
-                with open("ACPv1/Data/loghistory.txt", 'r') as file:
-                    for line in file:
-                        prelist=line.split(' ')
-                        if len(prelist) > 3:
-                            detailslist=[item + " " for item in prelist[2 : len(prelist)-1]]
-                        details="".join(detailslist)
-                        brain.sdcard.appendfile(filename, bytearray("%d [%s ms], %s, %s\n"%(int(prelist[0], 16),int(prelist[1], 16) , log.codes.get(prelist[2], prelist[2]), details), log.format))
+                codes=log.codes
+                out=[]
+                index=0
+                with open("ACPv1/Data/loghistory.txt", "rb") as f, open("logrecalled.csv", "ab") as o:
+                    f.readline()  # Skip the count header.
+                    for line in f:
+                        parts=line.rstrip(b"\r\n").split(b",", 2)
+                        if len(parts) < 2:
+                            continue
+                        code=parts[1].strip().decode()
+                        details=parts[2].strip() if len(parts) > 2 else b""
+                        out.append(b"%d [%d ms], %s, %s\n" % (index, int(parts[0].strip(), 16), codes.get(code, code.encode()), details))
+                        index+=1
+                        if len(out) >= 200:
+                            o.write(b"".join(out))
+                            out=[]
+                    if out:
+                        o.write(b"".join(out))
                 print("Recall done.")
 
     class Settings:
@@ -1473,8 +1506,8 @@ try:
                 "brain_read": False,
                 "print_read": True,
                 "sdcard_read": True,
-                "controller_interface": False,
-                "gc_use": True,
+                "controller_interface": True,
+                "gc_use": False,
                 "archive_log": True,
                 "archive_recordings": True,
                 "log_memory": False,

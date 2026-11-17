@@ -27,6 +27,8 @@ def ACP_driver():
     LeftMotors: list[Motor]=[]
     RightMotors: list[Motor]=[]
 
+    GearRatio = 1
+
     # Loop through the config file and set the variables for the driver control.
     for line in variabledata:
         if "LeftMotors" in line:

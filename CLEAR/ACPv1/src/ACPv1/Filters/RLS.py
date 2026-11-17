@@ -1,4 +1,4 @@
-from .MatrixMath import Matrix
+from ..General.MatrixMath import Matrix
 
 class RLS:
     def __init__(self, Name, lambda_: float, delta: Matrix, Theta0: Matrix = Matrix([[0], [0], [0], [0]])):

@@ -1,5 +1,5 @@
 from vex import *
-from .General.RLS import RLS, Matrix
+from .Filters.RLS import RLS, Matrix
 
 brain = Brain()
 
