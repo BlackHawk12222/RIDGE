@@ -15,6 +15,15 @@ brain = Brain()
 if brain.sdcard.is_inserted() and brain.sdcard.exists("ACPv1"):
     import ACPv1
 
+class DigitalOutCustom():
+    def __init__(self, obj: DigitalOut):
+        self.status = False
+        self.OBJ = obj
+
+    def set(self, Stat: bool):
+        self.OBJ.set(Stat)
+        self.status = Stat
+
 # Actions to do when the program starts.
 brain.screen.clear_screen()
 
@@ -24,32 +33,39 @@ brain.screen.clear_screen()
 controller_1 = Controller(PRIMARY)
 Interface =  Controller(PARTNER)
 
+
+sudoIntakeLift = DigitalOut(brain.three_wire_port.a)
+sudoGrabber = DigitalOut(brain.three_wire_port.b)
+
 #3-wire ports
-intakeLift = DigitalOut(brain.three_wire_port.a)
-grabber = DigitalOut(brain.three_wire_port.b)
+intakeLift = DigitalOutCustom(sudoIntakeLift)
+grabber = DigitalOutCustom(sudoIntakeLift)
 
 #other objects, in order of port, lowest first
 Yodom = Rotation(Ports.PORT1, False)#------------------------------ONE
 Horzontal_rotation = Rotation(Ports.PORT2, False)#-----------------TWO
 #------------------------------------------------horizontal_AID on FOURTEEN
-ColorSensor = Optical(Ports.PORT4)#-------------------------------FOUR
-Bar_Switcher = Motor(Ports.PORT5, GearSetting.RATIO_18_1, False)#--FIVE
+# ColorSensor = Optical(Ports.PORT4)#-------------------------------FOUR
+# Bar_Switcher = Motor(Ports.PORT5, GearSetting.RATIO_18_1, False)#--FIVE
 
-DistanceSensor = Distance(Ports.PORT6)#----------------------------SIX
+# DistanceSensor = Distance(Ports.PORT6)#----------------------------SIX
 
 Inertial_ = Inertial(Ports.PORT7)#---------------------------------SEVEN
 
-Intake = Motor(Ports.PORT8)#---------------------------------------EIGHT
+ElevenIntake = Motor(Ports.PORT6, GearSetting.RATIO_6_1)
+FiveIntake = Motor(Ports.PORT4)
+
+Intake = MotorGroup(ElevenIntake, FiveIntake)#---------------------EIGHT
 #---------------------------------------------------------radio on NINE
 Claw = Motor(Ports.PORT10)#----------------------------------------TEN
 
-Horizontal_AID = Rotation(Ports.PORT14, False)#--------------------FOURTEEN
+Horizontal_AID = Rotation(Ports.PORT11, False)#--------------------FOURTEEN
 
 liftOne = Motor(Ports.PORT15, GearSetting.RATIO_6_1, False)#-------FIFTEEN
 liftTwo = Motor(Ports.PORT16,GearSetting.RATIO_6_1,True)#---------SIXTEEN
 right_motor_a = Motor(Ports.PORT17, GearSetting.RATIO_6_1, False)#-SEVENTEEN
 right_motor_b = Motor(Ports.PORT18, GearSetting.RATIO_6_1, False)#-EIGHTEEN
-left_motor_a = Motor(Ports.PORT13, GearSetting.RATIO_6_1, True)#---THIRTEEN
+left_motor_a = Motor(Ports.PORT13, GearSetting.RATIO_6_1, True)#---NINETEEN
 left_motor_b = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)#---TWENTY
 
 # Creating motor grouping.
@@ -820,82 +836,83 @@ class AIMDrive():
             wait(10,MSEC)
         drivetrain.stop()
 
-class BarColor():
-    def Check_for_bar(self) -> None:
-        """
-        Checks if an object (the control bar) is close enough. If it is, check to see if it's our own color, and activate the spin command.
+# class BarColor():
+#     def Check_for_bar(self) -> None:
+#         """
+#         Checks if an object (the control bar) is close enough. If it is, check to see if it's our own color, and activate the spin command.
         
-        ### Args:
-        None;
+#         ### Args:
+#         None;
 
-        ### Returns:
-        None;
-        """
+#         ### Returns:
+#         None;
+#         """
 
-        self.check_dist()
+#         self.check_dist()
 
-        if Dist < 240:
-            self.check_color_redundancy()
+#         if Dist < 240:
+#             self.check_color_redundancy()
         
-        self.spin_motor()
+#         self.spin_motor()
 
-    def check_dist(self) -> None:
-        """
-        Used in Check_for_bar(): initializes Color_flips to 0(do not spin), then records the distance to the object.
+#     def check_dist(self) -> None:
+#         """
+#         Used in Check_for_bar(): initializes Color_flips to 0(do not spin), then records the distance to the object.
         
-        ### Args:
-        None;
+#         ### Args:
+#         None;
 
-        ### Returns:
-        None;
-        """
+#         ### Returns:
+#         None;
+#         """
 
-        global Dist, Color_Flips
+#         global Dist, Color_Flips
 
-        Color_Flips = 0
+#         Color_Flips = 0
 
-        Dist = DistanceSensor.object_distance(MM)
+#         Dist = DistanceSensor.object_distance(MM)
 
-    def check_color_redundancy(self) -> None:
-        """
-        Used in Check_for_bar(): sets Color_flips to 1(spin motor), then checks to see if the detected object is our color. If it is, set Color_flips to 0(do not spin).
+#     def check_color_redundancy(self) -> None:
+#         """
+#         Used in Check_for_bar(): sets Color_flips to 1(spin motor), then checks to see if the detected object is our color. If it is, set Color_flips to 0(do not spin).
         
-        ### Args:
-        None;
+#         ### Args:
+#         None;
 
-        ### Returns:
-        None;
-        """
+#         ### Returns:
+#         None;
+#         """
         
-        global Color_Flips
-        Color_Flips = 1
+#         global Color_Flips
+#         Color_Flips = 1
 
-        if ColorSensor.color() == Color.BLUE and MyColor == "blue" or ColorSensor.color() == Color.RED and MyColor == "red":
-            Color_Flips = 0
+#         if ColorSensor.color() == Color.BLUE and MyColor == "blue" or ColorSensor.color() == Color.RED and MyColor == "red":
+#             Color_Flips = 0
 
-    def spin_motor(self) -> None:
-        """
-        Spins Bar_Switcher if Color_fips is 1(spin motor). Continues to do so until distance is too far away(robot has moved away) or color is correct.
+#     def spin_motor(self) -> None:
+#         """
+#         Spins Bar_Switcher if Color_fips is 1(spin motor). Continues to do so until distance is too far away(robot has moved away) or color is correct.
         
-        ### Args:
-        None;
+#         ### Args:
+#         None;
 
-        ### Returns:
-        None;
-        """
+#         ### Returns:
+#         None;
+#         """
 
-        while Color_Flips == 1:
+#         while Color_Flips == 1:
 
-            Bar_Switcher.spin_for(FORWARD, 130, DEGREES)
-            wait(0.15, SECONDS)
+#             Bar_Switcher.spin_for(FORWARD, 100, DEGREES)
+#             wait(0.15, SECONDS)
 
-            self.check_dist()
+#             self.check_dist()
 
-            if Dist < 240:
-                self.check_color_redundancy()
+#             if Dist < 240:
+#                 self.check_color_redundancy()
 
-        Bar_Switcher.stop()
+#         Bar_Switcher.stop()
 
+# colorBar = BarColor()
 
 # APF SCRIPTS
 
@@ -1134,29 +1151,29 @@ def offset_accommodation() -> None:
 
 #RUNNING SCRIPTS
 
-def color_switching() -> None:
-    """
-    Initialize and run color sensing. Also set drive stopping and set Bar_switcher to 100% velocity.
+# def color_switching() -> None:
+#     """
+#     Initialize and run color sensing. Also set drive stopping and set Bar_switcher to 100% velocity.
 
-    ### Args:
-    None;
+#     ### Args:
+#     None;
 
-    ### Returns:
-    None;
-    """
+#     ### Returns:
+#     None;
+#     """
 
-    global MyColor, drivetrain, Bar_Switcher, ColorSensor
+#     global MyColor, drivetrain, Bar_Switcher, ColorSensor
 
-    Bar_Switcher.set_velocity(100, PERCENT)
+#     Bar_Switcher.set_velocity(100, PERCENT)
 
-    #MyColor = "red"
+#     #MyColor = "red"
 
-    ColorSensor.set_light(LedStateType.ON)
-    ColorSensor.set_light_power(100, PERCENT)
+#     ColorSensor.set_light(LedStateType.ON)
+#     ColorSensor.set_light_power(100, PERCENT)
 
-    while True:
-        colorBar.Check_for_bar()
-        wait(5, MSEC)
+#     while True:
+#         colorBar.Check_for_bar()
+#         wait(5, MSEC)
 
 def vs_setup() -> None:
     """
@@ -1618,7 +1635,8 @@ def auto() -> None:
     None;
     """
 
-    #color = Thread( color_switching )
+    # color = Thread( color_switching )
+    AIM = AIMDrive()
 
     global MyColor, Auto_Side
 
@@ -1656,6 +1674,7 @@ def auto() -> None:
         drivetrain.turn_for(RIGHT,50,DEGREES,50,PERCENT)
         drivetrain.drive_for(FORWARD,600,MM,50,PERCENT)
     # Stops Color turn Thread.
+    # color.stop()
 
 def driver():
     """
@@ -1667,31 +1686,33 @@ def driver():
     ### Returns:
     None;
     """
-    lift_run.broadcast()
+
     
-    claw  = Thread(K56721.autoload)
-    drive = Thread(lambda: K56721.TankDrive(2))
-    color_switching()
-colorBar = BarColor()
+    K56721.TankDrive(2)
+    # color_switching()
+
 #PROGRAM RUN
 AIM = AIMDrive()
 K56721 = robot()
 grabber.set(True)
 PROG = Thread( prog_setup )
 VS = Thread( vs_setup )
+claw  = Thread( K56721.autoload )
 
-comp = Competition(driver,auto)
-#ACP=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
-if comp.is_driver_control():
-    if brain.sdcard.is_inserted() and UseACP:
-        pass
-        # comp=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
-    else:
-        wait(1, SECONDS)
-        while not setUp:
-            wait(5, MSEC)
-            controller_1.screen.print(".")
-        if RunAuto:
-            controller_1.screen.print("auto")
-            auto()
-            RunAuto = False
+comp=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
+
+
+# if comp.is_driver_control():
+#     if brain.sdcard.is_inserted() and UseACP:
+#         comp=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
+#     else:
+#         wait(1, SECONDS)
+#         while not setUp:
+#             wait(5, MSEC)
+#             controller_1.screen.print(".")
+#         if RunAuto:
+#             controller_1.screen.print("auto")
+#             auto()
+#             RunAut0 = False
+#         #claw  = Thread(K56721.autoload)
+#         drive = Thread(lambda: K56721.TankDrive(2))

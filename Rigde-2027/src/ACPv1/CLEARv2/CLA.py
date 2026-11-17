@@ -1160,7 +1160,7 @@ try:
                     controllers+=[controller_temp]
 
                     if "Interface" in item or "interface" in item:
-                        Thread(CInterface.start, [controller_temp])  # type: ignore
+                        Thread(lambda: CInterface.start (controller_temp))  # type: ignore
 
                 elif item_type == "<class 'inertial'>" and auto_do_smart_port:
                     log.add_logstart("log.capture.smartport.inertial(%s)"%(item.replace("'", "")))
