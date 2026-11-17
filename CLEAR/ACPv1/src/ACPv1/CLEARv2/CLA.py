@@ -1160,7 +1160,7 @@ try:
             def set_controller(name, obj):
                 self.controllers+=[obj]
 
-                if "Interface" in name or "interface" in name:
+                if ("Interface", "interface") in name:
                     Thread(lambda: CInterface.start(obj))
 
             def set_inertial(name, obj):
