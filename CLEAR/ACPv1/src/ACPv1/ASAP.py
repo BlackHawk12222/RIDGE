@@ -107,15 +107,6 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
 
         InertialHeading = Inertial.heading()
 
-        # Check if the robot Should be going straight.
-        # StaySraight=bool( abs(RightPos - LeftPos) <= Controllertolrance)
-        StayStright = False
-
-        # Toggle the heading if the robot is going straight and it has not been checked yet.
-        if StayStright and not CheckedIfStraight:
-            heading = Inertial.heading()
-            CheckedIfStraight = True
-
         # Update the TrueSpeedFilter with the current acceleration and velocity.
         a_fwd = Inertial.acceleration(XAXIS) * 9.81 - 9.81 * math.sin(math.radians(Inertial.orientation(PITCH, DEGREES)))
         TrueSpeedFilter.update(a_fwd, _rpm_to_wheel_speed_mps(XOdom.velocity(RPM), OdomWheelSize_MM))
@@ -153,21 +144,16 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
         else:
             SlipRateLeft_PERCENT=0
 
-        # Calculate the target RPMs for both sides of the drivetrain based on the requested RPMs, slip rates, and heading correction.
-        if not StayStright:
-            TargetRightRPM=RequestedRightRPM
-            TargetLeftRPM=RequestedLeftRPM
-        else:
-            SlipOffsetRight=SlipRateRight_PERCENT * (MotorRpmMax/100)
-            SlipOffsetLeft=SlipRateLeft_PERCENT * (MotorRpmMax/100)
+        SlipOffsetRight=SlipRateRight_PERCENT * (MotorRpmMax/100)
+        SlipOffsetLeft=SlipRateLeft_PERCENT * (MotorRpmMax/100)
 
-            if InertialHeading > heading + headingTolrance:
-                headingCorrection=(InertialHeading - heading) * HeadingCorrectionGain
-            elif InertialHeading < heading - headingTolrance:
-                headingCorrection=(InertialHeading - heading) * HeadingCorrectionGain
+        if InertialHeading > heading + headingTolrance:
+            headingCorrection=(InertialHeading - heading) * HeadingCorrectionGain
+        elif InertialHeading < heading - headingTolrance:
+            headingCorrection=(InertialHeading - heading) * HeadingCorrectionGain
 
-            TargetRightRPM=max(min(RequestedRightRPM + SlipOffsetRight + headingCorrection, MotorRpmMax), -MotorRpmMax)
-            TargetLeftRPM=max(min(RequestedLeftRPM + SlipOffsetLeft - headingCorrection, MotorRpmMax), -MotorRpmMax)
+        TargetRightRPM=max(min(RequestedRightRPM + SlipOffsetRight + headingCorrection, MotorRpmMax), -MotorRpmMax)
+        TargetLeftRPM=max(min(RequestedLeftRPM + SlipOffsetLeft - headingCorrection, MotorRpmMax), -MotorRpmMax)
 
         LeftOutput=LeftController.compute(TargetLeftRPM, ActualLeftRPM, DT, 12, -12)
         RightOutput=RightController.compute(TargetRightRPM, ActualRightRPM, DT, 12, -12)
