@@ -55,13 +55,15 @@ def ACP_driver():
             XOdom: Rotation=eval(line.split(": ")[1])
         elif "inertial" in line:
             inertial: Inertial=eval(line.split(": ")[1])
+        elif "YOdom" in line:
+            YOdom: Rotation = eval(line.split(": ")[1])
 
     # Start the ASAP function with the variables from the config file.
     inertial.calibrate()
 
     print("Variable selection suscessful, starting ASAP with vars %s, %s, %s, %s, %s, %s, %s, %s, %s, %s"%(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial))
 
-    Start(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial)
+    Start(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial, YOdom)
 
 # Primary start method for the ACPv1 package. Call this in main.py to start the package.
 def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Tank", AtonFunc=_none) -> Competition:
@@ -70,11 +72,12 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
     ObjList=dir()  # Get a list of all objects in the current scope.
 
     # Initialize motor lists as strings.
-    RightMotors: list[str]=[]
-    LeftMotors: list[str]=[]
-    inertial: str=""
-    XOdom: str=""
-    controller: str=""
+    RightMotors: list[str] = []
+    LeftMotors: list[str] = []
+    inertial: str = ""
+    XOdom: str = ""
+    YOdom: str = ""
+    controller: str = ""
 
     # Auto finds the motors, controller, Inertial, and odometry sensor in the code and saves them to a config file for later use.
     for item in ObjList:
@@ -94,12 +97,15 @@ def start(GearRatio, Wheelsize_MM, MotorMax_RPM, OdomWheelSize_MM, StickType="Ta
                 RightMotors+=[item]
             elif "Left" in item or "left" in item:
                 LeftMotors+=[item]
-        elif item_type == "<class 'rotation'>" and ("Xodom" in item or "XOdom" in item or "xodom" in item):
-            XOdom=item
+        elif item_type == "<class 'rotation'>":
+            if any(opt in item for opt in ("Xodom", "XOdom", "xodom", "vertiacal" ,"Vertical")):
+                XOdom=item
+            elif any(opt in item for opt in ("Yodom", "YOdom", "Yodom", "horzontal" ,"Horzontal")):
+                YOdom=item
         elif item_type == "<class 'inertial'>":
             inertial=item
 
-    brain.sdcard.savefile("ACPv1/Config/ACPv1config.txt", bytearray(b"LeftMotors: %s\n RightMotors: %s\n GearRatio: %1.5f \n Wheelsize_MM: %1.5f \n MotorMax_RPM: %d \n controller: %s \n Xodom: %s \nOdomWheelSize_MM: %1.5f \n StickType: %s \n inertial: %s"%(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial)))
+    brain.sdcard.savefile("ACPv1/Config/ACPv1config.txt", bytearray(b"LeftMotors: %s\n RightMotors: %s\n GearRatio: %1.5f \n Wheelsize_MM: %1.5f \n MotorMax_RPM: %d \n controller: %s \n Xodom: %s \nOdomWheelSize_MM: %1.5f \n StickType: %s \n inertial: %s \n YOdom: %s"%(LeftMotors, RightMotors, GearRatio, Wheelsize_MM, MotorMax_RPM, controller, XOdom, OdomWheelSize_MM, StickType, inertial, YOdom)))
 
     # Start the driver control and the autonomous function.
     comp=Competition(ACP_driver, AtonFunc)

@@ -1141,7 +1141,7 @@ try:
             log_add_logstart = self.add_logstart
 
             def set_var(name: str, obj):
-                if name.isupper() or (name.endswith("__") and name.startswith("__")):  # Check if variable is all caps and is a dunder variable eg. "TOTAL" or "__path__" repectively.
+                if name.isupper() or ((name.endswith("__") and name.startswith("__"))):  # Check if variable is all caps and is a dunder variable eg. "TOTAL" or "__path__" repectively.
                     log.capture.const_variable(name, obj)
                     return
                 
