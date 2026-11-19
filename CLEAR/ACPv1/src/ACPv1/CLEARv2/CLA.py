@@ -1263,7 +1263,6 @@ try:
                     if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>") and auto_do_variables and item not in self.VariablesAdded:
                         log.add_logstart("_cv('%s.%s', %s.%s)"%(Module, item, Module, item.replace("'", "")))
                         self.VariablesAdded.append(item)
-
                     
             del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port, ConfigDict, scope, ModulesChecked, log_add_logstart
             del set_var, set_motor, set_controller, set_inertial, set_optical, set_rotation, set_distance, set_bumper, set_limit, set_digital_in, set_potv2, set_analog, set_comp
@@ -1327,8 +1326,6 @@ try:
             self.add("DS0", "%d MSEC"%(log_time.time()-start))
             
             gc_collect()
-
-
 
             while True:
                 for _ in range(2000):
@@ -1400,13 +1397,14 @@ try:
                 buf=bytearray(CHUNK)
 
                 def copy(src, dst):
-                    readinto=src.readinto
-                    write=dst.write
-                    while True:
-                        n=readinto(buf)
-                        if not n:
-                            break
-                        write(buf if n == CHUNK else buf[:n])
+                    if buf != None:
+                        readinto=src.readinto
+                        write=dst.write
+                        while True:
+                            n=readinto(buf)
+                            if not n:
+                                break
+                            write(buf if n == CHUNK else buf[:n])
 
                 rc={text: code.encode() for text, code in log.reversecodes.items()}
                 rc_get=rc.get
