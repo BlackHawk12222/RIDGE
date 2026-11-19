@@ -105,11 +105,23 @@ try:
                     self.distance_object={}
                     self.distance_history={}
 
+                def setup_motor(self, motor_) -> None:
+                    """One-time setup of a motor's monitoring entries (done at start, not every loop)."""
+                    motor_id=id(motor_)
+                    if motor_id in self.setup:
+                        return
+                    self.motor_temp_monitoring[motor_id] = 0
+                    self.motor_power_monitoring[motor_id] = 0
+                    self.motor_current_monitoring[motor_id] = 0
+                    self.motor_disconnected[motor_id] = False
+                    self.setup[motor_id]=True
+
                 def motor(self, motor: Motor|None=None, motorName: str|None=None) -> None:
                     """Capture for any general smart motor. Enter motor you wish to log as input. (Can take motor groups as well.)"""
 
                     if motor!=None and motor not in log.MiscMotors:
                         log.MiscMotors.append(motor)
+                        self.setup_motor(motor)
                     
                     if motorName!=None and motorName not in log.MiscMotorsName:
                         log.MiscMotorsName.append(motorName)
@@ -117,14 +129,6 @@ try:
                     for i in range(len(log.MiscMotors)):
                         motor_=log.MiscMotors[i]
                         self.motor_id=id(motor_)
-                        
-                        # Setup id to sets if not there.
-                        if self.motor_id not in self.setup:
-                            self.motor_temp_monitoring[self.motor_id] = 0
-                            self.motor_power_monitoring[self.motor_id] = 0
-                            self.motor_current_monitoring[self.motor_id] = 0
-                            self.motor_disconnected[self.motor_id] = False
-                            self.setup[self.motor_id]=True
 
                         self.motor_temp: int=motor_.temperature(PERCENT)
 
@@ -476,6 +480,23 @@ try:
                 self.rightside=Motor(Ports.PORT21)
                 self.leftside=Motor(Ports.PORT21)
                 self.DrivetrainSetup=False
+                self.drivetrain_list=[self.leftside, self.rightside]
+
+            def setup_drivetrain(self) -> None:
+                """One-time setup of both drivetrain sides' monitoring entries (done at start, not every loop)."""
+                self.drivetrain_list=[self.leftside, self.rightside]
+                names=("LeftSide", "RightSide")
+                for i in range(2):
+                    motor_id=id(self.drivetrain_list[i])
+                    if motor_id in self.drivetrain_setup:
+                        continue
+                    self.drivetrain_temp_monitoring[motor_id] = 0
+                    self.drivetrain_power_monitoring[motor_id] = 0
+                    self.drivetrain_current_monitoring[motor_id] = 0
+                    self.drivetrain_disconnected[motor_id] = False
+                    self.drivetrain_name[motor_id]=names[i]
+                    self.drivetrain_setup[motor_id]=True
+                self.DrivetrainSetup=True
 
             def drivetrain(self, leftmotors: list[Motor]|None=None, rightmotors: list[Motor]|None=None) -> None:
                 """
@@ -487,33 +508,18 @@ try:
                 """
 
                 if (leftmotors !=None and rightmotors!=None and log.LeftMotors != leftmotors) or not self.DrivetrainSetup:
-                    if self.DrivetrainSetup and leftmotors!=None and rightmotors!=None:
+                    if leftmotors and rightmotors:
                         log.LeftMotors = leftmotors
                         log.RightMotors = rightmotors
                         self.leftside=log.LeftMotors[0]
                         self.rightside=log.RightMotors[0]
-                    self.DrivetrainSetup=True
+                    self.setup_drivetrain()
 
-                motor_list = [self.leftside, self.rightside]
+                motor_list = self.drivetrain_list
 
                 for i in range(2):
                     motor_=motor_list[i]
                     self.motor_id=id(motor_)
-                        
-                    # Setup id to sets if not there.
-                    if self.motor_id not in self.drivetrain_setup:
-                        self.drivetrain_temp_monitoring[self.motor_id] = 0
-                        self.drivetrain_power_monitoring[self.motor_id] = 0
-                        self.drivetrain_current_monitoring[self.motor_id] = 0
-                        self.drivetrain_disconnected[self.motor_id] = False
-                        self.drivetrain_setup[self.motor_id]=True
-                        if i == 0:
-                            self.drivetrain_name[self.motor_id]="LeftSide"
-                        elif i == 1:
-                            self.drivetrain_name[self.motor_id]="RightSide"
-                        else:
-                            self.drivetrain_name[self.motor_id]="ERROR"
-                            
 
                     self.motor_temp: int=motor_.temperature(PERCENT)  # type: ignore
 
@@ -1145,7 +1151,7 @@ try:
                     log.capture.const_variable(name, obj)
                     return
                 
-                log_add_logstart("log.capture.variable('%s', %s)"%(name, name.replace("'", "")))
+                log_add_logstart("_cv('%s', %s)"%(name, name.replace("'", "")))
                 self.VariablesAdded.append(name)
 
             def set_motor(name, obj):
@@ -1164,34 +1170,34 @@ try:
                     Thread(lambda: CInterface.start(obj))
 
             def set_inertial(name, obj):
-                log_add_logstart("log.capture.smartport.inertial(%s)"%(name.replace("'", "")))
+                log_add_logstart("_spi(%s)"%(name.replace("'", "")))
 
             def set_optical(name, obj):
-                log_add_logstart("log.capture.smartport.optical(%s)"%(name.replace("'", "")))
+                log_add_logstart("_spo(%s)"%(name.replace("'", "")))
 
             def set_rotation(name, obj):
-                log_add_logstart("log.capture.smartport.rotation(%s, '%s')"%(name.replace("'", ""), name))
+                log_add_logstart("_spr(%s, '%s')"%(name.replace("'", ""), name))
 
             def set_distance(name, obj):
-                log_add_logstart("log.capture.smartport.distance(%s)"%(name.replace("'", "")))
+                log_add_logstart("_spd(%s)"%(name.replace("'", "")))
 
             def set_bumper(name, obj):
-                log_add_logstart("log.capture.threewire.bumper(%s)"%(name.replace("'", "")))
+                log_add_logstart("_twb(%s)"%(name.replace("'", "")))
 
             def set_limit(name, obj):
-                log_add_logstart("log.capture.threewire.limit(%s)"%(name.replace("'", "")))
+                log_add_logstart("_twl(%s)"%(name.replace("'", "")))
 
             def set_digital_in(name, obj):
-                log_add_logstart("log.capture.threewire.digitalinput(%s)"%(name.replace("'", "")))
+                log_add_logstart("_twd(%s)"%(name.replace("'", "")))
 
             def set_potv2(name, obj):
-                log_add_logstart("log.capture.threewire.potentiometer(%s)"%(name.replace("'", "")))
+                log_add_logstart("_twp(%s)"%(name.replace("'", "")))
 
             def set_analog(name, obj):
-                log_add_logstart("log.capture.threewire.analog(%s)"%(name.replace("'", "")))
+                log_add_logstart("_twa(%s)"%(name.replace("'", "")))
 
             def set_comp(name, obj):
-                log_add_logstart("log.capture.system.control(%s)"%(name.replace("'", "")))
+                log_add_logstart("_sc(%s)"%(name.replace("'", "")))
 
             ConfigDict = {
                 "<class 'int'>" : set_var if auto_do_variables else None,
@@ -1255,11 +1261,22 @@ try:
                         continue
 
                     if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>") and auto_do_variables and item not in self.VariablesAdded:
-                        log.add_logstart("log.capture.variable('%s.%s', %s.%s)"%(Module, item, Module, item.replace("'", "")))
+                        log.add_logstart("_cv('%s.%s', %s.%s)"%(Module, item, Module, item.replace("'", "")))
                         self.VariablesAdded.append(item)
 
                     
-            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port, ConfigDict, set_var, set_motor, set_controller, set_analog, set_bumper
+            del auto_do_variables, auto_do_three_wire, auto_do_control, auto_do_motors, auto_do_smart_port, ConfigDict, scope, ModulesChecked, log_add_logstart
+            del set_var, set_motor, set_controller, set_inertial, set_optical, set_rotation, set_distance, set_bumper, set_limit, set_digital_in, set_potv2, set_analog, set_comp
+
+            # Monitoring entries are set up once here, so the loop never checks for them.
+            setup_motor=self.capture.smartport.setup_motor
+            for motor_ in self.MiscMotors:
+                setup_motor(motor_)
+            if self.LeftMotors and self.RightMotors:
+                self.capture.leftside=self.LeftMotors[0]
+                self.capture.rightside=self.RightMotors[0]
+                self.capture.setup_drivetrain()
+            del setup_motor
 
             _exec=exec
             lwait=wait
@@ -1286,6 +1303,25 @@ try:
                 added_bytes_used=False
             
             del addedfuntion
+
+            # Logstart lines run with these capture functions as locals (one dict lookup each,
+            # instead of log -> .capture -> .smartport -> .func). Variables still come from the live globals.
+            exec_globals=globals()
+            cap=log.capture
+            exec_locals={
+                "_cv": cap.variable,
+                "_spi": cap.smartport.inertial,
+                "_spo": cap.smartport.optical,
+                "_spr": cap.smartport.rotation,
+                "_spd": cap.smartport.distance,
+                "_twb": cap.threewire.bumper,
+                "_twl": cap.threewire.limit,
+                "_twd": cap.threewire.digitalinput,
+                "_twp": cap.threewire.potentiometer,
+                "_twa": cap.threewire.analog,
+                "_sc": cap.system.control,
+            }
+            del cap
 
             # Logs system start.
             self.add("DS0", "%d MSEC"%(log_time.time()-start))
@@ -1315,7 +1351,7 @@ try:
                             controllercapture(controller)
 
                     if added_bytes_used:
-                        _exec(added_bytes)
+                        _exec(added_bytes, exec_globals, exec_locals)
                     
                     if self.MiscMotors:
                         motorcapture()
