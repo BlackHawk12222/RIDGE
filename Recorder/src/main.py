@@ -1,3 +1,10 @@
+# ============================================================================ #
+#  AI-GENERATED TEST BUILD - NOT COMPETITION LEGAL                             #
+#  Branch "Parks Recorder": edits below were written by an AI (Hark) only to   #
+#  test whether recording works. Under the GRSF Student-Centered Policy, do    #
+#  NOT use this in competition, put it in the notebook, or merge it into main. #
+#  Every AI change is marked: # [AI-GENERATED TEST EDIT - NOT COMPETITION LEGAL]
+# ============================================================================ #
 # ---------------------------------------------------------------------------- #
 #                                                                              #
 #   Module:       main.py  (Recorder project, its own program slot)            #
@@ -133,6 +140,9 @@ class Recording():
         self.Gen = 0                    # bumps every start(); an old loop sees it and exits
         self.Path = ""                  # file the newest start() records into
         self.Headroom = 500
+        self.Frames = 0     # [AI-GENERATED TEST EDIT - NOT COMPETITION LEGAL]
+        self.Late = 0       # frames that came > 2 periods after the last one
+        self.MaxGap = 0     # longest gap between frames, ms
 
     # -----------------------------------------------------------------------
     # Config: sort every global in main into the lists above, by type.
@@ -257,8 +267,10 @@ class Recording():
 
         brain.sdcard.savefile(FULLFILEPATH, bytearray(self.Header))  # create file + header
 
-        BufferLen = 34000
-        Buffer = bytearray(BufferLen)  # 34 KB buffer
+        # [AI-GENERATED TEST EDIT - NOT COMPETITION LEGAL]
+        # Bigger buffer: about half as many SD flushes, so fewer frame gaps.
+        BufferLen = 60000
+        Buffer = bytearray(BufferLen)  # 60 KB buffer
         Offset = 0
         Headroom = self.Headroom
         History = self.StateHistory
@@ -278,19 +290,35 @@ class Recording():
 
         Start = self.Timer.time()
         NextTime = Start
+        # [AI-GENERATED TEST EDIT - NOT COMPETITION LEGAL]
+        # Timing stats: how many frames, how many ran late, longest gap.
+        self.Frames = 0
+        self.Late = 0
+        self.MaxGap = 0
+        LastT = Start
         while self.Run and self.Gen == gen:
+            Now = self.Timer.time()  # [AI-GENERATED TEST EDIT - NOT COMPETITION LEGAL]
+            Gap = Now - LastT
+            if Gap > self.MaxGap:
+                self.MaxGap = Gap
+            if Gap > 2 * self.PERIOD_MS:
+                self.Late += 1
+            LastT = Now
+            self.Frames += 1
             Offset = write(b"T %d;\n" % (self.Timer.time() - Start), Offset)
 
             # --- continuous: written every frame ---
             for prefix, motor in Motors:
-                Offset = write(prefix + b"%.4f, %.1f / Pos [DEGREES], Vel [RPM];\n"
-                               % (motor.position(DEGREES), motor.velocity(RPM)), Offset)
+                # [AI-GENERATED TEST EDIT - NOT COMPETITION LEGAL]
+                # Encode only reads position, so velocity is dropped and 0.01 deg is
+                # plenty. Frames get ~40% smaller -> less SD time, steadier timing.
+                Offset = write(prefix + b"%.2f / Pos [DEGREES];\n" % motor.position(DEGREES), Offset)
 
             for prefix, imu in Inertials:
-                Offset = write(prefix + b"%.4f / Rot [DEGREES];\n" % imu.rotation(DEGREES), Offset)
+                Offset = write(prefix + b"%.2f / Rot [DEGREES];\n" % imu.rotation(DEGREES), Offset)
 
             for prefix, rot in Rotations:
-                Offset = write(prefix + b"%.4f / Pos [DEGREES];\n" % rot.position(DEGREES), Offset)
+                Offset = write(prefix + b"%.2f / Pos [DEGREES];\n" % rot.position(DEGREES), Offset)
 
             # --- events: written only when they change ---
             for n, prefix in Vars:
@@ -1690,6 +1718,10 @@ def header(title, sub="", color=TEXT):
     brain.screen.set_pen_color(DIM)
     if sub:
         brain.screen.print_at(sub, x=14, y=58)
+    # [AI-GENERATED TEST EDIT - NOT COMPETITION LEGAL]
+    brain.screen.set_font(FontType.MONO12)
+    brain.screen.print_at("AI-GENERATED TEST BUILD - NOT COMPETITION LEGAL", x=140, y=236)
+    brain.screen.set_font(FontType.MONO20)
     S["buttons"] = []
 
 
@@ -1734,7 +1766,7 @@ def draw():
         header("CLEAR Recorder", S["msg"] or "Record by driving, play it back")
         button(14, 80, 220, 110, "RECORD", lambda: go("names"), STOPC)
         button(246, 80, 220, 110, "PLAY", open_list, BLUEC)
-        ctrl("CLEAR Recorder", "use brain screen")
+        ctrl("AI TEST - NOT LEGAL", "use brain screen")  # [AI-GENERATED TEST EDIT - NOT COMPETITION LEGAL]
     elif sc == "names":
         header("Record which auton?", "each take gets a new number")
         for i, name in enumerate(NAMES):
@@ -1869,6 +1901,10 @@ def stop_rec():
     S["play_ok"] = ok
     if ok:
         S["msg"] = "Saved" if flushed else "Saved (slow SD)"
+        # [AI-GENERATED TEST EDIT - NOT COMPETITION LEGAL]
+        # Test readout: frames recorded, late frames, worst gap.
+        S["msg"] += "  %d fr, %d late, max %d ms" % (REC.Frames, REC.Late, REC.MaxGap)
+        print("Recording stats:", REC.Frames, "frames,", REC.Late, "late, max gap", REC.MaxGap, "ms")
         controller_1.rumble("-")
     else:
         S["msg"] = "Encode failed"
