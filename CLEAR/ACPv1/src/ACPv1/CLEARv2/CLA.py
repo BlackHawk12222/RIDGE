@@ -1228,7 +1228,7 @@ try:
                     except AttributeError:
                         continue
 
-                    if  (item_type == "<class 'int'>" or item_type == "<class 'bool'>" or item_type == "<class 'float'>" or item_type == "<class 'str'>" or item_type == "<class 'list'>" or item_type == "<class 'dict'>" or item_type == "<class 'tuple'>") and auto_do_variables and item not in self.VariablesAdded:
+                    if  item_type in ("<class 'int'>", "<class 'bool'>", "<class 'float'>", "<class 'str'>", "<class 'list'>", "<class 'dict'>", "<class 'tuple'>") and auto_do_variables and item not in self.VariablesAdded:
                         log.add_logstart("log.capture.variable('%s.%s', %s.%s)"%(Module, item, Module, item.replace("'", "")))
                         self.VariablesAdded.append(item)
 
