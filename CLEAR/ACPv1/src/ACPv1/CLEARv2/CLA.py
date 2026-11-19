@@ -1345,32 +1345,39 @@ try:
             def log(self) -> None:
                 """
                 Archives the oldest lines of Log.csv into loghistory.txt, keeping the newest 2000.
-                Streams through one fixed 32 KB buffer so RAM use does not grow with file size.
-
-                Args:
-                None
+                No memoryview (stripped from V5 MicroPython 1.13): full chunks are written
+                straight from one reused buffer; only the last partial chunk is sliced.
                 """
-
                 speed=log_time.time()
-                KEEP=2000  # Lines kept in Log.csv.
+                KEEP=2000
                 HIST="ACPv1/Data/loghistory.txt"
                 TMP="ACPv1/Data/temp.tmp"
                 CHUNK=32768
+                FLUSH=4096  # Archive entries are joined and written about every 4 KB.
 
-                total=log._log_lines - 1  # Data lines (minus header). Counted in Log.__init__.
+                total=log._log_lines - 1
                 to_archive=total - KEEP
                 if to_archive <= 0:
                     return
 
                 collect()
                 buf=bytearray(CHUNK)
-                mv=memoryview(buf)
+
+                def copy(src, dst):
+                    readinto=src.readinto
+                    write=dst.write
+                    while True:
+                        n=readinto(buf)
+                        if not n:
+                            break
+                        write(buf if n == CHUNK else buf[:n])
 
                 rc={text: code.encode() for text, code in log.reversecodes.items()}
                 rc_get=rc.get
 
                 archived=0
-                off=0
+                pending=[]
+                size=0
                 with open("Log.csv", "rb") as f:
                     with open(HIST, "ab") as h:
                         header=f.readline()
@@ -1385,36 +1392,24 @@ try:
                             ts=int(p0[p0.find(b"[") + 1 : p0.rfind(b" ms")])
                             code=parts[1].strip() if len(parts) > 1 else b""
                             entry=b"%x,%s,%s\n" % (ts, rc_get(code, code), b" ".join(parts[2:]))
-                            n=len(entry)
-                            if off + n > CHUNK:
-                                write(mv[:off])
-                                off=0
-                            if n > CHUNK:
-                                write(entry)
-                            else:
-                                mv[off:off + n]=entry
-                                off+=n
+                            pending.append(entry)
+                            size+=len(entry)
+                            if size >= FLUSH:
+                                write(b"".join(pending))
+                                pending=[]
+                                size=0
                             archived+=1
-                        if off:
-                            write(mv[:off])
+                        if pending:
+                            write(b"".join(pending))
+                        pending=None
 
                     with open(TMP, "wb") as t:
                         t.write(header)
-                        readinto=f.readinto
-                        while True:
-                            n=readinto(buf)
-                            if not n:
-                                break
-                            t.write(mv[:n])
+                        copy(f, t)
 
                 with open(TMP, "rb") as t:
                     with open("Log.csv", "wb") as f:
-                        readinto=t.readinto
-                        while True:
-                            n=readinto(buf)
-                            if not n:
-                                break
-                            f.write(mv[:n])
+                        copy(t, f)
 
                 with open(HIST, "r+b") as h:
                     first=h.readline()
@@ -1429,21 +1424,12 @@ try:
                         h.readline()
                         with open(TMP, "wb") as t:
                             t.write(new_header)
-                            while True:
-                                n=h.readinto(buf)
-                                if not n:
-                                    break
-                                t.write(mv[:n])
+                            copy(h, t)
                     with open(TMP, "rb") as t:
                         with open(HIST, "wb") as h:
-                            while True:
-                                n=t.readinto(buf)
-                                if not n:
-                                    break
-                                h.write(mv[:n])
+                            copy(t, h)
 
                 brain.sdcard.savefile(TMP)  # Empty temp.tmp so it does not hold SD space.
-                mv=None
                 buf=None
                 log._log_lines=1 + total - archived
                 collect()
