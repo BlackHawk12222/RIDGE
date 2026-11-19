@@ -727,35 +727,13 @@ try:
                 Enter name of variable in a string and then the variable you wish to log.
                 
                 Args:
-                name= String
-                value= Int, Boolean, Float
+                name = String;
+                value = Any;
                 """
 
-                self.valueid=str(name)
-
-                # Adds id if not in set.
-                if self.valueid not in self.variables:
-
-                    if type(value)==bool:
-                        self.variables[self.valueid]=False
-                    elif type(value)==int:
-                        self.variables[self.valueid]=0
-                    elif type(value)==float:
-                        self.variables[self.valueid]=0.0
-                    elif type(value)==str:
-                        self.variables[self.valueid]=""
-                    elif type(value)==list:
-                        self.variables[self.valueid]=[]
-                    elif type(value)==dict:
-                        self.variables[self.valueid]={}
-                    elif type(value)==tuple:
-                        self.variables[self.valueid]=()
-                    else:
-                        self.variables[self.valueid]="Unknown Type: %s"%(type(value))
-
-                if value != self.variables[self.valueid]:
+                if value != self.variables[name]:
                     log.add(log.variable, "%s, Val %s"%(name, value))
-                    self.variables[self.valueid] = value
+                    self.variables[name] = value
 
             def const_variable(self, name: str, value: Any) -> None:
                 log.add(log.variable, "%s, Val %s"%(name, value))
@@ -925,7 +903,7 @@ try:
                 brain.screen.clear_screen()
                 brain.screen.set_cursor(1,1)
 
-            entry: list[bytearray]=[self.entry]
+            entry: list[bytes]=[self.entry]
 
             if len(self.entry) >= 81:
                 chunk_size=81
@@ -943,10 +921,6 @@ try:
             for i in range(len(entry)):
                 brain.screen.print(entry[i].decode(log.format))
                 brain.screen.new_line()
-
-        def controller_interface_add(self, add_code: str, add_details: Any) -> None:
-            reverse_code = self.reversecodes.get(self.codes.get(add_code), "ERR")
-            CInterface.add_to_buffer("%s %s" % (reverse_code, add_details))
         
         def add(self, add_code: str, add_details: Any) -> None:
             """
@@ -962,11 +936,11 @@ try:
             """
                 
             timestamp: int = log_time.time()
-            self.entry: bytearray=bytearray(b"%d [%d ms], %s, %s\n" %(self._index, timestamp, self.codes.get(add_code), add_details))
-            self._bufferSize: int=len(self.entry)
+            self.entry: bytes = b"%d [%d ms], %s, %s\n" %(self._index, timestamp, self.codes.get(add_code), add_details)
+            self._bufferSize: int = len(self.entry)
 
-            pack_into("=%ds"%(self._bufferSize), self.buffer, self._buffer_offset, self.entry)
-            self._buffer_offset+=self._bufferSize
+            pack_into(b"=%ds"%(self._bufferSize), self.buffer, self._buffer_offset, self.entry)
+            self._buffer_offset += self._bufferSize
 
             if self.logging:
                 self.append_log()
@@ -977,11 +951,11 @@ try:
             if self.printing:
                 print(self.entry)
             
-            if log_link.is_linked():
-                log_link.send(self.entry.decode(log.format))
+            # if log_link.is_linked():
+            #     log_link.send(self.entry.decode(log.format))
 
             if self.controller_interface and (b"ERR" in self.entry or b"WARN" in self.entry):
-                self.controller_interface_add(add_code, add_details)
+                CInterface.add_to_buffer("%s %s" %(add_code, add_details))
 
             self._index += 1
             
@@ -1147,7 +1121,7 @@ try:
             log_add_logstart = self.add_logstart
 
             def set_var(name: str, obj):
-                if name.isupper() or (name.endswith("__") and name.startswith("__")):  # Check if variable is all caps and is a dunder variable eg. "TOTAL" or "__path__" repectively.
+                if name.isupper() or ((name.endswith("__") and name.startswith("__"))):  # Check if variable is all caps and is a dunder variable eg. "TOTAL" or "__path__" repectively.
                     log.capture.const_variable(name, obj)
                     return
                 
@@ -1294,7 +1268,7 @@ try:
             # Loads extra funtions from file.
             try:
                 addedfuntion=brain.sdcard.loadfile("ACPv1/Config/Logstart.txt").decode(self.format)
-                added_bytes=compile(addedfuntion, '<string>' ,'exec', 0,  False, 2)
+                added_bytes=compile(addedfuntion, '<string>' ,'exec', 0, False, 2)
                 added_bytes_used=True
             except AttributeError:
                 addedfuntion=""
