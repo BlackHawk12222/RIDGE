@@ -214,7 +214,8 @@ wait(30, MSEC)
 
 print("")
 print("==== 4. Motor temperatures and torque limit ====")
-for i, m in enumerate(MOTORS):
+for i in range(len(MOTORS)):
+    m = MOTORS[i]
     print("motor %d: %d C = %d%%" % (i, m.temperature(TemperatureUnits.CELSIUS), m.temperature(PERCENT)))
 
 print("")
@@ -227,7 +228,8 @@ for m in MOTORS:
 peak = [0.0, 0.0, 0.0, 0.0]
 start = timer.time(MSEC)
 while timer.time(MSEC) - start < 2000:
-    for i, m in enumerate(MOTORS):
+    for i in range(len(MOTORS)):
+        m = MOTORS[i]
         m.spin(FORWARD, 12, VOLT)
         v = abs(m.velocity(RPM))
         if v > peak[i]:

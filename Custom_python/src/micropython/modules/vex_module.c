@@ -4139,6 +4139,13 @@ static const mp_rom_map_elem_t mp_power_units_locals_dict_table[] = {
 static MP_DEFINE_CONST_DICT(mp_power_units_locals_dict, mp_power_units_locals_dict_table);
 MP_DEFINE_CONST_OBJ_TYPE(mp_power_units_type, MP_QSTR_powerunits, MP_TYPE_FLAG_NONE, locals_dict, &mp_power_units_locals_dict);
 
+// 3. Add PowerUnits (WATT)
+static const mp_rom_map_elem_t mp_temperature_units_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_CELSIUS),     MP_ROM_INT(35) },
+    { MP_ROM_QSTR(MP_QSTR_FAHRENHEIT),  MP_ROM_INT(36) }
+};
+static MP_DEFINE_CONST_DICT(mp_temperature_units_locals_dict, mp_temperature_units_locals_dict_table);
+MP_DEFINE_CONST_OBJ_TYPE(mp_temperature_units_type, MP_QSTR_temperatureunits, MP_TYPE_FLAG_NONE, locals_dict, &mp_temperature_units_locals_dict);
 
 // This dictionary holds everything inside the top-level namespace: 'import vex'
 static const mp_rom_map_elem_t vex_module_globals_table[] = {
@@ -4196,6 +4203,7 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_OrientationType), MP_ROM_PTR(&mp_orientation_type) },
     { MP_ROM_QSTR(MP_QSTR_CurrentUnits), MP_ROM_PTR(&mp_current_units_type) },
     { MP_ROM_QSTR(MP_QSTR_PowerUnits), MP_ROM_PTR(&mp_power_units_type) },
+    { MP_ROM_QSTR(MP_QSTR_TemperatureUnits), MP_ROM_PTR(&mp_temperature_units_type) },    
 
     // Bind Global Enum Constants directly to the module scope
     { MP_ROM_QSTR(MP_QSTR_RATIO_6_1),  MP_ROM_INT(8) },
