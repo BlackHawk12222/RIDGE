@@ -204,6 +204,33 @@ RunAuto = False
 
 # BEGIN CODE HERE
 
+
+class PIDcontroller():
+
+    def __init__(self,kp,ki,kd,max_ki=50):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.max_integral = max_ki
+        self.integral = 0
+        self.prev_error = 0
+
+    def calculate(self,error):
+        self.integral += error
+        self.integral = max(-self.max_integral,min(self.integral,self.max_integral))
+        derivative = error - self.prev_error
+        self.prev_error = error
+        return self.kp*error + self.ki*self.integral + self.kd*derivative
+
+    def resetVars(self):
+        self.integral = 0
+        self.prev_error = 0
+
+    def resetMotors(self,*motors):
+        for motor in motors:
+            motor.set_position(0,DEGREES)
+
+
 class robot():
     """MISC CODE(custom printing, velocity setting etc.)"""
 
@@ -844,6 +871,8 @@ class AIMDrive():
             wait(10,MSEC)
         drivetrain.stop()
 
+def clamp(val,low,high):
+    return(max(low,min(val,high)))
 # class BarColor():
 #     def Check_for_bar(self) -> None:
 #         """
