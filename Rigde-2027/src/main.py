@@ -1708,7 +1708,19 @@ VS = Thread( vs_setup )
 claw  = Thread( K56721.autoload )
 
 if brain.sdcard.is_inserted():
-    comp=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
+    failed = False
+    try:
+        comp=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
+    except Exception as e:
+        print(e)
+        controller_1.rumble("_-_")
+
+        Thread(lambda: K56721.TankDrive(2))
+else:
+    controller_1.rumble("_-_")
+    
+    Thread(lambda: K56721.TankDrive(2))
+
 
 # if comp.is_driver_control():
 #     if brain.sdcard.is_inserted() and UseACP:
