@@ -344,11 +344,13 @@ float Motor::efficiency(EfficiencyUnits units){
 }
 
 int Motor::temperature(TemperatureUnits units){
-    const double celsius = vsafe::num(motor->get_temperature());
+    // Unplugged motors read PROS_ERR_F (or 0). VEXcode reports 21 C (2%) then, so match it.
+    const double raw = motor->get_temperature();
+    const double celsius = (std::isfinite(raw) && raw != 0.0) ? raw : 21.0;
     switch(units){
         case CELSIUS: return static_cast<int>(std::lround(celsius));
         case FAHRENHEIT: return static_cast<int>(std::lround(celsius * 1.8 + 32.0));
-        case TEMPERATURE_PERCENT: return static_cast<int>(std::lround(std::clamp((celsius - 20.0) * 2.0, 2.0, 100.0)));  // VEX: 0% = 20 C, 100% = 70 C
+        case TEMPERATURE_PERCENT: return static_cast<int>(std::lround(std::clamp((celsius - 20.0) * 2.0, 0.0, 100.0)));  // VEX: 0% = 20 C, 100% = 70 C
         default:
             mp_raise_ValueError(MP_ERROR_TEXT("Invalid argument type"));
             return 0;
@@ -701,7 +703,9 @@ float MotorGroup::efficiency(EfficiencyUnits units){
 }
 
 int MotorGroup::temperature(TemperatureUnits units){
-    const double celsius = vsafe::num(motor->get_temperature());
+    // Unplugged motors read PROS_ERR_F (or 0). VEXcode reports 21 C (2%) then, so match it.
+    const double raw = motor->get_temperature();
+    const double celsius = (std::isfinite(raw) && raw != 0.0) ? raw : 21.0;
     switch(units){
         case CELSIUS: return static_cast<int>(std::lround(celsius));
         case FAHRENHEIT: return static_cast<int>(std::lround(celsius * 1.8 + 32.0));
