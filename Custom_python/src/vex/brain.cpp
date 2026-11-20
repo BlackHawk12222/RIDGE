@@ -31,6 +31,9 @@ float Battery::voltage(VoltageUnits units){
     case VOLT:
         output = vsafe::num(pros::battery::get_voltage()) / 1000.0f;
         break;
+    case MV:
+        output = vsafe::num(pros::battery::get_voltage());
+        break;
     
     default:
         break;

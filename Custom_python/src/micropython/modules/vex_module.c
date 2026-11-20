@@ -212,6 +212,65 @@ static void *mp_vex_thread_entry(void *thread_data) {
     return NULL;
 }
 
+
+// Keyword-argument support for positional-only bindings. names[] are the
+// VEXcode parameter names after self; defaults[] fill gaps left by keywords
+// (MP_OBJ_NULL = required). Calls impl with a full positional array.
+static mp_obj_t mp_vex_kw_call(mp_obj_t (*impl)(size_t, const mp_obj_t *),
+                               size_t n_args, const mp_obj_t *pos, mp_map_t *kw,
+                               const qstr *names, const mp_obj_t *defaults, size_t n_names) {
+    if (n_args > n_names + 1) {
+        mp_raise_TypeError(MP_ERROR_TEXT("too many arguments"));
+    }
+    if (kw == NULL || kw->used == 0) {
+        return impl(n_args, pos);
+    }
+    mp_obj_t full[n_names + 1];
+    size_t n = n_args;
+    for (size_t i = 0; i < n_names + 1; i++) {
+        full[i] = i < n_args ? pos[i] : MP_OBJ_NULL;
+    }
+    for (size_t k = 0; k < kw->alloc; k++) {
+        if (!mp_map_slot_is_filled(kw, k)) {
+            continue;
+        }
+        qstr key = mp_obj_str_get_qstr(kw->table[k].key);
+        size_t j = 0;
+        while (j < n_names && names[j] != key) {
+            j++;
+        }
+        if (j == n_names) {
+            mp_raise_msg_varg(&mp_type_TypeError, MP_ERROR_TEXT("unexpected keyword argument '%q'"), key);
+        }
+        if (full[j + 1] != MP_OBJ_NULL) {
+            mp_raise_msg_varg(&mp_type_TypeError, MP_ERROR_TEXT("argument '%q' given twice"), key);
+        }
+        full[j + 1] = kw->table[k].value;
+        if (j + 2 > n) {
+            n = j + 2;
+        }
+    }
+    for (size_t i = 1; i < n; i++) {
+        if (full[i] == MP_OBJ_NULL) {
+            if (defaults[i - 1] == MP_OBJ_NULL) {
+                mp_raise_msg_varg(&mp_type_TypeError, MP_ERROR_TEXT("missing argument '%q'"), names[i - 1]);
+            }
+            full[i] = defaults[i - 1];
+        }
+    }
+    return impl(n, full);
+}
+
+#define MP_VEX_KW_FUN(fn, min_args, ...) \
+    static const qstr fn##_kw_names[] = { __VA_ARGS__ }; \
+    static mp_obj_t fn##_kw(size_t n_args, const mp_obj_t *args, mp_map_t *kw) { \
+        return mp_vex_kw_call(fn, n_args, args, kw, fn##_kw_names, fn##_kw_defaults, \
+            MP_ARRAY_SIZE(fn##_kw_names)); \
+    } \
+    static MP_DEFINE_CONST_FUN_OBJ_KW(fn##_obj, min_args, fn##_kw);
+
+#define MP_VEX_I(v) MP_OBJ_NEW_SMALL_INT(v)
+
 static mp_obj_t mp_vex_callback_data(mp_obj_t callback, mp_obj_t args, bool no_args, bool one_shot) {
     if (!mp_obj_is_callable(callback)) {
         mp_raise_TypeError("callback must be callable");
@@ -547,6 +606,7 @@ typedef struct _mp_brain_obj_t{
     mp_obj_t sdcard;  // Stores instance of mp_brain_sdcard_obj_t
     mp_obj_t battery; // Stores instance of mp_brain_battery_obj_t
     mp_obj_t three_wire_port;
+    mp_obj_t timer;   // brain.timer, a Timer started with the Brain
 } mp_brain_obj_t;
 
 typedef struct _mp_controller_screen_obj_t{
@@ -651,14 +711,64 @@ static int mp_color_get_value(mp_obj_t color_obj) {
     if (mp_obj_is_type(color_obj, &mp_color_type)) {
         return (int)((mp_color_obj_t *)MP_OBJ_TO_PTR(color_obj))->value;
     }
+    // VEXcode also takes web colors: "#RRGGBB" or "RRGGBB".
+    if (mp_obj_is_str(color_obj)) {
+        const char *str = mp_obj_str_get_str(color_obj);
+        if (*str == '#') {
+            str++;
+        }
+        int value = 0;
+        int digits = 0;
+        for (; *str; str++, digits++) {
+            char c = *str;
+            int d;
+            if (c >= '0' && c <= '9') d = c - '0';
+            else if (c >= 'a' && c <= 'f') d = c - 'a' + 10;
+            else if (c >= 'A' && c <= 'F') d = c - 'A' + 10;
+            else { digits = -1; break; }
+            value = (value << 4) | d;
+        }
+        if (digits != 6) {
+            mp_raise_ValueError(MP_ERROR_TEXT("color string must be #RRGGBB"));
+        }
+        return value;
+    }
     return mp_obj_get_int(color_obj);
 }
 
 static mp_obj_t mp_motor_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
-    mp_arg_check_num(n_args, n_kw, 1, 3, false); // strict 3 arguments
+    mp_arg_check_num(n_args, n_kw, 1, 3, true);
     int port = mp_obj_get_int(args[0]);
-    int gears = (n_args > 1) ? mp_obj_get_int(args[1])   : 18;
-    bool reversed = (n_args > 2) ? mp_obj_is_true(args[2])   : false;
+    int gears = 18;
+    bool reversed = false;
+    // VEXcode allows Motor(port, reverse) as well as Motor(port, gears, reverse).
+    if (n_args > 1) {
+        if (mp_obj_is_bool(args[1])) {
+            reversed = mp_obj_is_true(args[1]);
+        } else {
+            gears = mp_obj_get_int(args[1]);
+        }
+    }
+    if (n_args > 2) {
+        reversed = mp_obj_is_true(args[2]);
+    }
+    if (n_kw > 0) {
+        mp_map_t kw_map;
+        mp_map_init_fixed_table(&kw_map, n_kw, args + n_args);
+        for (size_t k = 0; k < kw_map.alloc; k++) {
+            if (!mp_map_slot_is_filled(&kw_map, k)) {
+                continue;
+            }
+            qstr key = mp_obj_str_get_qstr(kw_map.table[k].key);
+            if (key == MP_QSTR_gears) {
+                gears = mp_obj_get_int(kw_map.table[k].value);
+            } else if (key == MP_QSTR_reverse) {
+                reversed = mp_obj_is_true(kw_map.table[k].value);
+            } else {
+                mp_raise_msg_varg(&mp_type_TypeError, MP_ERROR_TEXT("unexpected keyword argument '%q'"), key);
+            }
+        }
+    }
 
     mp_motor_obj_t *self = mp_obj_malloc(mp_motor_obj_t, type);
     self->cpp_handle = motor_create(port, gears, reversed);
@@ -675,7 +785,8 @@ static mp_obj_t mp_motor_spin(size_t n_args, const mp_obj_t *args) {
     return mp_const_none;
 }
 // obj, requred args, total args, function.
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_obj, 2, 4, mp_motor_spin);
+static const mp_obj_t mp_motor_spin_kw_defaults[] = { MP_OBJ_NULL, MP_VEX_I(601), MP_VEX_I(24) };
+MP_VEX_KW_FUN(mp_motor_spin, 2, MP_QSTR_direction, MP_QSTR_velocity, MP_QSTR_units)
 
 static mp_obj_t mp_motor_spin_for(size_t n_args, const mp_obj_t *args) {
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -692,7 +803,8 @@ static mp_obj_t mp_motor_spin_for(size_t n_args, const mp_obj_t *args) {
     MP_VEX_CALL_BLOCKING(wait, motor_spin_for(self -> cpp_handle, direction, angle, units, velocity, units_v, wait));
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_for_obj, 3, 7, mp_motor_spin_for);
+static const mp_obj_t mp_motor_spin_for_kw_defaults[] = { MP_OBJ_NULL, MP_OBJ_NULL, MP_VEX_I(29), MP_VEX_I(601), MP_VEX_I(24), mp_const_true };
+MP_VEX_KW_FUN(mp_motor_spin_for, 3, MP_QSTR_direction, MP_QSTR_value, MP_QSTR_units, MP_QSTR_velocity, MP_QSTR_units_v, MP_QSTR_wait)
 
 static mp_obj_t mp_motor_spin_to_position(size_t n_args, const mp_obj_t *args){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -706,7 +818,8 @@ static mp_obj_t mp_motor_spin_to_position(size_t n_args, const mp_obj_t *args){
     MP_VEX_CALL_BLOCKING(wait, motor_spin_to_position(self -> cpp_handle, rotation, units, velocity, units_v, wait));
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_spin_to_position_obj, 2, 6, mp_motor_spin_to_position);
+static const mp_obj_t mp_motor_spin_to_position_kw_defaults[] = { MP_OBJ_NULL, MP_VEX_I(29), MP_VEX_I(601), MP_VEX_I(24), mp_const_true };
+MP_VEX_KW_FUN(mp_motor_spin_to_position, 2, MP_QSTR_rotation, MP_QSTR_units, MP_QSTR_velocity, MP_QSTR_units_v, MP_QSTR_wait)
 
 static mp_obj_t mp_motor_stop(size_t n_args, const mp_obj_t *args){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -716,7 +829,8 @@ static mp_obj_t mp_motor_stop(size_t n_args, const mp_obj_t *args){
     motor_stop(self -> cpp_handle, mode);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_stop_obj, 1, 2, mp_motor_stop);
+static const mp_obj_t mp_motor_stop_kw_defaults[] = { MP_VEX_I(-1) };
+MP_VEX_KW_FUN(mp_motor_stop, 1, MP_QSTR_mode)
 
 static mp_obj_t mp_motor_set_position(mp_obj_t self_ptr, mp_obj_t position_t, mp_obj_t units_t){
     mp_motor_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
@@ -983,7 +1097,8 @@ static mp_obj_t mp_motor_group_spin(size_t n_args, const mp_obj_t *args) {
     return mp_const_none;
 }
 // obj, required args (self + direction), total args, function.
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_obj, 2, 4, mp_motor_group_spin);
+static const mp_obj_t mp_motor_group_spin_kw_defaults[] = { MP_OBJ_NULL, MP_VEX_I(601), MP_VEX_I(24) };
+MP_VEX_KW_FUN(mp_motor_group_spin, 2, MP_QSTR_direction, MP_QSTR_velocity, MP_QSTR_units)
 
 static mp_obj_t mp_motor_group_spin_for(size_t n_args, const mp_obj_t *args) {
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -1000,7 +1115,8 @@ static mp_obj_t mp_motor_group_spin_for(size_t n_args, const mp_obj_t *args) {
     MP_VEX_CALL_BLOCKING(wait, motor_group_spin_for(self -> cpp_handle, direction, angle, units, velocity, units_v, wait));
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_for_obj, 3, 7, mp_motor_group_spin_for);
+static const mp_obj_t mp_motor_group_spin_for_kw_defaults[] = { MP_OBJ_NULL, MP_OBJ_NULL, MP_VEX_I(29), MP_VEX_I(601), MP_VEX_I(24), mp_const_true };
+MP_VEX_KW_FUN(mp_motor_group_spin_for, 3, MP_QSTR_direction, MP_QSTR_value, MP_QSTR_units, MP_QSTR_velocity, MP_QSTR_units_v, MP_QSTR_wait)
 
 static mp_obj_t mp_motor_group_spin_to_position(size_t n_args, const mp_obj_t *args){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -1014,7 +1130,8 @@ static mp_obj_t mp_motor_group_spin_to_position(size_t n_args, const mp_obj_t *a
     MP_VEX_CALL_BLOCKING(wait, motor_group_spin_to_position(self -> cpp_handle, rotation, units, velocity, units_v, wait));
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_spin_to_position_obj, 2, 6, mp_motor_group_spin_to_position);
+static const mp_obj_t mp_motor_group_spin_to_position_kw_defaults[] = { MP_OBJ_NULL, MP_VEX_I(29), MP_VEX_I(601), MP_VEX_I(24), mp_const_true };
+MP_VEX_KW_FUN(mp_motor_group_spin_to_position, 2, MP_QSTR_rotation, MP_QSTR_units, MP_QSTR_velocity, MP_QSTR_units_v, MP_QSTR_wait)
 
 static mp_obj_t mp_motor_group_stop(size_t n_args, const mp_obj_t *args){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -1024,7 +1141,8 @@ static mp_obj_t mp_motor_group_stop(size_t n_args, const mp_obj_t *args){
     motor_group_stop(self -> cpp_handle, mode);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_motor_group_stop_obj, 1, 2, mp_motor_group_stop);
+static const mp_obj_t mp_motor_group_stop_kw_defaults[] = { MP_VEX_I(-1) };
+MP_VEX_KW_FUN(mp_motor_group_stop, 1, MP_QSTR_mode)
 
 static mp_obj_t mp_motor_group_set_position(mp_obj_t self_ptr, mp_obj_t position_t, mp_obj_t units_t){
     mp_motorgroup_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
@@ -1317,7 +1435,8 @@ static mp_obj_t mp_drivetrain_drive(size_t n_args, const mp_obj_t *args) {
     drivetrain_drive(self->cpp_handle, direction, velocity, units);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_drive_obj, 2, 4, mp_drivetrain_drive);
+static const mp_obj_t mp_drivetrain_drive_kw_defaults[] = { MP_OBJ_NULL, MP_VEX_I(-1), MP_VEX_I(23) };
+MP_VEX_KW_FUN(mp_drivetrain_drive, 2, MP_QSTR_direction, MP_QSTR_velocity, MP_QSTR_units)
 
 static mp_obj_t mp_drivetrain_drive_for(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -1330,7 +1449,8 @@ static mp_obj_t mp_drivetrain_drive_for(size_t n_args, const mp_obj_t *args) {
     drivetrain_drive_for(self->cpp_handle, direction, distance, units, velocity, velocity_units, wait);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_drive_for_obj, 3, 7, mp_drivetrain_drive_for);
+static const mp_obj_t mp_drivetrain_drive_for_kw_defaults[] = { MP_OBJ_NULL, MP_OBJ_NULL, MP_VEX_I(40), MP_VEX_I(-1), MP_VEX_I(23), mp_const_true };
+MP_VEX_KW_FUN(mp_drivetrain_drive_for, 3, MP_QSTR_direction, MP_QSTR_distance, MP_QSTR_units, MP_QSTR_velocity, MP_QSTR_units_v, MP_QSTR_wait)
 
 static mp_obj_t mp_drivetrain_turn(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -1340,7 +1460,8 @@ static mp_obj_t mp_drivetrain_turn(size_t n_args, const mp_obj_t *args) {
     drivetrain_turn(self->cpp_handle, direction, velocity, units);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_obj, 2, 4, mp_drivetrain_turn);
+static const mp_obj_t mp_drivetrain_turn_kw_defaults[] = { MP_OBJ_NULL, MP_VEX_I(-1), MP_VEX_I(23) };
+MP_VEX_KW_FUN(mp_drivetrain_turn, 2, MP_QSTR_direction, MP_QSTR_velocity, MP_QSTR_units)
 
 static mp_obj_t mp_drivetrain_turn_for(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -1353,7 +1474,8 @@ static mp_obj_t mp_drivetrain_turn_for(size_t n_args, const mp_obj_t *args) {
     drivetrain_turn_for(self->cpp_handle, direction, angle, units, velocity, velocity_units, wait);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_for_obj, 3, 7, mp_drivetrain_turn_for);
+static const mp_obj_t mp_drivetrain_turn_for_kw_defaults[] = { MP_OBJ_NULL, MP_OBJ_NULL, MP_VEX_I(29), MP_VEX_I(-1), MP_VEX_I(23), mp_const_true };
+MP_VEX_KW_FUN(mp_drivetrain_turn_for, 3, MP_QSTR_direction, MP_QSTR_angle, MP_QSTR_units, MP_QSTR_velocity, MP_QSTR_units_v, MP_QSTR_wait)
 
 static mp_obj_t mp_drivetrain_turn_to_heading(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -1365,7 +1487,8 @@ static mp_obj_t mp_drivetrain_turn_to_heading(size_t n_args, const mp_obj_t *arg
     drivetrain_turn_to_heading(self->cpp_handle, heading, units, velocity, velocity_units, wait);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_to_heading_obj, 2, 6, mp_drivetrain_turn_to_heading);
+static const mp_obj_t mp_drivetrain_turn_to_heading_kw_defaults[] = { MP_OBJ_NULL, MP_VEX_I(29), MP_VEX_I(-1), MP_VEX_I(23), mp_const_true };
+MP_VEX_KW_FUN(mp_drivetrain_turn_to_heading, 2, MP_QSTR_angle, MP_QSTR_units, MP_QSTR_velocity, MP_QSTR_units_v, MP_QSTR_wait)
 
 static mp_obj_t mp_drivetrain_turn_to_rotation(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -1377,7 +1500,8 @@ static mp_obj_t mp_drivetrain_turn_to_rotation(size_t n_args, const mp_obj_t *ar
     drivetrain_turn_to_rotation(self->cpp_handle, rotation, units, velocity, velocity_units, wait);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_turn_to_rotation_obj, 2, 6, mp_drivetrain_turn_to_rotation);
+static const mp_obj_t mp_drivetrain_turn_to_rotation_kw_defaults[] = { MP_OBJ_NULL, MP_VEX_I(29), MP_VEX_I(-1), MP_VEX_I(23), mp_const_true };
+MP_VEX_KW_FUN(mp_drivetrain_turn_to_rotation, 2, MP_QSTR_angle, MP_QSTR_units, MP_QSTR_velocity, MP_QSTR_units_v, MP_QSTR_wait)
 
 static mp_obj_t mp_drivetrain_stop(size_t n_args, const mp_obj_t *args) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -1385,7 +1509,8 @@ static mp_obj_t mp_drivetrain_stop(size_t n_args, const mp_obj_t *args) {
     drivetrain_stop(self->cpp_handle, mode);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_drivetrain_stop_obj, 1, 2, mp_drivetrain_stop);
+static const mp_obj_t mp_drivetrain_stop_kw_defaults[] = { MP_VEX_I(-1) };
+MP_VEX_KW_FUN(mp_drivetrain_stop, 1, MP_QSTR_mode)
 
 static mp_obj_t mp_drivetrain_set_drive_velocity(mp_obj_t self_ptr, mp_obj_t velocity_obj, mp_obj_t units_obj) {
     mp_drivetrain_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
@@ -1775,16 +1900,17 @@ MP_DEFINE_CONST_OBJ_TYPE(
 );
 
 /* Defining class brain.battery for micropython module. */
-static mp_obj_t mp_brain_battery_voltage(mp_obj_t self_ptr, mp_obj_t units_t){
-    mp_brain_battery_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+// units is optional, like VEXcode (default MV).
+static mp_obj_t mp_brain_battery_voltage(size_t n_args, const mp_obj_t *args){
+    mp_brain_battery_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    int units = mp_obj_get_int(units_t);
+    int units = n_args > 1 ? mp_obj_get_int(args[1]) : 60;  // MV
 
     float output;
     output = brain_battery_voltage(self -> cpp_handle, units);
     return mp_vex_new_float(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_battery_voltage_obj, mp_brain_battery_voltage);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_battery_voltage_obj, 1, 2, mp_brain_battery_voltage);
 
 // units is optional, like VEXcode (default 33).
 static mp_obj_t mp_brain_battery_current(size_t n_args, const mp_obj_t *args) {
@@ -1809,16 +1935,17 @@ static mp_obj_t mp_brain_battery_capacity(mp_obj_t self_ptr){
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_battery_capacity_obj, mp_brain_battery_capacity);
 
-static mp_obj_t mp_brain_battery_temperature(mp_obj_t self_ptr, mp_obj_t units_t){
-    mp_brain_battery_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
+// units is optional, like VEXcode (default PERCENT).
+static mp_obj_t mp_brain_battery_temperature(size_t n_args, const mp_obj_t *args){
+    mp_brain_battery_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-    int units = mp_obj_get_int(units_t);
+    int units = n_args > 1 ? mp_obj_get_int(args[1]) : 23;  // PERCENT
 
     int output;
     output = brain_battery_temperature(self -> cpp_handle, units);
     return mp_obj_new_int(output);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_brain_battery_temperature_obj, mp_brain_battery_temperature);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_battery_temperature_obj, 1, 2, mp_brain_battery_temperature);
 
 static const mp_rom_map_elem_t mp_brain_battery_locals_dict_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
@@ -1989,24 +2116,46 @@ static int mp_vex_get_coord(mp_obj_t o) {
     return mp_obj_get_int(o);
 }
 
-static mp_obj_t mp_brain_screen_print(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args) {
-    enum { ARG_text, ARG_sep, ARG_precision };
-    static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_text, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_sep, MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_precision, MP_ARG_INT, {.u_int = 2} },
-    };
-    mp_arg_val_t values[MP_ARRAY_SIZE(allowed_args)];
-    mp_arg_parse_all(n_args - 1, args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, values);
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    mp_obj_t text_obj = mp_vex_stringify(values[ARG_text].u_obj);
-    const char *text = mp_obj_str_get_str(text_obj);
-    const char *sep = values[ARG_sep].u_obj == MP_OBJ_NULL
-        ? ""
-        : mp_obj_str_get_str(values[ARG_sep].u_obj);
-    int precision = values[ARG_precision].u_int;
+// Format values like VEXcode: floats to `precision` places, the rest via str(),
+// joined by sep.
+static mp_obj_t mp_vex_format_values(size_t n, const mp_obj_t *items, const char *sep, int precision) {
+    vstr_t buffer;
+    mp_print_t print;
+    vstr_init_print(&buffer, 16, &print);
+    if (precision < 0) {
+        precision = 0;
+    }
+    for (size_t i = 0; i < n; i++) {
+        if (i > 0) {
+            vstr_add_str(&buffer, sep);
+        }
+        if (mp_obj_is_float(items[i])) {
+            mp_printf(&print, "%.*f", precision, (double)mp_obj_get_float(items[i]));
+        } else {
+            mp_obj_print_helper(&print, items[i], PRINT_STR);
+        }
+    }
+    return mp_obj_new_str_from_utf8_vstr(&buffer);
+}
 
-    brain_screen_print(self -> cpp_handle, text, sep, precision);
+// VEXcode: screen.print(*values, sep=" ", precision=2)
+static mp_obj_t mp_brain_screen_print(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args) {
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    const char *sep = " ";
+    int precision = 2;
+    if (kw_args != NULL) {
+        mp_map_elem_t *e = mp_map_lookup(kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_sep), MP_MAP_LOOKUP);
+        if (e != NULL && e->value != mp_const_none) {
+            sep = mp_obj_str_get_str(e->value);
+        }
+        e = mp_map_lookup(kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_precision), MP_MAP_LOOKUP);
+        if (e != NULL) {
+            precision = mp_obj_get_int(e->value);
+        }
+    }
+    mp_obj_t text_obj = mp_vex_format_values(n_args - 1, args + 1, sep, precision);
+    // "\n" as sep keeps the C++ side from reformatting the text.
+    brain_screen_print(self -> cpp_handle, mp_obj_str_get_str(text_obj), "\n", precision);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(mp_brain_screen_print_obj, 1, mp_brain_screen_print);
@@ -2074,7 +2223,7 @@ static mp_obj_t mp_brain_screen_print_at(size_t n_args, const mp_obj_t *args, mp
     mp_arg_val_t values[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args - 1, args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, values);
     mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    mp_obj_t text_obj = mp_vex_stringify(values[ARG_text].u_obj);
+    mp_obj_t text_obj = mp_vex_format_values(1, &values[ARG_text].u_obj, "", values[ARG_precision].u_int);
     const char *text = mp_obj_str_get_str(text_obj);
     int x = mp_vex_get_coord(values[ARG_x].u_obj);
     int y = mp_vex_get_coord(values[ARG_y].u_obj);
@@ -2083,8 +2232,9 @@ static mp_obj_t mp_brain_screen_print_at(size_t n_args, const mp_obj_t *args, mp
         : mp_obj_str_get_str(values[ARG_sep].u_obj);
     int precision = values[ARG_precision].u_int;
     bool opaque = values[ARG_opaque].u_bool;
+    (void)sep;
 
-    brain_screen_print_at(self -> cpp_handle, text, x, y, sep, precision, opaque);
+    brain_screen_print_at(self -> cpp_handle, text, x, y, "\n", precision, opaque);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(mp_brain_screen_print_at_obj, 1, mp_brain_screen_print_at);
@@ -2292,23 +2442,25 @@ static mp_obj_t mp_brain_screen_y_position(mp_obj_t self_ptr){
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_brain_screen_y_position_obj, mp_brain_screen_y_position);
 
-static mp_obj_t mp_brain_screen_pressed(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    mp_obj_t callback_data = mp_vex_callback_data(callback, args, false, false);
+// The callback's arg tuple is optional, like VEXcode.
+static mp_obj_t mp_brain_screen_pressed(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_obj_t callback_data = mp_vex_callback_data(args[1], n_args > 2 ? args[2] : mp_const_none, n_args == 2, false);
 
     brain_screen_pressed(self -> cpp_handle, mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_pressed_obj, mp_brain_screen_pressed);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_pressed_obj, 2, 3, mp_brain_screen_pressed);
 
-static mp_obj_t mp_brain_screen_released(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
-    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    mp_obj_t callback_data = mp_vex_callback_data(callback, args, false, false);
+// The callback's arg tuple is optional, like VEXcode.
+static mp_obj_t mp_brain_screen_released(size_t n_args, const mp_obj_t *args){
+    mp_brain_screen_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_obj_t callback_data = mp_vex_callback_data(args[1], n_args > 2 ? args[2] : mp_const_none, n_args == 2, false);
 
     brain_screen_released(self -> cpp_handle, mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_3(mp_brain_screen_released_obj, mp_brain_screen_released);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_brain_screen_released_obj, 2, 3, mp_brain_screen_released);
 
 static const mp_rom_map_elem_t mp_brain_screen_locals_dict_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
@@ -2375,7 +2527,13 @@ static void mp_brain_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
         } else if (attr == MP_QSTR_three_wire_port) {
             dest[0] = self->three_wire_port;
             return;
+        } else if (attr == MP_QSTR_timer) {
+            dest[0] = self->timer;
+            return;
         }
+        // Not a sub-object: let the lookup continue in locals_dict.
+        dest[1] = MP_OBJ_SENTINEL;
+        return;
     }
     dest[0] = MP_OBJ_NULL; 
 }
@@ -2415,6 +2573,7 @@ static mp_obj_t mp_brain_make_new(const mp_obj_type_t *type, size_t n_args, size
     self->screen = MP_OBJ_FROM_PTR(scr);
     self->sdcard = MP_OBJ_FROM_PTR(sd);
     self->battery = MP_OBJ_FROM_PTR(bat);
+    self->timer = mp_timer_make_new(&mp_timer_type, 0, 0, NULL);
     return MP_OBJ_FROM_PTR(self);
 }
 
@@ -2548,6 +2707,33 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_TYPE_FLAG_NONE,
     make_new, mp_digital_out_make_new,
     locals_dict, &mp_digital_out_locals_dict
+);
+
+// VEXcode Pneumatics(brain.three_wire_port.a): a solenoid on a 3-wire port.
+static mp_obj_t mp_pneumatics_open(mp_obj_t self_ptr){
+    return mp_digital_out_set(self_ptr, mp_const_true);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_pneumatics_open_obj, mp_pneumatics_open);
+
+static mp_obj_t mp_pneumatics_close(mp_obj_t self_ptr){
+    return mp_digital_out_set(self_ptr, mp_const_false);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_pneumatics_close_obj, mp_pneumatics_close);
+
+static const mp_rom_map_elem_t mp_pneumatics_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&mp_pneumatics_open_obj) },
+    { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&mp_pneumatics_close_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set), MP_ROM_PTR(&mp_digital_out_set_obj) },
+    { MP_ROM_QSTR(MP_QSTR_value), MP_ROM_PTR(&mp_digital_out_value_obj) },
+};
+static MP_DEFINE_CONST_DICT(mp_pneumatics_locals_dict, mp_pneumatics_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    mp_pneumatics_type,
+    MP_QSTR_pneumatics,
+    MP_TYPE_FLAG_NONE,
+    make_new, mp_digital_out_make_new,
+    locals_dict, &mp_pneumatics_locals_dict
 );
 
 static void mp_vex_check_angle_units(int units);
@@ -3521,25 +3707,25 @@ static mp_obj_t mp_controller_button_pressing(mp_obj_t self_ptr){
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_controller_button_pressing_obj, mp_controller_button_pressing);
 
-static mp_obj_t mp_controller_button_pressed(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
-    mp_controller_button_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    mp_obj_t callback_data = mp_vex_callback_data(callback, args, false, false);
+// The callback's arg tuple is optional, like VEXcode.
+static mp_obj_t mp_controller_button_pressed(size_t n_args, const mp_obj_t *args){
+    mp_controller_button_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_obj_t callback_data = mp_vex_callback_data(args[1], n_args > 2 ? args[2] : mp_const_none, n_args == 2, false);
 
     controller_button_pressed(self -> cpp_handle, mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
-
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_3(mp_controller_button_pressed_obj, mp_controller_button_pressed);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_controller_button_pressed_obj, 2, 3, mp_controller_button_pressed);
 
-static mp_obj_t mp_controller_button_released(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
-    mp_controller_button_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    mp_obj_t callback_data = mp_vex_callback_data(callback, args, false, false);
+// The callback's arg tuple is optional, like VEXcode.
+static mp_obj_t mp_controller_button_released(size_t n_args, const mp_obj_t *args){
+    mp_controller_button_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_obj_t callback_data = mp_vex_callback_data(args[1], n_args > 2 ? args[2] : mp_const_none, n_args == 2, false);
 
     controller_button_released(self -> cpp_handle, mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
-
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_3(mp_controller_button_released_obj, mp_controller_button_released);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_controller_button_released_obj, 2, 3, mp_controller_button_released);
 
 static const mp_rom_map_elem_t mp_controller_button_locals_dict_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
@@ -3567,15 +3753,15 @@ static mp_obj_t mp_controller_axis_position(mp_obj_t self_ptr){
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mp_controller_axis_position_obj, mp_controller_axis_position);
 
-static mp_obj_t mp_controller_axis_changed(mp_obj_t self_ptr, mp_obj_t callback, mp_obj_t args){
-    mp_controller_axis_obj_t *self = MP_OBJ_TO_PTR(self_ptr);
-    mp_obj_t callback_data = mp_vex_callback_data(callback, args, false, false);
+// The callback's arg tuple is optional, like VEXcode.
+static mp_obj_t mp_controller_axis_changed(size_t n_args, const mp_obj_t *args){
+    mp_controller_axis_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    mp_obj_t callback_data = mp_vex_callback_data(args[1], n_args > 2 ? args[2] : mp_const_none, n_args == 2, false);
 
     controller_axis_changed(self -> cpp_handle, mp_vex_callback_trampoline, MP_OBJ_TO_PTR(callback_data));
-
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_3(mp_controller_axis_changed_obj, mp_controller_axis_changed);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_controller_axis_changed_obj, 2, 3, mp_controller_axis_changed);
 
 static const mp_rom_map_elem_t mp_controller_axis_locals_dict_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_PythonMethodName), MP_ROM_PTR(&C_Function_Object) }
@@ -3716,15 +3902,18 @@ static void mp_controller_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
             case MP_QSTR_axis3: dest[0] = self->axis3; return;
             case MP_QSTR_axis4: dest[0] = self->axis4; return;    
         }
+        // Not a sub-object (e.g. rumble): continue in locals_dict.
+        dest[1] = MP_OBJ_SENTINEL;
+        return;
     }
     dest[0] = MP_OBJ_NULL; 
 }
 
 
 static mp_obj_t mp_controller_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
-    mp_arg_check_num(n_args, n_kw, 1, 1, false); // strict 1 argument
+    mp_arg_check_num(n_args, n_kw, 0, 1, false); // VEXcode: Controller() is PRIMARY
 
-    int controller_type = mp_obj_get_int(args[0]);
+    int controller_type = n_args > 0 ? mp_obj_get_int(args[0]) : 50;  // PRIMARY
     void *cpp_controller = create_controller(controller_type);
 
     // 2. Allocate parent wrapper struct
@@ -4147,6 +4336,43 @@ static const mp_rom_map_elem_t mp_temperature_units_locals_dict_table[] = {
 static MP_DEFINE_CONST_DICT(mp_temperature_units_locals_dict, mp_temperature_units_locals_dict_table);
 MP_DEFINE_CONST_OBJ_TYPE(mp_temperature_units_type, MP_QSTR_temperatureunits, MP_TYPE_FLAG_NONE, locals_dict, &mp_temperature_units_locals_dict);
 
+// More VEXcode enum classes.
+#define MP_VEX_ENUM_TYPE(cname, qname, ...) \
+    static const mp_rom_map_elem_t cname##_locals_dict_table[] = { __VA_ARGS__ }; \
+    static MP_DEFINE_CONST_DICT(cname##_locals_dict, cname##_locals_dict_table); \
+    MP_DEFINE_CONST_OBJ_TYPE(cname, qname, MP_TYPE_FLAG_NONE, locals_dict, &cname##_locals_dict);
+
+MP_VEX_ENUM_TYPE(mp_torque_units_type, MP_QSTR_torqueunits,
+    { MP_ROM_QSTR(MP_QSTR_NM), MP_ROM_INT(31) },
+    { MP_ROM_QSTR(MP_QSTR_INLB), MP_ROM_INT(32) },
+    { MP_ROM_QSTR(MP_QSTR_PERCENT), MP_ROM_INT(23) },
+)
+MP_VEX_ENUM_TYPE(mp_time_units_type, MP_QSTR_timeunits,
+    { MP_ROM_QSTR(MP_QSTR_SECONDS), MP_ROM_INT(VEX_TIME_UNITS_SECONDS) },
+    { MP_ROM_QSTR(MP_QSTR_SEC), MP_ROM_INT(VEX_TIME_UNITS_SECONDS) },
+    { MP_ROM_QSTR(MP_QSTR_MSEC), MP_ROM_INT(VEX_TIME_UNITS_MSEC) },
+)
+MP_VEX_ENUM_TYPE(mp_rotation_units_type, MP_QSTR_rotationunits,
+    { MP_ROM_QSTR(MP_QSTR_DEG), MP_ROM_INT(29) },
+    { MP_ROM_QSTR(MP_QSTR_REV), MP_ROM_INT(30) },
+)
+MP_VEX_ENUM_TYPE(mp_voltage_units_type, MP_QSTR_voltageunits,
+    { MP_ROM_QSTR(MP_QSTR_VOLT), MP_ROM_INT(39) },
+    { MP_ROM_QSTR(MP_QSTR_MV), MP_ROM_INT(60) },
+)
+MP_VEX_ENUM_TYPE(mp_percent_units_type, MP_QSTR_percentunits,
+    { MP_ROM_QSTR(MP_QSTR_PERCENT), MP_ROM_INT(23) },
+)
+MP_VEX_ENUM_TYPE(mp_direction_type, MP_QSTR_directiontype,
+    { MP_ROM_QSTR(MP_QSTR_FORWARD), MP_ROM_INT(27) },
+    { MP_ROM_QSTR(MP_QSTR_REVERSE), MP_ROM_INT(28) },
+)
+MP_VEX_ENUM_TYPE(mp_brake_type, MP_QSTR_braketype,
+    { MP_ROM_QSTR(MP_QSTR_COAST), MP_ROM_INT(0) },
+    { MP_ROM_QSTR(MP_QSTR_BRAKE), MP_ROM_INT(1) },
+    { MP_ROM_QSTR(MP_QSTR_HOLD), MP_ROM_INT(2) },
+)
+
 // This dictionary holds everything inside the top-level namespace: 'import vex'
 static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),    MP_ROM_QSTR(MP_QSTR_vex) },
@@ -4204,6 +4430,15 @@ static const mp_rom_map_elem_t vex_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_CurrentUnits), MP_ROM_PTR(&mp_current_units_type) },
     { MP_ROM_QSTR(MP_QSTR_PowerUnits), MP_ROM_PTR(&mp_power_units_type) },
     { MP_ROM_QSTR(MP_QSTR_TemperatureUnits), MP_ROM_PTR(&mp_temperature_units_type) },    
+    { MP_ROM_QSTR(MP_QSTR_TorqueUnits), MP_ROM_PTR(&mp_torque_units_type) },
+    { MP_ROM_QSTR(MP_QSTR_TimeUnits), MP_ROM_PTR(&mp_time_units_type) },
+    { MP_ROM_QSTR(MP_QSTR_RotationUnits), MP_ROM_PTR(&mp_rotation_units_type) },
+    { MP_ROM_QSTR(MP_QSTR_VoltageUnits), MP_ROM_PTR(&mp_voltage_units_type) },
+    { MP_ROM_QSTR(MP_QSTR_PercentUnits), MP_ROM_PTR(&mp_percent_units_type) },
+    { MP_ROM_QSTR(MP_QSTR_DirectionType), MP_ROM_PTR(&mp_direction_type) },
+    { MP_ROM_QSTR(MP_QSTR_BrakeType), MP_ROM_PTR(&mp_brake_type) },
+    { MP_ROM_QSTR(MP_QSTR_Pneumatics), MP_ROM_PTR(&mp_pneumatics_type) },
+    { MP_ROM_QSTR(MP_QSTR_MV),          MP_ROM_INT(60) },
 
     // Bind Global Enum Constants directly to the module scope
     { MP_ROM_QSTR(MP_QSTR_RATIO_6_1),  MP_ROM_INT(8) },

@@ -1,0 +1,17 @@
+{
+  "sim": {"mips": 530, "background_us": 20, "api_call_us": 0.5, "run_ms": 50000},
+  "ports": {
+    "1": {"type": "motor", "gear": "6"}, "2": {"type": "motor", "gear": "6"},
+    "3": {"type": "motor", "gear": "18"}, "4": {"type": "motor", "gear": "18"},
+    "11": {"type": "motor", "gear": "18"}, "12": {"type": "motor", "gear": "6"},
+    "17": {"type": "motor", "gear": "6"}, "18": {"type": "motor", "gear": "6"},
+    "5": "rotation", "7": "imu", "8": "distance", "9": "optical"
+  },
+  "controller": [
+    {"t": 30000, "input": "axis3", "value": 100},
+    {"t": 30000, "input": "axis1", "value": 30},
+    {"t": 30000, "input": "r1", "value": 1},
+    {"t": 33000, "input": "r1", "value": 0}
+  ],
+  "competition": [{"t": 0, "mode": "driver"}]
+}

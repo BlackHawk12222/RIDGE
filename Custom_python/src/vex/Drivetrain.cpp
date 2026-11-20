@@ -257,7 +257,7 @@ void Drivetrain::set_stopping(BrakeMode mode) {
 }
 
 void Drivetrain::set_timeout(float value, TimeUnits units) {
-    if (value < 0.0f) {
+    if (value <= 0.0f) {
         timeout_ms_ = -1.0f;
     } else if (units == SECONDS) {
         timeout_ms_ = value * 1000.0f;
@@ -285,9 +285,8 @@ bool Drivetrain::is_done() {
         target_active_ = false;
         return true;
     }
-    return !continuous_motion_ &&
-           std::abs(vsafe::num(left_motors_->get_actual_velocity())) < 1.0 &&
-           std::abs(vsafe::num(right_motors_->get_actual_velocity())) < 1.0;
+    // No target pending: done unless drive()/turn() is running.
+    return !continuous_motion_;
 }
 
 bool Drivetrain::is_moving() const {

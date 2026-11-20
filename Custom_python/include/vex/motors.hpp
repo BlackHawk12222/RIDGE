@@ -96,7 +96,14 @@ class Motor {
 
         void timeout();
         void wait_for_position(double target);
+        void spin_for_time(Direction direction, double duration, TimeUnits units, float velocity, VelocityUnits units_v, bool wait);
         volatile std::uint32_t CommandGen = 0;
+        // What the last command was, for is_done(): 0 none/stopped,
+        // 1 position move, 2 timed spin, 3 continuous spin.
+        volatile int MoveKind = 0;
+        double MoveTarget = 0.0;
+        std::uint32_t MoveStartMs = 0;
+        std::uint32_t MoveEndMs = 0;
 
     public:
     
@@ -168,7 +175,14 @@ class MotorGroup{
 
         void timeout();
         void wait_for_position(double target);
+        void spin_for_time(Direction direction, double duration, TimeUnits units, float velocity, VelocityUnits units_v, bool wait);
         volatile std::uint32_t CommandGen = 0;
+        // What the last command was, for is_done(): 0 none/stopped,
+        // 1 position move, 2 timed spin, 3 continuous spin.
+        volatile int MoveKind = 0;
+        double MoveTarget = 0.0;
+        std::uint32_t MoveStartMs = 0;
+        std::uint32_t MoveEndMs = 0;
 
         static std::vector<std::int8_t> extract_ports(std::initializer_list<Motor> motors){
             std::vector<std::int8_t> PortList;

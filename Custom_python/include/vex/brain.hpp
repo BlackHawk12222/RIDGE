@@ -50,6 +50,7 @@ struct ThreeWirePort{
 
 enum VoltageUnits{
     VOLT=39,
+    MV=60,
 
 };
 

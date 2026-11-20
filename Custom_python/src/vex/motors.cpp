@@ -58,7 +58,7 @@ Motor::Motor(Ports port, GearSetting gears, bool reversed){
 // old timeout never stops a newer movement.
 void Motor::timeout(){
     const std::uint32_t gen = ++CommandGen;
-    if (TimeoutTime < 0.0f) {
+    if (TimeoutTime <= 0.0f) {
         return;
     }
     const int ms = get_timeout();
@@ -79,6 +79,7 @@ void Motor::spin(Direction direction, float velocity, VelocityUnits units){
     }
     const double sign = direction == REVERSE ? -1.0 : 1.0;
     ++CommandGen;
+    MoveKind = 3;
 
     if (units == VELOCITY_VOLT){
         motor->move_voltage(static_cast<std::int32_t>(std::lround(vsafe::num(sign * velocity * 1000.0))));
@@ -93,6 +94,11 @@ void Motor::spin(Direction direction, float velocity, VelocityUnits units){
 }
 
 void Motor::spin_for(Direction direction, double angle, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
+    // VEXcode also accepts time units: spin for that long, then stop.
+    if (static_cast<int>(units) == SECONDS || static_cast<int>(units) == MSEC){
+        spin_for_time(direction, angle, static_cast<TimeUnits>(static_cast<int>(units)), velocity, units_v, wait);
+        return;
+    }
     // 601 means "no velocity given": use set_velocity()'s value and units.
     if (velocity == 601){
         velocity = Velocity;
@@ -123,6 +129,12 @@ void Motor::spin_for(Direction direction, double angle, AngleUnits units, float 
     const double target = vsafe::num(motor->get_position()) + degrees;
     motor->move_relative(degrees, static_cast<std::int32_t>(std::lround(rpm)));
     timeout();
+    MoveKind = 1;
+    MoveTarget = target;
+    MoveStartMs = pros::millis();
+    MoveKind = 1;
+    MoveTarget = target;
+    MoveStartMs = pros::millis();
 
     if (wait && degrees != 0.0 && rpm > 0.0){
         wait_for_position(target);
@@ -154,6 +166,12 @@ void Motor::spin_to_position(double rotation, AngleUnits units, float velocity, 
 
     motor->move_absolute(degrees, static_cast<std::int32_t>(std::lround(rpm)));
     timeout();
+    MoveKind = 1;
+    MoveTarget = degrees;
+    MoveStartMs = pros::millis();
+    MoveKind = 1;
+    MoveTarget = degrees;
+    MoveStartMs = pros::millis();
 
     if (wait && rpm > 0.0){
         wait_for_position(degrees);
@@ -164,8 +182,13 @@ void Motor::spin_to_position(double rotation, AngleUnits units, float velocity, 
 // moving after starting (stalled, or stopped by its timeout).
 void Motor::wait_for_position(double target){
     int elapsed_ms = 0;
+    const int limit_ms = TimeoutTime > 0.0f ? get_timeout() : -1;
     while (std::abs(vsafe::num(motor->get_position()) - target) > 3.0){
         if (elapsed_ms > 150 && std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0){
+            break;
+        }
+        if (limit_ms >= 0 && elapsed_ms >= limit_ms){
+            motor->brake();
             break;
         }
         pros::delay(10);
@@ -175,6 +198,7 @@ void Motor::wait_for_position(double target){
 
 void Motor::stop(BrakeMode mode){
     ++CommandGen;
+    MoveKind = 0;
     const BrakeMode brake_mode = mode != NALL ? mode : DefaultBrakeMode;
     motor->set_brake_mode(static_cast<pros::v5::MotorBrake>(brake_mode));
     motor->brake();
@@ -237,7 +261,56 @@ void Motor::reset_position(){
 }
 
 bool Motor::is_done(){
-    return std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0f;
+    const std::uint32_t now = pros::millis();
+    switch (MoveKind){
+        case 0:
+            return true;
+        case 1: {
+            if (std::abs(vsafe::num(motor->get_position()) - MoveTarget) <= 3.0){
+                MoveKind = 0;
+                return true;
+            }
+            const std::uint32_t elapsed = now - MoveStartMs;
+            if (TimeoutTime > 0.0f && elapsed >= static_cast<std::uint32_t>(get_timeout())){
+                return true;
+            }
+            // Stalled after starting.
+            return elapsed > 150 && std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0;
+        }
+        case 2:
+            return static_cast<std::int32_t>(now - MoveEndMs) >= 0;
+        default:
+            return std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0f;
+    }
+}
+
+void Motor::spin_for_time(Direction direction, double duration, TimeUnits units, float velocity, VelocityUnits units_v, bool wait){
+    double ms = vsafe::num(duration);
+    if (units == SECONDS){
+        ms *= 1000.0;
+    }
+    if (ms < 0.0){
+        ms = 0.0;
+    }
+    spin(direction, velocity, units_v);
+    const std::uint32_t gen = CommandGen;
+    MoveKind = 2;
+    MoveStartMs = pros::millis();
+    MoveEndMs = MoveStartMs + static_cast<std::uint32_t>(std::lround(ms));
+    const std::uint32_t delay_ms = static_cast<std::uint32_t>(std::lround(ms));
+    if (wait){
+        pros::delay(delay_ms);
+        if (CommandGen == gen){
+            stop();
+        }
+        return;
+    }
+    pros::Task([this, gen, delay_ms]() {
+        pros::delay(delay_ms);
+        if (CommandGen == gen){
+            stop();
+        }
+    }, "spin_for_time");
 }
 
 bool Motor::is_spinning(){
@@ -418,7 +491,7 @@ MotorGroup::MotorGroup(Motor** motor_array, int count){
 // old timeout never stops a newer movement.
 void MotorGroup::timeout(){
     const std::uint32_t gen = ++CommandGen;
-    if (TimeoutTime < 0.0f) {
+    if (TimeoutTime <= 0.0f) {
         return;
     }
     const int ms = get_timeout();
@@ -439,6 +512,7 @@ void MotorGroup::spin(Direction direction, float velocity, VelocityUnits units){
     }
     const double sign = direction == REVERSE ? -1.0 : 1.0;
     ++CommandGen;
+    MoveKind = 3;
 
     if (units == VELOCITY_VOLT){
         motor->move_voltage(static_cast<std::int32_t>(std::lround(vsafe::num(sign * velocity * 1000.0))));
@@ -453,6 +527,11 @@ void MotorGroup::spin(Direction direction, float velocity, VelocityUnits units){
 }
 
 void MotorGroup::spin_for(Direction direction, double angle, AngleUnits units, float velocity, VelocityUnits units_v, bool wait){
+    // VEXcode also accepts time units: spin for that long, then stop.
+    if (static_cast<int>(units) == SECONDS || static_cast<int>(units) == MSEC){
+        spin_for_time(direction, angle, static_cast<TimeUnits>(static_cast<int>(units)), velocity, units_v, wait);
+        return;
+    }
     // 601 means "no velocity given": use set_velocity()'s value and units.
     if (velocity == 601){
         velocity = Velocity;
@@ -483,6 +562,12 @@ void MotorGroup::spin_for(Direction direction, double angle, AngleUnits units, f
     const double target = vsafe::num(motor->get_position()) + degrees;
     motor->move_relative(degrees, static_cast<std::int32_t>(std::lround(rpm)));
     timeout();
+    MoveKind = 1;
+    MoveTarget = target;
+    MoveStartMs = pros::millis();
+    MoveKind = 1;
+    MoveTarget = target;
+    MoveStartMs = pros::millis();
 
     if (wait && degrees != 0.0 && rpm > 0.0){
         wait_for_position(target);
@@ -514,6 +599,12 @@ void MotorGroup::spin_to_position(double rotation, AngleUnits units, float veloc
 
     motor->move_absolute(degrees, static_cast<std::int32_t>(std::lround(rpm)));
     timeout();
+    MoveKind = 1;
+    MoveTarget = degrees;
+    MoveStartMs = pros::millis();
+    MoveKind = 1;
+    MoveTarget = degrees;
+    MoveStartMs = pros::millis();
 
     if (wait && rpm > 0.0){
         wait_for_position(degrees);
@@ -524,8 +615,13 @@ void MotorGroup::spin_to_position(double rotation, AngleUnits units, float veloc
 // moving after starting (stalled, or stopped by its timeout).
 void MotorGroup::wait_for_position(double target){
     int elapsed_ms = 0;
+    const int limit_ms = TimeoutTime > 0.0f ? get_timeout() : -1;
     while (std::abs(vsafe::num(motor->get_position()) - target) > 3.0){
         if (elapsed_ms > 150 && std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0){
+            break;
+        }
+        if (limit_ms >= 0 && elapsed_ms >= limit_ms){
+            motor->brake();
             break;
         }
         pros::delay(10);
@@ -535,6 +631,7 @@ void MotorGroup::wait_for_position(double target){
 
 void MotorGroup::stop(BrakeMode mode){
     ++CommandGen;
+    MoveKind = 0;
     const BrakeMode brake_mode = mode != NALL ? mode : DefaultBrakeMode;
     motor->set_brake_mode_all(static_cast<pros::v5::MotorBrake>(brake_mode));
     motor->brake();
@@ -584,7 +681,8 @@ void MotorGroup::set_max_torque(float value, TorqueUnits units){
 }
 
 void MotorGroup::set_timeout(float value, TimeUnits units){
-    // Techinical difficulties plese stand by...
+    TimeoutTime=value;
+    TimeoutType=units;
 }
 
 void MotorGroup::set_reversed(bool value){
@@ -596,7 +694,56 @@ void MotorGroup::reset_position(){
 }
 
 bool MotorGroup::is_done(){
-    return std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0f;
+    const std::uint32_t now = pros::millis();
+    switch (MoveKind){
+        case 0:
+            return true;
+        case 1: {
+            if (std::abs(vsafe::num(motor->get_position()) - MoveTarget) <= 3.0){
+                MoveKind = 0;
+                return true;
+            }
+            const std::uint32_t elapsed = now - MoveStartMs;
+            if (TimeoutTime > 0.0f && elapsed >= static_cast<std::uint32_t>(get_timeout())){
+                return true;
+            }
+            // Stalled after starting.
+            return elapsed > 150 && std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0;
+        }
+        case 2:
+            return static_cast<std::int32_t>(now - MoveEndMs) >= 0;
+        default:
+            return std::abs(vsafe::num(motor->get_actual_velocity())) < 1.0f;
+    }
+}
+
+void MotorGroup::spin_for_time(Direction direction, double duration, TimeUnits units, float velocity, VelocityUnits units_v, bool wait){
+    double ms = vsafe::num(duration);
+    if (units == SECONDS){
+        ms *= 1000.0;
+    }
+    if (ms < 0.0){
+        ms = 0.0;
+    }
+    spin(direction, velocity, units_v);
+    const std::uint32_t gen = CommandGen;
+    MoveKind = 2;
+    MoveStartMs = pros::millis();
+    MoveEndMs = MoveStartMs + static_cast<std::uint32_t>(std::lround(ms));
+    const std::uint32_t delay_ms = static_cast<std::uint32_t>(std::lround(ms));
+    if (wait){
+        pros::delay(delay_ms);
+        if (CommandGen == gen){
+            stop();
+        }
+        return;
+    }
+    pros::Task([this, gen, delay_ms]() {
+        pros::delay(delay_ms);
+        if (CommandGen == gen){
+            stop();
+        }
+    }, "spin_for_time");
 }
 
 bool MotorGroup::is_spinning(){

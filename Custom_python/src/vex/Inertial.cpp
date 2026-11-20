@@ -55,6 +55,11 @@ float Inertial::orientation(AxisType axis, AngleUnits units){
 
 void Inertial::set_heading(float value, AngleUnits units){
     float degrees = units == TURNS ? value * 360.0f : value;
+    // PROS rejects headings outside 0-360; VEXcode wraps them.
+    degrees = std::fmod(degrees, 360.0f);
+    if (degrees < 0.0f){
+        degrees += 360.0f;
+    }
     if (TurnDirection == LEFT){
         degrees = std::fmod(360.0f - degrees, 360.0f);
     }
@@ -73,7 +78,7 @@ void Inertial::calibrate(){
     // Non-blocking like VEXcode. Wait only until the IMU reports it has
     // started, so is_calibrating() is true right after this returns.
     Sensor->reset(false);
-    for (int i = 0; i < 20 && Sensor->get_status() != pros::ImuStatus::calibrating; ++i){
+    for (int i = 0; i < 20 && !is_calibrating(); ++i){
         pros::delay(5);
     }
 }
@@ -87,7 +92,9 @@ void Inertial::reset_rotation(){
 }
 
 bool Inertial::is_calibrating(){
-    return Sensor->get_status() == pros::ImuStatus::calibrating;
+    // Status is a bit field; 0xFF means the read failed.
+    const auto status = static_cast<std::uint32_t>(Sensor->get_status());
+    return status != 0xFFu && (status & static_cast<std::uint32_t>(pros::ImuStatus::calibrating)) != 0;
 }
 
 bool Inertial::installed(){
