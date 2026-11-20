@@ -236,7 +236,7 @@ for i in range(4):
     print("motor %d peak: %d RPM (blue free speed is about 600)" % (i, peak[i]))
 
 print("")
-print("==== DONE. Copy everything above to Hark. ====")
+print("==== DONE. ====")
 brain.screen.print("Benchmark done")
 while True:
     wait(100, MSEC)
