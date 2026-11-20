@@ -195,7 +195,7 @@ def main():
     ap.add_argument("--src", default=CP, help="Custom_python folder to build from (default: this repo's)")
     ap.add_argument("--robot", default=os.path.join(HERE, "robot.json"), help="robot config JSON")
     ap.add_argument("--ms", type=int, default=0, help="stop after this much brain time (default from robot.json or 20000)")
-    ap.add_argument("--mips", type=int, default=0, help="brain speed, instructions per microsecond (default robot.json or 400)")
+    ap.add_argument("--mips", type=int, default=0, help="brain speed, instructions per microsecond (default robot.json or 530)")
     ap.add_argument("--bg-us", type=int, default=-1, help="cost of each VEXos background call in us (default 20)")
     ap.add_argument("--api-us", type=float, default=-1, help="cost of each device API call in us (default 0.5)")
     ap.add_argument("--sd", help="host folder used as the SD card (/usd)")
@@ -207,7 +207,7 @@ def main():
 
     robot = json.load(open(a.robot)) if a.robot and os.path.exists(a.robot) else {}
     sim = robot.get("sim", {})
-    mips = a.mips or sim.get("mips", 400)
+    mips = a.mips or sim.get("mips", 530)
     bg_us = a.bg_us if a.bg_us >= 0 else sim.get("background_us", 20)
     api_us = a.api_us if a.api_us >= 0 else sim.get("api_call_us", 0.5)
     run_ms = a.ms or sim.get("run_ms", 20000)

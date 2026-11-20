@@ -1,5 +1,5 @@
 {
-  "sim": {"mips": 400, "background_us": 20, "api_call_us": 0.5, "run_ms": 8000},
+  "sim": {"mips": 530, "background_us": 20, "api_call_us": 0.5, "run_ms": 8000},
   "ports": {
     "17": {"type": "motor", "gear": "6"}, "18": {"type": "motor", "gear": "6"},
     "19": {"type": "motor", "gear": "6"}, "20": {"type": "motor", "gear": "6"},

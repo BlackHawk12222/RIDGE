@@ -5,7 +5,7 @@ emulated V5 brain, so speed and threading changes can be tested without a robot.
 
 - **CPU:** QEMU `xilinx-zynq-a9` — the same Zynq-7000 / Cortex-A9 chip family as the V5 brain.
 - **Speed cap:** QEMU runs with `-icount`, so brain time = instructions executed. `mips` in
-  `robot.json` (default 400 instructions per µs) sets how fast the brain is. Results don't depend on
+  `robot.json` (default 530 instructions per µs, calibrated 2026-11-19 against a real brain: VM ops match within ~7%) sets how fast the brain is. Results don't depend on
   how fast the host PC is.
 - **VEXos:** `emu/vexos.c` is a small fake VEXos that fills the jump table at `0x037FC000`. PROS and
   Custom_python run unmodified on top of it. Any VEXos call it doesn't implement is logged once

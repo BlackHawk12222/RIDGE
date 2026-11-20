@@ -1,6 +1,6 @@
 {
  "sim": {
-  "mips": 400,
+  "mips": 530,
   "background_us": 20,
   "api_call_us": 0.5,
   "run_ms": 25000
