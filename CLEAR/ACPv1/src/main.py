@@ -24,8 +24,28 @@ print("\033[2J")
 def aton():
     pass
 
+def fallback():
+    while True:
+        Right1.spin(FORWARD, controller_1.axis2.position(), PERCENT)
+        Right2.spin(FORWARD, controller_1.axis2.position(), PERCENT)
+
+        left1.spin(FORWARD, controller_1.axis3.position(), PERCENT)
+        left1.spin(FORWARD, controller_1.axis3.position(), PERCENT)
+
+        wait(10, MSEC)
+
 # Aton Functions
-comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
+failed = False
+try:
+    if not failed:
+        comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
+except Exception as e:
+    failed = True
+    print(e)
+    controller_1.rumble("_-_")
+
+    Thread(fallback)
+
 
 while True:
     wait(20, MSEC)

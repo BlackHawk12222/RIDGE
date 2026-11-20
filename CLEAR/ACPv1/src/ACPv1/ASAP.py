@@ -28,10 +28,10 @@ YACCEL_SIGN = 1.0        # set -1 if acceleration(YAXIS) reads - when sliding ri
 # ===========================================================================
 # Anti-slip / turn tuning
 # ===========================================================================
-STICK_DEADBAND = 5           # percent; sticks inside this read as 0
+STICK_DEADBAND = 2           # percent; sticks inside this read as 0
 K_YAW = 0.3                  # turn-rate feedback 0..1 (raise toward 0.6 until it twitches)
-SLIP_MAX = 0.15              # wheels may outrun the ground by 15% ...
-SLIP_MARGIN_MPS = 0.4        # ... plus this much. Sets launch accel: ~margin * KP = 6 m/s^2.
+SLIP_MAX = 0.05              # wheels may outrun the ground by 15% ...
+SLIP_MARGIN_MPS = 0.2        # ... plus this much. Sets launch accel: ~margin * KP = 6 m/s^2.
                              # Lower = gentler launches, less wheelspin; higher = more punch.
 LAT_ACCEL_MAX = 0.7 * 9.81   # most sideways grip (m/s^2) before a fast arc slides out
 LAT_SLIP_MPS = 0.15          # sideways speed that counts as sliding
@@ -122,7 +122,7 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
     KP = 15    # Controller bandwidth (rad/s): ~67 ms response, 3x open-loop speed, under sensor-delay limit
     KPSCALE = 0.0     # Turn off error-scaling initially to establish a baseline
 
-    B0 = 239    # Plant gain (RPM/s per volt) for ~6.8 kg robot, 2x 600rpm motors/side, G=0.75, 69.85mm wheels. ~1624/mass_kg
+    B0 = 229    # Plant gain (RPM/s per volt) for ~6.8 kg robot, 2x 600rpm motors/side, G=0.75, 69.85mm wheels. ~1624/mass_kg
     OMEGA_O = 45    # Observer bandwidth = 3x KP; Omega_o*dt = 0.45 (stable for Euler at 100Hz)
 
     ALPHA = 1.0       # IMPORTANT: Sets _fal() to linear mode for safe initial tuning
