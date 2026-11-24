@@ -177,16 +177,16 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
 
         # Updateing all the values from the controller and motors.
         if StickUsed == 1:  # Tank Control
-            RightPos = Controller.axis2.position()
-            LeftPos = Controller.axis3.position()
+            RightPos = -(Controller.axis2.position())
+            LeftPos = -(Controller.axis3.position())
 
         elif StickUsed == 2:  # Arcade Control
-            RightPos = Controller.axis3.position() - Controller.axis4.position()
-            LeftPos = Controller.axis3.position() + Controller.axis4.position()
+            RightPos = -(Controller.axis3.position() - Controller.axis4.position())
+            LeftPos = -(Controller.axis3.position() + Controller.axis4.position())
         
         elif StickUsed == 3:  # Split Arcade Control
-            RightPos = Controller.axis3.position() - Controller.axis4.position()
-            LeftPos = Controller.axis3.position() + Controller.axis4.position()
+            RightPos = -(Controller.axis3.position() - Controller.axis4.position())
+            LeftPos = -(Controller.axis3.position() + Controller.axis4.position())
 
         else:
             raise ValueError("Invalid StickType. Must be 'Tank', 'Arcade', or 'SplitArcade'.")
@@ -283,10 +283,10 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             TempVeryHigh=False
 
         for i in range(len(LeftMotorList)):
-            LeftMotorList[i].spin(REVERSE, LeftOutput, VOLT)
+            LeftMotorList[i].spin(FORWARD, LeftOutput, VOLT)
 
         for i in range(len(RightMotorList)):
-            RightMotorList[i].spin(REVERSE, RightOutput, VOLT)
+            RightMotorList[i].spin(FORWARD, RightOutput, VOLT)
 
         # Takes the time of calculation and waits the rest of the time to make sure the loop runs at 100Hz.
         wait((DT * 1000) - (timer.time() - StartTime), MSEC)
