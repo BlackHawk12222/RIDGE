@@ -33,14 +33,14 @@ brain.screen.clear_screen()
 controller_1 = Controller(PRIMARY)
 Interface =  Controller(PARTNER)
 
-ACPv1.CLEARv2.CInterface.start(Interface)
+#ACPv1.CLEARv2.CInterface.start(Interface)
 
-sudoIntakeLift = DigitalOut(brain.three_wire_port.a)
-sudoGrabber = DigitalOut(brain.three_wire_port.b)
+sudoIntakeLift = DigitalOut(brain.three_wire_port.b)
+sudoGrabber = DigitalOut(brain.three_wire_port.a)
 
 #3-wire ports
 intakeLift = DigitalOutCustom(sudoIntakeLift)
-grabber = DigitalOutCustom(sudoIntakeLift)
+grabber = DigitalOutCustom(sudoGrabber)
 
 #other objects, in order of port, lowest first
 Yodom = Rotation(Ports.PORT1, False)#------------------------------ONE
@@ -53,8 +53,8 @@ Horzontal_rotation = Rotation(Ports.PORT2, False)#-----------------TWO
 
 Inertial_ = Inertial(Ports.PORT7)#---------------------------------SEVEN
 
-ElevenIntake = Motor(Ports.PORT6, GearSetting.RATIO_6_1)
-FiveIntake = Motor(Ports.PORT4)
+ElevenIntake = Motor(Ports.PORT6, GearSetting.RATIO_6_1,True)
+FiveIntake = Motor(Ports.PORT4, GearSetting.RATIO_18_1)
 
 Intake = MotorGroup(ElevenIntake, FiveIntake)#---------------------EIGHT
 #---------------------------------------------------------radio on NINE
@@ -64,10 +64,10 @@ Horizontal_AID = Rotation(Ports.PORT11, False)#--------------------FOURTEEN
 
 liftOne = Motor(Ports.PORT15, GearSetting.RATIO_6_1, False)#-------FIFTEEN
 liftTwo = Motor(Ports.PORT16,GearSetting.RATIO_6_1,True)#---------SIXTEEN
-right_motor_a = Motor(Ports.PORT17, GearSetting.RATIO_6_1, False)#-SEVENTEEN
-right_motor_b = Motor(Ports.PORT18, GearSetting.RATIO_6_1, False)#-EIGHTEEN
-left_motor_a = Motor(Ports.PORT13, GearSetting.RATIO_6_1, True)#---NINETEEN
-left_motor_b = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)#---TWENTY
+right_motor_a = Motor(Ports.PORT13, GearSetting.RATIO_6_1, False)#-SEVENTEEN
+right_motor_b = Motor(Ports.PORT20, GearSetting.RATIO_6_1, False)#-EIGHTEEN
+left_motor_a = Motor(Ports.PORT17, GearSetting.RATIO_6_1, True)#---NINETEEN
+left_motor_b = Motor(Ports.PORT18, GearSetting.RATIO_6_1, True)#---TWENTY
 
 # Creating motor grouping.
 liftGroup = MotorGroup(liftOne,liftTwo)
@@ -205,7 +205,7 @@ RunAuto = False
 # BEGIN CODE HERE
 
 
-class PIDcontroller():
+class PIDController():
 
     def __init__(self,kp,ki,kd,max_ki=50):
         self.kp = kp
@@ -589,7 +589,6 @@ class MotorTicks:
         ### Returns:
         None;
         """
-        
         if not Loading:
             if controller_1.buttonR1.pressing():
                 Intake.spin(FORWARD)
@@ -656,7 +655,6 @@ class MotorTicks:
                 wait(20, MSEC)
 
     def resetTick(self):
-        controller_1.screen.print("RESET")
         """resets the claw to zero facing down"""
 
         global Loading
@@ -664,7 +662,6 @@ class MotorTicks:
         if not Loading:
        
             if controller_1.buttonLeft.pressing():
-                controller_1.screen.print("  <_  ")
        
                 if self.leftRelease:
                     controller_1.screen.print("(>)")
@@ -676,9 +673,7 @@ class MotorTicks:
                         wait(10,MSEC)
 
                     Claw.stop()
-                    Claw.set_stopping(COAST)
                     wait(0.2,SECONDS)
-                    Claw.set_stopping(HOLD)
                     Claw.set_position(0,DEGREES)
                     
                     Loading = False
@@ -1265,7 +1260,9 @@ def prog_setup() -> None:
     setUp = True
     
     #start CC(controller connectivity) display
+    print("PROGRAM RUN")
     CC_display.broadcast()
+    lift_run.broadcast()
     #initialize setup progression variable
     SETUP_progression = 1
 
@@ -1614,6 +1611,82 @@ def bootAnim() -> None:
     brain.screen.render()
 
 
+
+
+
+
+
+
+drive_pid = PIDController(kp=0.8, ki=0.002, kd=0.1)
+turn_pid = PIDController(kp=1.5, ki=0.003, kd=0.2)
+
+
+def pid_drive(target_MM):
+    """Drive forward target_MM using PID."""
+    drive_pid.resetVars()
+    drive_pid.resetMotors(left_drive_smart,right_drive_smart)
+
+    wheel_diameter = 69.85
+    wheel_circumference = wheel_diameter*3.14
+    target_degrees = (target_MM / wheel_circumference) * 360
+
+    while True:
+
+        leftError = target_degrees - left_drive_smart
+        rightError = target_degrees - right_drive_smart
+        error = (leftError+rightError)/2
+        if abs(error) < 3:
+            break
+
+        power = drive_pid.calculate(leftError)
+        power = max(-100, min(100, power))
+
+        left_drive_smart.spin(FORWARD, power, PERCENT)
+
+        power = drive_pid.calculate(rightError)
+        power = max(-100, min(100, power))
+
+        right_drive_smart.spin(FORWARD, power, PERCENT)
+        wait(20, MSEC)
+
+    left_drive_smart.stop(BRAKE)
+    right_drive_smart.stop(BRAKE)
+
+
+def pid_turn(target_heading):
+    """Turn to an absolute heading (0-360) using PID."""
+    turn_pid.resetVars()
+
+    while True:
+        current_heading = Inertial_.heading()
+
+        # Calculate shortest path to target (handle 0/360 wrap)
+        error = target_heading - current_heading
+        if error > 180:
+            error -= 360
+        elif error < -180:
+            error += 360
+
+        if abs(error) < 5:
+            break
+
+        power = turn_pid.calculate(error)
+        power = max(-100, min(100, power))
+
+        # Turn: left motor forward, right motor backward (or vice versa)
+        left_drive_smart.spin(FORWARD, power, PERCENT)
+        right_drive_smart.spin(REVERSE, power, PERCENT)
+        wait(20, MSEC)
+
+    left_drive_smart.stop(BRAKE)
+    right_drive_smart.stop(BRAKE)
+
+
+
+
+
+
+
 def liftTick_callback() -> None:
     """
     Main loop for all ticks for Driver Control.
@@ -1625,11 +1698,19 @@ def liftTick_callback() -> None:
     None;
     """
 
+    deltaTimer = 0
+    prevTimer = 0
+
     MT = MotorTicks()
     liftGroup.set_velocity(100,PERCENT)
     liftGroup.set_stopping(HOLD)
     Claw.spin_to_position(-20,DEGREES)
+    timer = Timer()
     while True:
+        deltaTimer = timer.time() - prevTimer
+        prevTimer = timer.time()
+        #print(str(deltaTimer)," MSEC")
+
         MT.lift_tick()
         MT.intake_tick()
         MT.liftTick()
@@ -1639,9 +1720,9 @@ def liftTick_callback() -> None:
         MT.forceGrabberTick()
 
 # Event activation
+
 CC_display(CC_display_callback)
 lift_run(liftTick_callback)
-
 
 # add 15ms delay to make sure events are registered correctly.
 wait(15, MSEC)
@@ -1713,20 +1794,20 @@ def auto() -> None:
     # Stops Color turn Thread.
     # color.stop()
 
-# def driver():
-#     """
-#     Driver Control init.
+def driver():
+    """
+    Driver Control init.
 
-#     ### Args:
-#     None;
+    ### Args:
+    None;
 
-#     ### Returns:
-#     None;
-#     """
+   ### Returns:
+   #     None;
+    """
 
     
-#     K56721.TankDrive(2)
-#     # color_switching()
+    K56721.TankDrive(2)
+    #color_switching()
 
 #PROGRAM RUN
 AIM = AIMDrive()
@@ -1735,7 +1816,6 @@ grabber.set(True)
 PROG = Thread( prog_setup )
 VS = Thread( vs_setup )
 claw  = Thread( K56721.autoload )
-
 if brain.sdcard.is_inserted():
     failed = False
     try:
@@ -1744,24 +1824,8 @@ if brain.sdcard.is_inserted():
         print(e)
         controller_1.rumble("_-_")
 
-        Thread(lambda: K56721.TankDrive(2))
+        comp = Competition(driver,auto)
 else:
     controller_1.rumble("_-_")
-    
-    Thread(lambda: K56721.TankDrive(2))
 
-
-# if comp.is_driver_control():
-#     if brain.sdcard.is_inserted() and UseACP:
-#         comp=ACPv1.start(GearRatio = 0.75, Wheelsize_MM = 69.85, MotorMax_RPM = 600, OdomWheelSize_MM = 50.8, StickType = "Tank", AtonFunc = auto)
-#     else:
-#         wait(1, SECONDS)
-#         while not setUp:
-#             wait(5, MSEC)
-#             controller_1.screen.print(".")
-#         if RunAuto:
-#             controller_1.screen.print("auto")
-#             auto()
-#             RunAut0 = False
-#         #claw  = Thread(K56721.autoload)
-#         drive = Thread(lambda: K56721.TankDrive(2))
+    comp = Competition(driver,auto)
