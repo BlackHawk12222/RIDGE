@@ -283,10 +283,10 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
             TempVeryHigh=False
 
         for i in range(len(LeftMotorList)):
-            LeftMotorList[i].spin(FORWARD, LeftOutput, VOLT)
+            LeftMotorList[i].spin(REVERSE, LeftOutput, VOLT)
 
         for i in range(len(RightMotorList)):
-            RightMotorList[i].spin(FORWARD, RightOutput, VOLT)
+            RightMotorList[i].spin(REVERSE, RightOutput, VOLT)
 
         # Takes the time of calculation and waits the rest of the time to make sure the loop runs at 100Hz.
         wait((DT * 1000) - (timer.time() - StartTime), MSEC)
