@@ -35,8 +35,8 @@ Interface =  Controller(PARTNER)
 
 #ACPv1.CLEARv2.CInterface.start(Interface)
 
-sudoIntakeLift = DigitalOut(brain.three_wire_port.b)
-sudoGrabber = DigitalOut(brain.three_wire_port.a)
+sudoIntakeLift = DigitalOut(brain.three_wire_port.a)
+sudoGrabber = DigitalOut(brain.three_wire_port.b)
 
 #3-wire ports
 intakeLift = DigitalOutCustom(sudoIntakeLift)
