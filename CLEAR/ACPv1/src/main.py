@@ -10,13 +10,15 @@ controller_1 = Controller(PRIMARY)
 controller_interface = Controller(PARTNER)
 Right1 = Motor(Ports.PORT17, GearSetting.RATIO_6_1, False)
 Right2 = Motor(Ports.PORT18, GearSetting.RATIO_6_1, False)
-left1 = Motor(Ports.PORT19, GearSetting.RATIO_6_1, True)
-left2 = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)
+Left1 = Motor(Ports.PORT19, GearSetting.RATIO_6_1, True)
+Left2 = Motor(Ports.PORT20, GearSetting.RATIO_6_1, True)
 inertial = Inertial(Ports.PORT7)
 Xodom = Rotation(Ports.PORT5)
+Yodom = Rotation(Ports.PORT9)
 
 # add a small delay to make sure we don't print in the middle of the REPL header
 wait(200, MSEC)
+
 # clear the console to make sure we don't have the REPL in the console
 print("\033[2J")
 
@@ -24,28 +26,7 @@ print("\033[2J")
 def aton():
     pass
 
-def fallback():
-    while True:
-        Right1.spin(FORWARD, controller_1.axis2.position(), PERCENT)
-        Right2.spin(FORWARD, controller_1.axis2.position(), PERCENT)
-
-        left1.spin(FORWARD, controller_1.axis3.position(), PERCENT)
-        left1.spin(FORWARD, controller_1.axis3.position(), PERCENT)
-
-        wait(10, MSEC)
-
-# Aton Functions
-failed = False
-try:
-    if not failed:
-        comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
-except Exception as e:
-    failed = True
-    print(e)
-    controller_1.rumble("_-_")
-
-    Thread(fallback)
-
+comp=ACPv1.start(GearRatio=0.75, Wheelsize_MM=69.85, MotorMax_RPM=600, OdomWheelSize_MM=50.8, StickType="Tank", AtonFunc=aton)
 
 while True:
     wait(20, MSEC)

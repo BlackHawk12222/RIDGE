@@ -177,16 +177,16 @@ def _run(LeftMotorList: list[Motor], RightMotorList: list[Motor], GearRatio: flo
 
         # Updateing all the values from the controller and motors.
         if StickUsed == 1:  # Tank Control
-            RightPos = -(Controller.axis2.position())
-            LeftPos = -(Controller.axis3.position())
+            RightPos = Controller.axis2.position()
+            LeftPos = Controller.axis3.position()
 
         elif StickUsed == 2:  # Arcade Control
-            RightPos = -(Controller.axis3.position() - Controller.axis4.position())
-            LeftPos = -(Controller.axis3.position() + Controller.axis4.position())
+            RightPos = Controller.axis3.position() - Controller.axis4.position()
+            LeftPos = Controller.axis3.position() + Controller.axis4.position()
         
         elif StickUsed == 3:  # Split Arcade Control
-            RightPos = -(Controller.axis3.position() - Controller.axis4.position())
-            LeftPos = -(Controller.axis3.position() + Controller.axis4.position())
+            RightPos = Controller.axis3.position() - Controller.axis4.position()
+            LeftPos = Controller.axis3.position() + Controller.axis4.position()
 
         else:
             raise ValueError("Invalid StickType. Must be 'Tank', 'Arcade', or 'SplitArcade'.")
