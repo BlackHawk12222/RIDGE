@@ -9,6 +9,7 @@
 
 # Library imports
 from vex import *
+import math
 
 brain = Brain()
 
@@ -1617,74 +1618,64 @@ def bootAnim() -> None:
 
 
 
-drive_pid = PIDController(kp=0.8, ki=0.002, kd=0.1)
+left_pid = PIDController(kp=0.8, ki=0.002, kd=0.1)
+right_pid = PIDController(kp=0.8, ki=0.002, kd=0.1)
 turn_pid = PIDController(kp=1.5, ki=0.003, kd=0.2)
 
+GEAR_RATIO = 0.75          # wheel turns per motor turn (600 rpm -> 450 rpm)
+WHEEL_DIAMETER_MM = 69.85
 
-def pid_drive(target_MM):
-    """Drive forward target_MM using PID."""
-    drive_pid.resetVars()
-    drive_pid.resetMotors(left_drive_smart,right_drive_smart)
 
-    wheel_diameter = 69.85
-    wheel_circumference = wheel_diameter*3.14
-    target_degrees = (target_MM / wheel_circumference) * 360
+def pid_drive(target_MM, timeout_ms=3000):
+    """Drive forward target_MM using PID (negative = backward)."""
+    left_pid.resetVars()
+    right_pid.resetVars()
+    left_pid.resetMotors(left_drive_smart, right_drive_smart)
 
-    while True:
+    wheel_circumference = WHEEL_DIAMETER_MM * math.pi
+    target_degrees = (target_MM / wheel_circumference) * 360 / GEAR_RATIO
 
-        leftError = target_degrees - left_drive_smart
-        rightError = target_degrees - right_drive_smart
-        error = (leftError+rightError)/2
-        if abs(error) < 3:
+    timer = Timer()
+    while timer.time(MSEC) < timeout_ms:
+        leftError = target_degrees - left_drive_smart.position(DEGREES)
+        rightError = target_degrees - right_drive_smart.position(DEGREES)
+
+        if abs((leftError + rightError) / 2) < 3:
             break
 
-        power = drive_pid.calculate(leftError)
-        power = max(-100, min(100, power))
+        leftPower = max(-100, min(100, left_pid.calculate(leftError)))
+        rightPower = max(-100, min(100, right_pid.calculate(rightError)))
 
-        left_drive_smart.spin(FORWARD, power, PERCENT)
-
-        power = drive_pid.calculate(rightError)
-        power = max(-100, min(100, power))
-
-        right_drive_smart.spin(FORWARD, power, PERCENT)
+        left_drive_smart.spin(FORWARD, leftPower, PERCENT)
+        right_drive_smart.spin(FORWARD, rightPower, PERCENT)
         wait(20, MSEC)
 
     left_drive_smart.stop(BRAKE)
     right_drive_smart.stop(BRAKE)
 
 
-def pid_turn(target_heading):
+def pid_turn(target_heading, timeout_ms=2000):
     """Turn to an absolute heading (0-360) using PID."""
     turn_pid.resetVars()
 
-    while True:
-        current_heading = Inertial_.heading()
-
-        # Calculate shortest path to target (handle 0/360 wrap)
-        error = target_heading - current_heading
+    timer = Timer()
+    while timer.time(MSEC) < timeout_ms:
+        error = target_heading - Inertial_.heading()
         if error > 180:
             error -= 360
         elif error < -180:
             error += 360
 
-        if abs(error) < 5:
+        if abs(error) < 2:
             break
 
-        power = turn_pid.calculate(error)
-        power = max(-100, min(100, power))
-
-        # Turn: left motor forward, right motor backward (or vice versa)
+        power = max(-100, min(100, turn_pid.calculate(error)))
         left_drive_smart.spin(FORWARD, power, PERCENT)
         right_drive_smart.spin(REVERSE, power, PERCENT)
         wait(20, MSEC)
 
     left_drive_smart.stop(BRAKE)
     right_drive_smart.stop(BRAKE)
-
-
-
-
-
 
 
 def liftTick_callback() -> None:
